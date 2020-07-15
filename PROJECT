@@ -1,0 +1,7 @@
+domain: amazee.io
+repo: github.com/amazeeio/lagoon-kbd
+resources:
+- group: lagoon
+  kind: LagoonBuild
+  version: v1alpha1
+version: "2"

@@ -1,0 +1,26 @@
+# permissions to do edit lagoonbuilds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lagoonbuild-editor-role
+rules:
+- apiGroups:
+  - lagoon.amazee.io
+  resources:
+  - lagoonbuilds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lagoon.amazee.io
+  resources:
+  - lagoonbuilds/status
+  verbs:
+  - get
+  - patch
+  - update

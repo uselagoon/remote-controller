@@ -17,9 +17,19 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -36,11 +46,394 @@ type LagoonBuildReconciler struct {
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds/status,verbs=get;update;patch
 
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+
 func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("lagoonbuild", req.NamespacedName)
+	ctx := context.Background()
+	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 
 	// your logic here
+	var lagoonBuild lagoonv1alpha1.LagoonBuild
+	if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err != nil {
+		return ctrl.Result{}, ignoreNotFound(err)
+	}
+
+	finalizerName := "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
+		// check if we get a lagoonbuild not in any namespace
+		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; !ok {
+			// Namesapce creation
+			namespace := &corev1.Namespace{}
+			opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+			err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild.Spec)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// ServiceAccount creation
+			opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+			serviceAccount := &corev1.ServiceAccount{}
+			err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// ServiceAccount RoleBinding creation
+			opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+			saRoleBinding := &rbacv1.RoleBinding{}
+			err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// copy the build resource into a new resource and set the status to pending
+			// create the new resource and the controller will handle it via queue
+			opLog.Info(fmt.Sprintf("Creating LagoonBuild in Pending status: %s", lagoonBuild.ObjectMeta.Name))
+			err = r.getOrCreateBuildResource(ctx, &lagoonBuild, namespace.ObjectMeta.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// if everything is all good, then return.
+			// controller will handle the new build resource that gets created as it will have
+			// the `lagoon.sh/buildStatus = Pending` now
+			return ctrl.Result{}, nil
+		}
+		// if we do have a `lagoon.sh/buildStatus` set, then process as normal
+		runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+			client.InNamespace(req.Namespace),
+			client.MatchingLabels(map[string]string{
+				"lagoon.sh/buildStatus": "Running",
+			}),
+		})
+		if err := r.List(ctx, runningBuilds, listOption); err != nil {
+			return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		}
+		for _, runningBuild := range runningBuilds.Items {
+			if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+				opLog.Info(fmt.Sprintf("Starting work on build: %s", lagoonBuild.ObjectMeta.Name))
+				// create the lagoon-sshkey secret
+				sshKey := &corev1.Secret{}
+				opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+				err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.ObjectMeta.Namespace)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+
+				// ServiceAccount creation
+				opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+				serviceAccount := &corev1.ServiceAccount{}
+				err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.ObjectMeta.Namespace)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+
+				// ServiceAccount RoleBinding creation
+				opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+				saRoleBinding := &rbacv1.RoleBinding{}
+				err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.ObjectMeta.Namespace)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+
+				opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
+				var serviceaccountTokenSecret string
+				for _, secret := range serviceAccount.Secrets {
+					match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+					if match {
+						serviceaccountTokenSecret = secret.Name
+						break
+					}
+				}
+				if serviceaccountTokenSecret == "" {
+					return ctrl.Result{}, fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
+				}
+				// create the Pod that will do the work
+				podEnvs := []corev1.EnvVar{
+					{
+						Name:  "BUILD_TYPE",
+						Value: lagoonBuild.Spec.Build.Type,
+					},
+					{
+						Name:  "SOURCE_REPOSITORY",
+						Value: lagoonBuild.Spec.Git.URL,
+					},
+					{
+						Name:  "GIT_REF",
+						Value: lagoonBuild.Spec.Git.Reference,
+					},
+					{
+						Name:  "SUBFOLDER",
+						Value: lagoonBuild.Spec.Project.SubFolder,
+					},
+					{
+						Name:  "ENVIRONMENT",
+						Value: lagoonBuild.Spec.Project.Environment,
+					},
+					{
+						Name:  "BRANCH",
+						Value: lagoonBuild.Spec.Branch.Name,
+					},
+					{
+						Name:  "PROJECT",
+						Value: lagoonBuild.Spec.Project.Name,
+					},
+					{
+						Name: "ROUTER_URL",
+						Value: strings.ToLower(
+							strings.Replace(
+								strings.Replace(
+									lagoonBuild.Spec.Project.RouterPattern,
+									"${environment}",
+									lagoonBuild.Spec.Project.Environment,
+									-1,
+								),
+								"${project}",
+								lagoonBuild.Spec.Project.Name,
+								-1,
+							),
+						),
+					},
+					{
+						Name:  "ENVIRONMENT_TYPE",
+						Value: lagoonBuild.Spec.Project.EnvironmentType,
+					},
+					{
+						Name:  "ACTIVE_ENVIRONMENT",
+						Value: lagoonBuild.Spec.Project.ProductionEnvironment,
+					},
+					{
+						Name:  "STANDBY_ENVIRONMENT",
+						Value: lagoonBuild.Spec.Project.StandbyEnvironment,
+					},
+					{
+						Name:  "KUBERNETES",
+						Value: lagoonBuild.Spec.Project.DeployTarget,
+					},
+					{
+						Name:  "PROJECT_SECRET",
+						Value: lagoonBuild.Spec.Project.ProjectSecret,
+					},
+					{
+						Name:  "REGISTRY",
+						Value: lagoonBuild.Spec.Project.Registry,
+					},
+					{
+						Name:  "MONITORING_ALERTCONTACT",
+						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
+					},
+				}
+				if lagoonBuild.Spec.Build.CI != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "CI",
+						Value: lagoonBuild.Spec.Build.CI,
+					})
+				}
+				if lagoonBuild.Spec.Build.Type == "pullrequest" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_HEAD_BRANCH",
+						Value: lagoonBuild.Spec.Pullrequest.HeadBranch,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_HEAD_SHA",
+						Value: lagoonBuild.Spec.Pullrequest.HeadSha,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_BASE_BRANCH",
+						Value: lagoonBuild.Spec.Pullrequest.BaseBranch,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_BASE_SHA",
+						Value: lagoonBuild.Spec.Pullrequest.BaseSha,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_TITLE",
+						Value: lagoonBuild.Spec.Pullrequest.Title,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_NUMBER",
+						Value: string(lagoonBuild.Spec.Pullrequest.Number),
+					})
+				}
+				if lagoonBuild.Spec.Build.Type == "promote" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_HEAD_BRANCH",
+						Value: lagoonBuild.Spec.Promote.SourceEnvironment,
+					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "PR_HEAD_SHA",
+						Value: lagoonBuild.Spec.Promote.SourceProject,
+					})
+				}
+				if lagoonBuild.Spec.Project.Variables.Project != nil {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_PROJECT_VARIABLES",
+						Value: string(lagoonBuild.Spec.Project.Variables.Project),
+					})
+				}
+				if lagoonBuild.Spec.Project.Variables.Environment != nil {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+						Value: string(lagoonBuild.Spec.Project.Variables.Environment),
+					})
+				}
+				if lagoonBuild.Spec.Project.Monitoring.StatuspageID != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "MONITORING_STATUSPAGEID",
+						Value: lagoonBuild.Spec.Project.Monitoring.StatuspageID,
+					})
+				}
+				newPod := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      lagoonBuild.ObjectMeta.Name,
+						Namespace: lagoonBuild.ObjectMeta.Namespace,
+						Labels: map[string]string{
+							"lagoon.sh/jobType":   "build",
+							"lagoon.sh/buildName": lagoonBuild.ObjectMeta.Name,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
+								Kind:       "LagoonBuild",
+								Name:       lagoonBuild.ObjectMeta.Name,
+								UID:        lagoonBuild.UID,
+							},
+						},
+					},
+					Spec: corev1.PodSpec{
+						RestartPolicy: "Never",
+						Volumes: []corev1.Volume{
+							{
+								Name: serviceaccountTokenSecret,
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName:  serviceaccountTokenSecret,
+										DefaultMode: intPtr(420),
+									},
+								},
+							},
+							{
+								Name: "lagoon-sshkey",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName:  "lagoon-sshkey",
+										DefaultMode: intPtr(420),
+									},
+								},
+							},
+						},
+						Tolerations: []corev1.Toleration{
+							{
+								Key:      "lagoon/build",
+								Effect:   "NoSchedule",
+								Operator: "Exists",
+							},
+							{
+								Key:      "lagoon/build",
+								Effect:   "PreferNoSchedule",
+								Operator: "Exists",
+							},
+						},
+						Containers: []corev1.Container{
+							{
+								Name:            "lagoon-build",
+								Image:           lagoonBuild.Spec.Build.Image,
+								ImagePullPolicy: "Always",
+								Env:             podEnvs,
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      serviceaccountTokenSecret,
+										ReadOnly:  true,
+										MountPath: "/var/run/secrets/lagoon/deployer",
+									},
+									{
+										Name:      "lagoon-sshkey",
+										ReadOnly:  true,
+										MountPath: "/var/run/secrets/lagoon/ssh",
+									},
+								},
+							},
+						},
+					},
+				}
+				opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
+				err = r.Get(ctx, types.NamespacedName{
+					Namespace: lagoonBuild.ObjectMeta.Namespace,
+					Name:      newPod.ObjectMeta.Name,
+				}, newPod)
+				if err != nil {
+					opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
+					if err := r.Create(ctx, newPod); err != nil {
+						return ctrl.Result{}, err
+					}
+					break
+				}
+			} // end check if running build is current LagoonBuild
+		} // end loop for running builds
+
+		// if there are no running builds, check if there are any pending builds
+		if len(runningBuilds.Items) == 0 {
+			pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
+			listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.InNamespace(req.Namespace),
+				client.MatchingLabels(map[string]string{
+					"lagoon.sh/buildStatus": "Pending",
+				}),
+			})
+			if err := r.List(ctx, pendingBuilds, listOption); err != nil {
+				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+			}
+			// sort the pending builds by creation timestamp
+			sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+				return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
+			})
+			if len(pendingBuilds.Items) > 0 {
+				pendingBuild := pendingBuilds.Items[0].DeepCopy()
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = "Running"
+				if err := r.Update(ctx, pendingBuild); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
+			lagoonBuild.ObjectMeta.Finalizers = append(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
+			// use patches to avoid update errors
+			mergePatch, _ := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"finalizers": lagoonBuild.ObjectMeta.Finalizers,
+				},
+			})
+			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
+			// our finalizer is present, so lets handle any external dependency
+			if err := r.deleteExternalResources(&lagoonBuild, req.NamespacedName.Namespace); err != nil {
+				// if fail to delete the external dependency here, return with error
+				// so that it can be retried
+				return ctrl.Result{}, err
+			}
+			// remove our finalizer from the list and update it.
+			lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
+			// use patches to avoid update errors
+			mergePatch, _ := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"finalizers": lagoonBuild.ObjectMeta.Finalizers,
+				},
+			})
+			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -49,4 +442,171 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonBuild{}).
 		Complete(r)
+}
+
+func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
+	// delete any external resources if required
+	return nil
+}
+
+func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, condition lagoonv1alpha1.LagoonBuildConditions, log string) error {
+	// set the transition time
+	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
+	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
+		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"status": map[string]interface{}{
+				"conditions": lagoonBuild.Status.Conditions,
+				"log":        log,
+			},
+		})
+		if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			return fmt.Errorf("Unable to update status condition: %v", err)
+		}
+	}
+	return nil
+}
+
+// getOrCreateServiceAccount will create the lagoon-deployer service account if it doesn't exist.
+func (r *LagoonBuildReconciler) getOrCreateServiceAccount(ctx context.Context, serviceAccount *corev1.ServiceAccount, ns string) error {
+	serviceAccount.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-deployer",
+		Namespace: ns,
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-deployer",
+	}, serviceAccount)
+	if err != nil {
+		if err := r.Create(ctx, serviceAccount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// getOrCreateSARoleBinding will create the rolebinding for the lagoon-deployer if it doesn't exist.
+func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, saRoleBinding *rbacv1.RoleBinding, ns string) error {
+	saRoleBinding.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-deployer-admin",
+		Namespace: ns,
+	}
+	saRoleBinding.RoleRef = rbacv1.RoleRef{
+		Name:     "admin",
+		Kind:     "ClusterRole",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+	saRoleBinding.Subjects = []rbacv1.Subject{
+		{
+			Name:      "lagoon-deployer",
+			Kind:      "ServiceAccount",
+			Namespace: ns,
+		},
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-deployer-admin",
+	}, saRoleBinding)
+	if err != nil {
+		if err := r.Create(ctx, saRoleBinding); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// getOrCreateNamespace will create the namespace if it doesn't exist.
+func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, spec lagoonv1alpha1.LagoonBuildSpec) error {
+	// parse the project/env through the project pattern, or use the default
+	nsPattern := spec.Project.NamespacePattern
+	if spec.Project.NamespacePattern == "" {
+		nsPattern = DefaultNamespacePattern
+	}
+	// lowercase and dnsify the namespace against the namespace pattern
+	ns := regexp.MustCompile(`[^0-9a-z-]`).ReplaceAllString(
+		strings.ToLower(
+			strings.Replace(
+				strings.Replace(
+					nsPattern,
+					"${environment}",
+					spec.Project.Environment,
+					-1,
+				),
+				"${project}",
+				spec.Project.Name,
+				-1,
+			),
+		),
+		`$1-$2`,
+	)
+	// add the required lagoon labels to the namespace when creating
+	namespace.ObjectMeta = metav1.ObjectMeta{
+		Name: ns,
+		Labels: map[string]string{
+			"lagoon.sh/project":         spec.Project.Name,
+			"lagoon.sh/environment":     spec.Project.Environment,
+			"lagoon.sh/environmentType": spec.Project.EnvironmentType,
+		},
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Name: ns,
+	}, namespace)
+	if err != nil {
+		if err := r.Create(ctx, namespace); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// getCreateOrUpdateSSHKeySecret will create or update the ssh key.
+func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Context, sshKey *corev1.Secret, spec lagoonv1alpha1.LagoonBuildSpec, ns string) error {
+	sshKey.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-sshkey",
+		Namespace: ns,
+	}
+	sshKey.Type = "kubernetes.io/ssh-auth"
+	sshKey.Data = map[string][]byte{
+		"ssh-privatekey": spec.Project.Key,
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-sshkey",
+	}, sshKey)
+	if err != nil {
+		if err := r.Create(ctx, sshKey); err != nil {
+			return err
+		}
+	}
+	if err := r.Update(ctx, sshKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+// getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace
+// then clean up the old one.
+func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, build *lagoonv1alpha1.LagoonBuild, ns string) error {
+	newBuild := build.DeepCopy()
+	newBuild.SetNamespace(ns)
+	newBuild.SetResourceVersion("")
+	newBuild.SetLabels(
+		map[string]string{
+			"lagoon.sh/buildStatus": "Pending",
+		},
+	)
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      newBuild.ObjectMeta.Name,
+	}, newBuild)
+	if err != nil {
+		if err := r.Create(ctx, newBuild); err != nil {
+			return err
+		}
+	}
+	err = r.Delete(ctx, build)
+	if err != nil {
+		return err
+	}
+	return nil
 }

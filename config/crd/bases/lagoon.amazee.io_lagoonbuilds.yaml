@@ -1,0 +1,184 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.4
+  creationTimestamp: null
+  name: lagoonbuilds.lagoon.amazee.io
+spec:
+  group: lagoon.amazee.io
+  names:
+    kind: LagoonBuild
+    listKind: LagoonBuildList
+    plural: lagoonbuilds
+    singular: lagoonbuild
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      description: LagoonBuild is the Schema for the lagoonbuilds API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: LagoonBuildSpec defines the desired state of LagoonBuild
+          properties:
+            branch:
+              properties:
+                name:
+                  type: string
+              type: object
+            build:
+              properties:
+                ci:
+                  type: string
+                image:
+                  type: string
+                type:
+                  type: string
+              required:
+              - image
+              - type
+              type: object
+            git:
+              properties:
+                reference:
+                  type: string
+                url:
+                  type: string
+              required:
+              - reference
+              - url
+              type: object
+            project:
+              properties:
+                deployTarget:
+                  type: string
+                environment:
+                  type: string
+                environmentType:
+                  type: string
+                key:
+                  format: byte
+                  type: string
+                monitoring:
+                  properties:
+                    contact:
+                      type: string
+                    statuspageID:
+                      type: string
+                  type: object
+                name:
+                  type: string
+                namespacePattern:
+                  type: string
+                productionEnvironment:
+                  type: string
+                projectSecret:
+                  type: string
+                registry:
+                  type: string
+                routerPattern:
+                  type: string
+                standbyEnvironment:
+                  type: string
+                subfolder:
+                  type: string
+                variables:
+                  properties:
+                    environment:
+                      format: byte
+                      type: string
+                    project:
+                      format: byte
+                      type: string
+                  type: object
+              required:
+              - deployTarget
+              - environment
+              - environmentType
+              - key
+              - monitoring
+              - name
+              - productionEnvironment
+              - projectSecret
+              - standbyEnvironment
+              - variables
+              type: object
+            promote:
+              properties:
+                sourceEnvironment:
+                  type: string
+                sourceProject:
+                  type: string
+              type: object
+            pullrequest:
+              properties:
+                baseBranch:
+                  type: string
+                baseSha:
+                  type: string
+                headBranch:
+                  type: string
+                headSha:
+                  type: string
+                number:
+                  type: integer
+                title:
+                  type: string
+              type: object
+          required:
+          - build
+          - git
+          - project
+          type: object
+        status:
+          description: LagoonBuildStatus defines the observed state of LagoonBuild
+          properties:
+            conditions:
+              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                of cluster Important: Run "make" to regenerate code after modifying
+                this file'
+              items:
+                description: LagoonBuildConditions defines the observed conditions
+                  of the migrations
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - lastTransitionTime
+                - status
+                - type
+                type: object
+              type: array
+            log:
+              format: byte
+              type: string
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

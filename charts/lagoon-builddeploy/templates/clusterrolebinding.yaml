@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "lagoon-builddeploy.fullname" . }}-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "lagoon-builddeploy.fullname" . }}-manager
+subjects:
+- kind: ServiceAccount
+  name: {{ include "lagoon-builddeploy.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "lagoon-builddeploy.fullname" . }}-proxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "lagoon-builddeploy.fullname" . }}-proxy
+subjects:
+- kind: ServiceAccount
+  name: {{ include "lagoon-builddeploy.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace | quote }}

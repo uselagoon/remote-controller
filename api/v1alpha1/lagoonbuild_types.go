@@ -20,9 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// BuildConditionType const for the status type
 type BuildConditionType string
-
-const BuildStatus string = "Status"
 
 // These are valid conditions of a job.
 const (
@@ -42,12 +41,12 @@ type LagoonBuildSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Build       Build       `json:"build"`
-	Git         Git         `json:"git"`
-	Project     Project     `json:"project"`
-	Branch      Branch      `json:"branch,omitempty"`
-	Pullrequest Pullrequest `json:"pullrequest,omitempty"`
-	Promote     Promote     `json:"promote,omitempty"`
+	Build        Build       `json:"build"`
+	Project      Project     `json:"project"`
+	Branch       Branch      `json:"branch,omitempty"`
+	Pullrequest  Pullrequest `json:"pullrequest,omitempty"`
+	Promote      Promote     `json:"promote,omitempty"`
+	GitReference string      `json:"gitReference"`
 }
 
 // LagoonBuildStatus defines the observed state of LagoonBuild
@@ -73,8 +72,16 @@ type LagoonBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   LagoonBuildSpec   `json:"spec,omitempty"`
-	Status LagoonBuildStatus `json:"status,omitempty"`
+	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
+	Status         LagoonBuildStatus     `json:"status,omitempty"`
+	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+}
+
+// LagoonStatusMessages is where unsent messages are stored for re-sending.
+type LagoonStatusMessages struct {
+	StatusMessage      *LagoonLog     `json:"statusMessage,omitempty"`
+	BuildLogMessage    *LagoonLog     `json:"buildLogMessage,omitempty"`
+	EnvironmentMessage *LagoonMessage `json:"environmentMessage,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -90,20 +97,18 @@ func init() {
 	SchemeBuilder.Register(&LagoonBuild{}, &LagoonBuildList{})
 }
 
+// Build contains the type of build, and the image to use for the builder.
 type Build struct {
 	CI    string `json:"ci,omitempty"`
 	Image string `json:"image"`
 	Type  string `json:"type"`
 }
 
-type Git struct {
-	URL       string `json:"url"`
-	Reference string `json:"reference"`
-}
-
+// Project contains the project information from lagoon.
 type Project struct {
 	Name                  string     `json:"name"`
 	Environment           string     `json:"environment"`
+	GitURL                string     `json:"giturl"`
 	NamespacePattern      string     `json:"namespacePattern,omitempty"`
 	RouterPattern         string     `json:"routerPattern,omitempty"`
 	EnvironmentType       string     `json:"environmentType"`
@@ -118,15 +123,18 @@ type Project struct {
 	Registry              string     `json:"registry,omitempty"`
 }
 
-type Branch struct {
-	Name string `json:"name,omitempty"`
-}
-
+// Variables contains the project and environment variables from lagoon.
 type Variables struct {
 	Project     []byte `json:"project,omitempty"`
 	Environment []byte `json:"environment,omitempty"`
 }
 
+// Branch contains the branch name used for a branch deployment.
+type Branch struct {
+	Name string `json:"name,omitempty"`
+}
+
+// Pullrequest contains the information for a pullrequest deployment.
 type Pullrequest struct {
 	HeadBranch string `json:"headBranch,omitempty"`
 	HeadSha    string `json:"headSha,omitempty"`
@@ -136,12 +144,59 @@ type Pullrequest struct {
 	Number     int    `json:"number,omitempty"`
 }
 
+// Promote contains the information for a promote deployment.
 type Promote struct {
 	SourceEnvironment string `json:"sourceEnvironment,omitempty"`
 	SourceProject     string `json:"sourceProject,omitempty"`
 }
 
+// Monitoring contains the monitoring information for the project in Lagoon.
 type Monitoring struct {
 	Contact      string `json:"contact,omitempty"`
 	StatuspageID string `json:"statuspageID,omitempty"`
+}
+
+// LagoonMessaging
+
+// LagoonLog is used to sendToLagoonLogs messaging queue
+// this is general logging information
+type LagoonLog struct {
+	Severity string         `json:"severity,omitempty"`
+	Project  string         `json:"project,omitempty"`
+	UUID     string         `json:"uuid,omitempty"`
+	Event    string         `json:"event,omitempty"`
+	Meta     *LagoonLogMeta `json:"meta,omitempty"`
+	Message  string         `json:"message,omitempty"`
+}
+
+// LagoonLogMeta is the metadata that is used by logging in Lagoon.
+type LagoonLogMeta struct {
+	ProjectName string `json:"projectName,omitempty"`
+	BranchName  string `json:"branchName,omitempty"`
+	JobName     string `json:"jobName,omitempty"`
+	BuildPhase  string `json:"buildPhase,omitempty"`
+	RemoteID    string `json:"remoteId,omitempty"`
+}
+
+// LagoonMessage is used for sending build info back to Lagoon
+// messaging queue to update the environment or deployment
+type LagoonMessage struct {
+	Type      string           `json:"type,omitempty"`
+	Namespace string           `json:"namespace,omitempty"`
+	BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
+}
+
+// LagoonBuildInfo contains all the information the operatorhandler in Lagoon needs
+// to be able to update an environment or deployment task.
+type LagoonBuildInfo struct {
+	Environment    string `json:"environment,omitempty"`
+	Route          string `json:"route,omitempty"`
+	Routes         string `json:"routes,omitempty"`
+	MonitoringURLs string `json:"monitoringUrls,omitempty"`
+	Project        string `json:"project,omitempty"`
+	JobUID         string `json:"jobUid,omitempty"`
+	BuildPhase     string `json:"buildPhase,omitempty"`
+	BuildName      string `json:"buildName,omitempty"`
+	StartTime      string `json:"startTime,omitempty"`
+	EndTime        string `json:"endTime,omitempty"`
 }

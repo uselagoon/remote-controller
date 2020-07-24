@@ -53,7 +53,7 @@ var failureStates = []string{
 	"ImagePullBackOff",
 }
 
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="*",resources="*",verbs="*"
 
 // Reconcile runs when a request comes through
 func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {

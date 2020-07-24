@@ -35,11 +35,14 @@ spec:
           description: LagoonBuildSpec defines the desired state of LagoonBuild
           properties:
             branch:
+              description: Branch contains the branch name used for a branch deployment.
               properties:
                 name:
                   type: string
               type: object
             build:
+              description: Build contains the type of build, and the image to use
+                for the builder.
               properties:
                 ci:
                   type: string
@@ -51,17 +54,10 @@ spec:
               - image
               - type
               type: object
-            git:
-              properties:
-                reference:
-                  type: string
-                url:
-                  type: string
-              required:
-              - reference
-              - url
-              type: object
+            gitReference:
+              type: string
             project:
+              description: Project contains the project information from lagoon.
               properties:
                 deployTarget:
                   type: string
@@ -69,10 +65,14 @@ spec:
                   type: string
                 environmentType:
                   type: string
+                giturl:
+                  type: string
                 key:
                   format: byte
                   type: string
                 monitoring:
+                  description: Monitoring contains the monitoring information for
+                    the project in Lagoon.
                   properties:
                     contact:
                       type: string
@@ -96,6 +96,8 @@ spec:
                 subfolder:
                   type: string
                 variables:
+                  description: Variables contains the project and environment variables
+                    from lagoon.
                   properties:
                     environment:
                       format: byte
@@ -108,6 +110,7 @@ spec:
               - deployTarget
               - environment
               - environmentType
+              - giturl
               - key
               - monitoring
               - name
@@ -117,6 +120,7 @@ spec:
               - variables
               type: object
             promote:
+              description: Promote contains the information for a promote deployment.
               properties:
                 sourceEnvironment:
                   type: string
@@ -124,6 +128,8 @@ spec:
                   type: string
               type: object
             pullrequest:
+              description: Pullrequest contains the information for a pullrequest
+                deployment.
               properties:
                 baseBranch:
                   type: string
@@ -140,7 +146,7 @@ spec:
               type: object
           required:
           - build
-          - git
+          - gitReference
           - project
           type: object
         status:
@@ -169,6 +175,106 @@ spec:
             log:
               format: byte
               type: string
+          type: object
+        statusMessages:
+          description: LagoonStatusMessages is where unsent messages are stored for
+            re-sending.
+          properties:
+            buildLogMessage:
+              description: LagoonLog is used to sendToLagoonLogs messaging queue this
+                is general logging information
+              properties:
+                event:
+                  type: string
+                message:
+                  type: string
+                meta:
+                  description: LagoonLogMeta is the metadata that is used by logging
+                    in Lagoon.
+                  properties:
+                    branchName:
+                      type: string
+                    buildPhase:
+                      type: string
+                    jobName:
+                      type: string
+                    projectName:
+                      type: string
+                    remoteId:
+                      type: string
+                  type: object
+                project:
+                  type: string
+                severity:
+                  type: string
+                uuid:
+                  type: string
+              type: object
+            environmentMessage:
+              description: LagoonMessage is used for sending build info back to Lagoon
+                messaging queue to update the environment or deployment
+              properties:
+                buildInfo:
+                  description: LagoonBuildInfo contains all the information the operatorhandler
+                    in Lagoon needs to be able to update an environment or deployment
+                    task.
+                  properties:
+                    buildName:
+                      type: string
+                    buildPhase:
+                      type: string
+                    endTime:
+                      type: string
+                    environment:
+                      type: string
+                    jobUid:
+                      type: string
+                    monitoringUrls:
+                      type: string
+                    project:
+                      type: string
+                    route:
+                      type: string
+                    routes:
+                      type: string
+                    startTime:
+                      type: string
+                  type: object
+                namespace:
+                  type: string
+                type:
+                  type: string
+              type: object
+            statusMessage:
+              description: LagoonLog is used to sendToLagoonLogs messaging queue this
+                is general logging information
+              properties:
+                event:
+                  type: string
+                message:
+                  type: string
+                meta:
+                  description: LagoonLogMeta is the metadata that is used by logging
+                    in Lagoon.
+                  properties:
+                    branchName:
+                      type: string
+                    buildPhase:
+                      type: string
+                    jobName:
+                      type: string
+                    projectName:
+                      type: string
+                    remoteId:
+                      type: string
+                  type: object
+                project:
+                  type: string
+                severity:
+                  type: string
+                uuid:
+                  type: string
+              type: object
           type: object
       type: object
   version: v1alpha1

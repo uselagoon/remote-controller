@@ -56,6 +56,7 @@ func main() {
 	var enableLeaderElection bool
 	var enableMQ bool
 	var leaderElectionID string
+	var pendingMessageCron string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-kubernetes",
@@ -70,6 +71,8 @@ func main() {
 		"The hostname:port for the rabbitmq host.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
+	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
+		"The hostname:port for the rabbitmq host.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,
@@ -82,6 +85,7 @@ func main() {
 	mqHost = getEnv("RABBITMQ_HOSTNAME", mqHost)
 	lagoonTargetName = getEnv("LAGOON_TARGET_NAME", lagoonTargetName)
 	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
+	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -172,7 +176,7 @@ func main() {
 		// this will check any `LagoonBuild` resources for the pendingMessages label
 		// and attempt to re-publish them
 		c := cron.New()
-		c.AddFunc("*/5 * * * *", func() {
+		c.AddFunc(pendingMessageCron, func() {
 			messaging.GetPendingMessages()
 		})
 		c.Start()

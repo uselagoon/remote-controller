@@ -18,20 +18,30 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/amazeeio/lagoon-kbd/controllers"
+	"github.com/amazeeio/lagoon-kbd/handlers"
+	"github.com/cheshir/go-mq"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"gopkg.in/robfig/cron.v2"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme           = runtime.NewScheme()
+	setupLog         = ctrl.Log.WithName("setup")
+	lagoonAppID      string
+	lagoonTargetName string
+	mqUser           string
+	mqPass           string
+	mqHost           string
 )
 
 func init() {
@@ -44,10 +54,34 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	var enableMQ bool
+	var leaderElectionID string
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
+		"The address the metric endpoint binds to.")
+	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-kubernetes",
+		"The name of the target as it is in lagoon.")
+	flag.StringVar(&lagoonAppID, "lagoon-app-id", "builddeploymonitor",
+		"The appID to use that will be sent with messages.")
+	flag.StringVar(&mqUser, "rabbitmq-username", "guest",
+		"The username of the rabbitmq user.")
+	flag.StringVar(&mqPass, "rabbitmq-password", "guest",
+		"The password for the rabbitmq user.")
+	flag.StringVar(&mqHost, "rabbitmq-hostname", "localhost:5672",
+		"The hostname:port for the rabbitmq host.")
+	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
+		"The ID to use for leader election.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableMQ, "enable-message-queue", true,
+		"Enable message queue to provide updates back to Lagoon.")
 	flag.Parse()
+
+	// get overrides from environment variables
+	mqUser = getEnv("RABBITMQ_USERNAME", mqUser)
+	mqPass = getEnv("RABBITMQ_PASSWORD", mqPass)
+	mqHost = getEnv("RABBITMQ_HOSTNAME", mqHost)
+	lagoonTargetName = getEnv("LAGOON_TARGET_NAME", lagoonTargetName)
+	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -56,6 +90,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   leaderElectionID,
 		Port:               9443,
 	})
 	if err != nil {
@@ -63,18 +98,102 @@ func main() {
 		os.Exit(1)
 	}
 
+	config := mq.Config{
+		ReconnectDelay: 30 * time.Second,
+		Exchanges: mq.Exchanges{
+			{
+				Name: "lagoon-tasks",
+				Type: "direct",
+				Options: mq.Options{
+					"durable": true,
+				},
+			},
+		},
+		Consumers: mq.Consumers{
+			{
+				Name: "remove-queue",
+				// RoutingKey: lagoonTargetName + ":remove",
+				Queue:   "lagoon-tasks:" + lagoonTargetName + ":remove",
+				Workers: 1,
+			}, {
+				Name: "builddeploy-queue",
+				// RoutingKey: lagoonTargetName + ":builddeploy",
+				Queue:   "lagoon-tasks:" + lagoonTargetName + ":builddeploy",
+				Workers: 1,
+			},
+		},
+		Queues: mq.Queues{
+			{
+				Name:       "lagoon-tasks:" + lagoonTargetName + ":builddeploy",
+				Exchange:   "lagoon-tasks",
+				RoutingKey: lagoonTargetName + ":builddeploy",
+				Options: mq.Options{
+					"durable": true,
+				},
+			}, {
+				Name:       "lagoon-tasks:" + lagoonTargetName + ":remove",
+				Exchange:   "lagoon-tasks",
+				RoutingKey: lagoonTargetName + ":remove",
+				Options: mq.Options{
+					"durable": true,
+				},
+			},
+		},
+		Producers: mq.Producers{
+			{
+				Name:     "lagoon-logs",
+				Exchange: "lagoon-logs",
+				Options: mq.Options{
+					"content_type":  "text/plain",
+					"app_id":        lagoonAppID,
+					"delivery_mode": 2,
+				},
+			},
+			{
+				Name:       "lagoon-tasks:operator",
+				Exchange:   "lagoon-tasks",
+				RoutingKey: "operator",
+				Options: mq.Options{
+					"content_type":  "text/plain",
+					"app_id":        lagoonAppID,
+					"delivery_mode": 2,
+				},
+			},
+		},
+		DSN: "amqp://" + mqUser + ":" + mqPass + "@" + mqHost + "/",
+	}
+	messaging := handlers.NewMessaging(config, mgr.GetClient())
+	// if we are running with MQ support, then start the consumer handler
+	if enableMQ {
+		setupLog.Info("starting messaging handler")
+		go messaging.Consumer(lagoonTargetName)
+
+		// use cron to run a pending message task
+		// this will check any `LagoonBuild` resources for the pendingMessages label
+		// and attempt to re-publish them
+		c := cron.New()
+		c.AddFunc("*/5 * * * *", func() {
+			messaging.GetPendingMessages()
+		})
+		c.Start()
+	}
+
+	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:   mgr.GetScheme(),
+		EnableMQ: enableMQ,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
 	}
 	if err = (&controllers.LagoonMonitorReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("LagoonMonitor"),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controllers").WithName("LagoonMonitor"),
+		Scheme:    mgr.GetScheme(),
+		EnableMQ:  enableMQ,
+		Messaging: messaging,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
@@ -86,4 +205,11 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

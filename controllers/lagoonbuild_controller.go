@@ -16,6 +16,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,13 +35,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
+	"github.com/amazeeio/lagoon-kbd/handlers"
 )
 
 // LagoonBuildReconciler reconciles a LagoonBuild object
 type LagoonBuildReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	EnableMQ  bool
+	Messaging *handlers.Messaging
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -51,6 +55,7 @@ type LagoonBuildReconciler struct {
 // +kubebuilder:rbac:groups="",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 
+// Reconcile runs when a request comes through
 func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
@@ -65,7 +70,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
-		// check if we get a lagoonbuild not in any namespace
+		// check if we get a lagoonbuild that hasn't got any buildstatus
+		// this means it was created by the message queue handler
+		// so we should do the steps required for a lagoon build and then copy the build
+		// into the created namespace
 		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; !ok {
 			// Namesapce creation
 			namespace := &corev1.Namespace{}
@@ -74,7 +82,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// ServiceAccount creation
+			// create the `lagoon-deployer` ServiceAccount
 			opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
 			serviceAccount := &corev1.ServiceAccount{}
 			err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
@@ -95,9 +103,9 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// if everything is all good, then return.
-			// controller will handle the new build resource that gets created as it will have
+			// if everything is all good controller will handle the new build resource that gets created as it will have
 			// the `lagoon.sh/buildStatus = Pending` now
+			// so end this reconcile process
 			return ctrl.Result{}, nil
 		}
 		// if we do have a `lagoon.sh/buildStatus` set, then process as normal
@@ -108,11 +116,14 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				"lagoon.sh/buildStatus": "Running",
 			}),
 		})
+		// list any builds that are running
 		if err := r.List(ctx, runningBuilds, listOption); err != nil {
 			return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 		}
 		for _, runningBuild := range runningBuilds.Items {
+			// if the running build is the one from this request then process it
 			if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+				// we run these steps again just to be sure that it gets updated/created if it hasn't already
 				opLog.Info(fmt.Sprintf("Starting work on build: %s", lagoonBuild.ObjectMeta.Name))
 				// create the lagoon-sshkey secret
 				sshKey := &corev1.Secret{}
@@ -122,7 +133,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					return ctrl.Result{}, err
 				}
 
-				// ServiceAccount creation
+				// create the `lagoon-deployer` ServiceAccount
 				opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
 				serviceAccount := &corev1.ServiceAccount{}
 				err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.ObjectMeta.Namespace)
@@ -158,11 +169,11 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					},
 					{
 						Name:  "SOURCE_REPOSITORY",
-						Value: lagoonBuild.Spec.Git.URL,
+						Value: lagoonBuild.Spec.Project.GitURL,
 					},
 					{
 						Name:  "GIT_REF",
-						Value: lagoonBuild.Spec.Git.Reference,
+						Value: lagoonBuild.Spec.GitReference,
 					},
 					{
 						Name:  "SUBFOLDER",
@@ -359,16 +370,21 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					},
 				}
 				opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
+				// once the pod spec has been defined, check if it isn't already created
 				err = r.Get(ctx, types.NamespacedName{
 					Namespace: lagoonBuild.ObjectMeta.Namespace,
 					Name:      newPod.ObjectMeta.Name,
 				}, newPod)
 				if err != nil {
+					// if it doesn't exist, then create the build pod
 					opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 					if err := r.Create(ctx, newPod); err != nil {
 						return ctrl.Result{}, err
 					}
+					// then break out of the build
 					break
+				} else {
+					opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))
 				}
 			} // end check if running build is current LagoonBuild
 		} // end loop for running builds
@@ -438,6 +454,8 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager sets up the controller with the given manager
+// and we set it to watch LagoonBuilds
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonBuild{}).
@@ -449,6 +467,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alp
 	return nil
 }
 
+// updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, condition lagoonv1alpha1.LagoonBuildConditions, log string) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
@@ -578,8 +597,14 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 			return err
 		}
 	}
-	if err := r.Update(ctx, sshKey); err != nil {
-		return err
+	// if the keys are different, then load in the new key from the spec
+	if bytes.Compare(sshKey.Data["ssh-privatekey"], spec.Project.Key) != 0 {
+		sshKey.Data = map[string][]byte{
+			"ssh-privatekey": spec.Project.Key,
+		}
+		if err := r.Update(ctx, sshKey); err != nil {
+			return err
+		}
 	}
 	return nil
 }

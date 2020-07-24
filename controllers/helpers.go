@@ -12,13 +12,7 @@ const (
 	DefaultNamespacePattern = "${project}-${environment}"
 )
 
-// slice of the different failure states of pods that we care about
-var failureStates = []string{
-	"ErrImagePull",
-	"ImagePullBackOff",
-}
-
-// IgnoreNotFound will ignore not found errors
+// ignoreNotFound will ignore not found errors
 func ignoreNotFound(err error) error {
 	if apierrors.IsNotFound(err) {
 		return nil

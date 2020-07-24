@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  lagoon-builddeploy:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2020-07-24T14:46:04.055112+10:00"
+    description: A Helm chart for lagoon-builddeploy
+    digest: 7710884e4aad6b2c7ff80473d1d5a1af722d05d9caa1d4f318db208d310bc803
+    name: lagoon-builddeploy
+    type: application
+    urls:
+    - lagoon-builddeploy-0.1.0.tgz
+    version: 0.1.0
+generated: "2020-07-24T14:46:04.052024+10:00"

@@ -95,6 +95,8 @@ spec:
                   type: string
                 subfolder:
                   type: string
+                uiLink:
+                  type: string
                 variables:
                   description: Variables contains the project and environment variables
                     from lagoon.
@@ -195,13 +197,35 @@ spec:
                   properties:
                     branchName:
                       type: string
+                    buildName:
+                      type: string
                     buildPhase:
                       type: string
+                    endTime:
+                      type: string
+                    environment:
+                      type: string
                     jobName:
+                      type: string
+                    logLink:
+                      type: string
+                    monitoringUrls:
+                      items:
+                        type: string
+                      type: array
+                    project:
                       type: string
                     projectName:
                       type: string
                     remoteId:
+                      type: string
+                    route:
+                      type: string
+                    routes:
+                      items:
+                        type: string
+                      type: array
+                    startTime:
                       type: string
                   type: object
                 project:
@@ -228,16 +252,57 @@ spec:
                       type: string
                     environment:
                       type: string
-                    jobUid:
-                      type: string
                     monitoringUrls:
-                      type: string
+                      items:
+                        type: string
+                      type: array
                     project:
+                      type: string
+                    remoteId:
                       type: string
                     route:
                       type: string
                     routes:
+                      items:
+                        type: string
+                      type: array
+                    startTime:
                       type: string
+                  type: object
+                meta:
+                  description: LagoonLogMeta is the metadata that is used by logging
+                    in Lagoon.
+                  properties:
+                    branchName:
+                      type: string
+                    buildName:
+                      type: string
+                    buildPhase:
+                      type: string
+                    endTime:
+                      type: string
+                    environment:
+                      type: string
+                    jobName:
+                      type: string
+                    logLink:
+                      type: string
+                    monitoringUrls:
+                      items:
+                        type: string
+                      type: array
+                    project:
+                      type: string
+                    projectName:
+                      type: string
+                    remoteId:
+                      type: string
+                    route:
+                      type: string
+                    routes:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                   type: object
@@ -260,13 +325,35 @@ spec:
                   properties:
                     branchName:
                       type: string
+                    buildName:
+                      type: string
                     buildPhase:
                       type: string
+                    endTime:
+                      type: string
+                    environment:
+                      type: string
                     jobName:
+                      type: string
+                    logLink:
+                      type: string
+                    monitoringUrls:
+                      items:
+                        type: string
+                      type: array
+                    project:
                       type: string
                     projectName:
                       type: string
                     remoteId:
+                      type: string
+                    route:
+                      type: string
+                    routes:
+                      items:
+                        type: string
+                      type: array
+                    startTime:
                       type: string
                   type: object
                 project:

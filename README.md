@@ -67,6 +67,7 @@ spec:
     project:
         name: active-standby-example
         environment: main
+        uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-ysxf3a
         routerPattern: 'main-active-standby-example'
         environmentType: production
         productionEnvironment: main

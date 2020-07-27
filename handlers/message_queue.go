@@ -104,7 +104,7 @@ func (h *Messaging) Consumer(targetName string) { // error {
 			operatorMsg := lagoonv1alpha1.LagoonMessage{
 				Type:      "remove",
 				Namespace: removeTask.OpenshiftProjectName,
-				BuildInfo: &lagoonv1alpha1.LagoonBuildInfo{
+				Meta: &lagoonv1alpha1.LagoonLogMeta{
 					Project:     removeTask.ProjectName,
 					Environment: removeTask.Branch,
 				},

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -75,7 +76,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if buildPod.Status.Phase == corev1.PodPending {
 			opLog.Info(fmt.Sprintf("Build %s is %v", buildPod.ObjectMeta.Labels["lagoon.sh/buildName"], buildPod.Status.Phase))
 			// send any messages to lagoon message queues
-			r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod)
+			r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod, nil)
 			r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &buildPod, nil)
 			// check each container in the pod
 			for _, container := range buildPod.Status.ContainerStatuses {
@@ -120,7 +121,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 							opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", buildPod.ObjectMeta.Namespace))
 						}
 						// send any messages to lagoon message queues
-						r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod)
+						r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod, &lagoonEnv)
 						r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &buildPod, &lagoonEnv)
 						logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
 						r.buildLogsToLagoonLogs(&lagoonBuild, &buildPod, []byte(logMsg))
@@ -183,7 +184,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				}
 				// send any messages to lagoon message queues
 				// update the deployment with the status
-				r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod)
+				r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod, &lagoonEnv)
 				r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &buildPod, &lagoonEnv)
 				r.buildLogsToLagoonLogs(&lagoonBuild, &buildPod, allContainerLogs)
 			}
@@ -192,7 +193,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		// if it isn't pending, failed, or complete, it will be running, we should tell lagoon
 		opLog.Info(fmt.Sprintf("Build %s is %v", buildPod.ObjectMeta.Labels["lagoon.sh/buildName"], buildPod.Status.Phase))
 		// send any messages to lagoon message queues
-		r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod)
+		r.statusLogsToLagoonLogs(&lagoonBuild, &buildPod, nil)
 		r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &buildPod, nil)
 	} else {
 		// a pod deletion request came through
@@ -373,7 +374,7 @@ func (r *LagoonMonitorReconciler) removePendingMessageStatus(ctx context.Context
 }
 
 // statusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild, buildPod *corev1.Pod) {
+func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild, buildPod *corev1.Pod, lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
 		condition := "pending"
 		switch buildPod.Status.Phase {
@@ -391,6 +392,10 @@ func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1al
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
 				ProjectName: lagoonBuild.Spec.Project.Name,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
+				BuildPhase:  condition,
+				BuildName:   lagoonBuild.ObjectMeta.Name,
+				RemoteID:    string(buildPod.ObjectMeta.UID),
+				LogLink:     lagoonBuild.Spec.Project.UILink,
 			},
 			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
 				lagoonBuild.Spec.Project.Name,
@@ -398,6 +403,21 @@ func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1al
 				lagoonBuild.ObjectMeta.Name,
 				string(buildPod.Status.Phase),
 			),
+		}
+		// if we aren't being provided the lagoon config, we can skip adding the routes etc
+		if lagoonEnv != nil {
+			msg.Meta.Route = ""
+			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
+				msg.Meta.Route = route
+			}
+			msg.Meta.Routes = []string{}
+			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
+				msg.Meta.Routes = strings.Split(routes, ",")
+			}
+			msg.Meta.MonitoringURLs = []string{}
+			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
+				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
+			}
 		}
 		msgBytes, _ := json.Marshal(msg)
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
@@ -413,7 +433,8 @@ func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1al
 	}
 }
 
-// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the operatorhandler message queue in lagoon
+// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the operatorhandler message queue in lagoon,
+// this is for the operatorhandler to process.
 func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild *lagoonv1alpha1.LagoonBuild, buildPod *corev1.Pod, lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
 		condition := "pending"
@@ -428,37 +449,38 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 		operatorMsg := lagoonv1alpha1.LagoonMessage{
 			Type:      "build",
 			Namespace: lagoonBuild.ObjectMeta.Namespace,
-			BuildInfo: &lagoonv1alpha1.LagoonBuildInfo{
+			Meta: &lagoonv1alpha1.LagoonLogMeta{
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,
 				BuildPhase:  condition,
 				BuildName:   lagoonBuild.ObjectMeta.Name,
-				JobUID:      string(buildPod.ObjectMeta.UID),
+				RemoteID:    string(buildPod.ObjectMeta.UID),
+				LogLink:     lagoonBuild.Spec.Project.UILink,
 			},
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if lagoonEnv != nil {
-			operatorMsg.BuildInfo.Route = ""
+			operatorMsg.Meta.Route = ""
 			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
-				operatorMsg.BuildInfo.Route = route
+				operatorMsg.Meta.Route = route
 			}
-			operatorMsg.BuildInfo.Routes = ""
+			operatorMsg.Meta.Routes = []string{}
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
-				operatorMsg.BuildInfo.Routes = routes
+				operatorMsg.Meta.Routes = strings.Split(routes, ",")
 			}
-			operatorMsg.BuildInfo.MonitoringURLs = ""
+			operatorMsg.Meta.MonitoringURLs = []string{}
 			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				operatorMsg.BuildInfo.MonitoringURLs = monitoringUrls
+				operatorMsg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
 		// we can add the build start time here
 		if buildPod.Status.StartTime != nil {
-			operatorMsg.BuildInfo.StartTime = buildPod.Status.StartTime.Time.UTC().Format("2006-01-02 15:04:05")
+			operatorMsg.Meta.StartTime = buildPod.Status.StartTime.Time.UTC().Format("2006-01-02 15:04:05")
 		}
 		// and then once the pod is terminated we can add the terminated time here
 		if buildPod.Status.ContainerStatuses != nil {
 			if buildPod.Status.ContainerStatuses[0].State.Terminated != nil {
-				operatorMsg.BuildInfo.EndTime = buildPod.Status.ContainerStatuses[0].State.Terminated.FinishedAt.Time.UTC().Format("2006-01-02 15:04:05")
+				operatorMsg.Meta.EndTime = buildPod.Status.ContainerStatuses[0].State.Terminated.FinishedAt.Time.UTC().Format("2006-01-02 15:04:05")
 			}
 		}
 		operatorMsgBytes, _ := json.Marshal(operatorMsg)
@@ -487,6 +509,7 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(lagoonBuild *lagoonv1alp
 				BranchName: lagoonBuild.Spec.Project.Environment,
 				BuildPhase: string(buildPod.Status.Phase),
 				RemoteID:   string(buildPod.ObjectMeta.UID),
+				LogLink:    lagoonBuild.Spec.Project.UILink,
 			},
 			Message: fmt.Sprintf("%s", logs),
 		}

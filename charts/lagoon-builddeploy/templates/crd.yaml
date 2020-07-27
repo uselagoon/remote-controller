@@ -237,36 +237,6 @@ spec:
               description: LagoonMessage is used for sending build info back to Lagoon
                 messaging queue to update the environment or deployment
               properties:
-                buildInfo:
-                  description: LagoonBuildInfo contains all the information the operatorhandler
-                    in Lagoon needs to be able to update an environment or deployment
-                    task.
-                  properties:
-                    buildName:
-                      type: string
-                    buildPhase:
-                      type: string
-                    endTime:
-                      type: string
-                    environment:
-                      type: string
-                    monitoringUrls:
-                      items:
-                        type: string
-                      type: array
-                    project:
-                      type: string
-                    remoteId:
-                      type: string
-                    route:
-                      type: string
-                    routes:
-                      items:
-                        type: string
-                      type: array
-                    startTime:
-                      type: string
-                  type: object
                 meta:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.

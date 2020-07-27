@@ -108,6 +108,7 @@ type Build struct {
 type Project struct {
 	Name                  string     `json:"name"`
 	Environment           string     `json:"environment"`
+	UILink                string     `json:"uiLink,omitempty"`
 	GitURL                string     `json:"giturl"`
 	NamespacePattern      string     `json:"namespacePattern,omitempty"`
 	RouterPattern         string     `json:"routerPattern,omitempty"`
@@ -171,32 +172,27 @@ type LagoonLog struct {
 
 // LagoonLogMeta is the metadata that is used by logging in Lagoon.
 type LagoonLogMeta struct {
-	ProjectName string `json:"projectName,omitempty"`
-	BranchName  string `json:"branchName,omitempty"`
-	JobName     string `json:"jobName,omitempty"`
-	BuildPhase  string `json:"buildPhase,omitempty"`
-	RemoteID    string `json:"remoteId,omitempty"`
+	BranchName     string   `json:"branchName,omitempty"`
+	BuildName      string   `json:"buildName,omitempty"`
+	BuildPhase     string   `json:"buildPhase,omitempty"`
+	EndTime        string   `json:"endTime,omitempty"`
+	Environment    string   `json:"environment,omitempty"`
+	JobName        string   `json:"jobName,omitempty"`
+	LogLink        string   `json:"logLink,omitempty"`
+	MonitoringURLs []string `json:"monitoringUrls,omitempty"`
+	Project        string   `json:"project,omitempty"`
+	ProjectName    string   `json:"projectName,omitempty"`
+	RemoteID       string   `json:"remoteId,omitempty"`
+	Route          string   `json:"route,omitempty"`
+	Routes         []string `json:"routes,omitempty"`
+	StartTime      string   `json:"startTime,omitempty"`
 }
 
 // LagoonMessage is used for sending build info back to Lagoon
 // messaging queue to update the environment or deployment
 type LagoonMessage struct {
-	Type      string           `json:"type,omitempty"`
-	Namespace string           `json:"namespace,omitempty"`
-	BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
-}
-
-// LagoonBuildInfo contains all the information the operatorhandler in Lagoon needs
-// to be able to update an environment or deployment task.
-type LagoonBuildInfo struct {
-	Environment    string `json:"environment,omitempty"`
-	Route          string `json:"route,omitempty"`
-	Routes         string `json:"routes,omitempty"`
-	MonitoringURLs string `json:"monitoringUrls,omitempty"`
-	Project        string `json:"project,omitempty"`
-	JobUID         string `json:"jobUid,omitempty"`
-	BuildPhase     string `json:"buildPhase,omitempty"`
-	BuildName      string `json:"buildName,omitempty"`
-	StartTime      string `json:"startTime,omitempty"`
-	EndTime        string `json:"endTime,omitempty"`
+	Type      string         `json:"type,omitempty"`
+	Namespace string         `json:"namespace,omitempty"`
+	Meta      *LagoonLogMeta `json:"meta,omitempty"`
+	// BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
 }

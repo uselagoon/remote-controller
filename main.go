@@ -17,6 +17,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -109,37 +110,56 @@ func main() {
 				Name: "lagoon-tasks",
 				Type: "direct",
 				Options: mq.Options{
-					"durable": true,
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
 				},
 			},
 		},
 		Consumers: mq.Consumers{
 			{
-				Name: "remove-queue",
-				// RoutingKey: lagoonTargetName + ":remove",
-				Queue:   "lagoon-tasks:" + lagoonTargetName + ":remove",
+				Name:    "remove-queue",
+				Queue:   fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
 				Workers: 1,
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
 			}, {
-				Name: "builddeploy-queue",
-				// RoutingKey: lagoonTargetName + ":builddeploy",
-				Queue:   "lagoon-tasks:" + lagoonTargetName + ":builddeploy",
+				Name:    "builddeploy-queue",
+				Queue:   fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
 				Workers: 1,
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
 			},
 		},
 		Queues: mq.Queues{
 			{
-				Name:       "lagoon-tasks:" + lagoonTargetName + ":builddeploy",
+				Name:       fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
 				Exchange:   "lagoon-tasks",
-				RoutingKey: lagoonTargetName + ":builddeploy",
+				RoutingKey: fmt.Sprintf("%s:builddeploy", lagoonTargetName),
 				Options: mq.Options{
-					"durable": true,
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
 				},
 			}, {
-				Name:       "lagoon-tasks:" + lagoonTargetName + ":remove",
+				Name:       fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
 				Exchange:   "lagoon-tasks",
-				RoutingKey: lagoonTargetName + ":remove",
+				RoutingKey: fmt.Sprintf("%s:remove", lagoonTargetName),
 				Options: mq.Options{
-					"durable": true,
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
 				},
 			},
 		},
@@ -148,9 +168,10 @@ func main() {
 				Name:     "lagoon-logs",
 				Exchange: "lagoon-logs",
 				Options: mq.Options{
-					"content_type":  "text/plain",
 					"app_id":        lagoonAppID,
-					"delivery_mode": 2,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
 				},
 			},
 			{
@@ -158,13 +179,14 @@ func main() {
 				Exchange:   "lagoon-tasks",
 				RoutingKey: "operator",
 				Options: mq.Options{
-					"content_type":  "text/plain",
 					"app_id":        lagoonAppID,
-					"delivery_mode": 2,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
 				},
 			},
 		},
-		DSN: "amqp://" + mqUser + ":" + mqPass + "@" + mqHost + "/",
+		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
 	messaging := handlers.NewMessaging(config, mgr.GetClient())
 	// if we are running with MQ support, then start the consumer handler

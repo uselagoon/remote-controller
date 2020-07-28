@@ -109,7 +109,7 @@ type Project struct {
 	Name                  string     `json:"name"`
 	Environment           string     `json:"environment"`
 	UILink                string     `json:"uiLink,omitempty"`
-	GitURL                string     `json:"giturl"`
+	GitURL                string     `json:"gitUrl"`
 	NamespacePattern      string     `json:"namespacePattern,omitempty"`
 	RouterPattern         string     `json:"routerPattern,omitempty"`
 	EnvironmentType       string     `json:"environmentType"`

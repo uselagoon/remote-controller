@@ -63,7 +63,7 @@ spec:
                   type: string
                 environmentType:
                   type: string
-                giturl:
+                gitUrl:
                   type: string
                 key:
                   format: byte
@@ -110,7 +110,7 @@ spec:
               - deployTarget
               - environment
               - environmentType
-              - giturl
+              - gitUrl
               - key
               - monitoring
               - name

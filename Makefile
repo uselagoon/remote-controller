@@ -78,3 +78,13 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+operator-test:
+	./operator-test.sh
+
+clean:
+	docker-compose down
+	kind delete cluster --name ${KIND_NAME}
+
+local-circle:
+	circleci build -v $(shell pwd):/workdir

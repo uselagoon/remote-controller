@@ -1,0 +1,17 @@
+providers:
+  production:
+    environment: production
+    hostname: production.172.17.0.1.nip.io
+    readReplicaHostnames:
+      - production.replica.172.17.0.1.nip.io
+    password: password
+    port: '33066'
+    user: root
+  development:
+    environment: development
+    hostname: development.172.17.0.1.nip.io
+    readReplicaHostnames:
+      - development.replica.172.17.0.1.nip.io
+    password: password
+    port: '33066'
+    user: root

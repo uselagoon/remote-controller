@@ -11,7 +11,7 @@ services:
       MYSQL_PASSWORD: 'password'
       MYSQL_ROOT_PASSWORD: 'password'
     ports:
-      - '33066:3306'
+      - '3306:3306'
   mysql:
     image: amazeeio/alpine-mysql-client
     environment:

@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: RABBITMQ_USERNAME
+              value: 'guest'
+            - name: RABBITMQ_PASSWORD
+              value: 'guest'
+            - name: RABBITMQ_HOSTNAME
+              value: '172.17.0.1:5672'
+            - name: LAGOON_TARGET_NAME
+              value: 'ci-local-operator-k8s'

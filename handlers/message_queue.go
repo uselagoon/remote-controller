@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/cheshir/go-mq"
+	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,25 +33,47 @@ type messaging interface {
 
 // Messaging is used for the config and client information for the messaging queue
 type Messaging struct {
-	Config mq.Config
-	Client client.Client
+	Config                  mq.Config
+	Client                  client.Client
+	ConnectionAttempts      int
+	ConnectionRetryInterval int
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client) *Messaging {
+func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int) *Messaging {
 	return &Messaging{
-		Config: config,
-		Client: client,
+		Config:                  config,
+		Client:                  client,
+		ConnectionAttempts:      startupAttempts,
+		ConnectionRetryInterval: startupInterval,
 	}
 }
 
 // Consumer handles consuming messages sent to the queue that this operator is connected to and processes them accordingly
-func (h *Messaging) Consumer(targetName string) { // error {
+func (h *Messaging) Consumer(targetName string) { //error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	messageQueue, err := mq.New(h.Config)
+	var messageQueue mq.MQ
+	// if no mq is found when the goroutine starts, retry a few times before exiting
+	// default is 10 retry with 30 second delay = 5 minutes
+	err := try.Do(func(attempt int) (bool, error) {
+		var err error
+		messageQueue, err = mq.New(h.Config)
+		if err != nil {
+			opLog.Info(
+				fmt.Sprintf(
+					"Failed to initialize message queue manager, retrying in %d seconds, attempt %d/%d: %v",
+					h.ConnectionRetryInterval,
+					attempt,
+					h.ConnectionAttempts,
+					err,
+				),
+			)
+			time.Sleep(60 * time.Second)
+		}
+		return attempt < h.ConnectionAttempts, err
+	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to initialize message queue manager: %v", err))
-		return
+		log.Fatalf("Finally failed to initialize message queue manager: %v", err)
 	}
 	defer messageQueue.Close()
 
@@ -67,10 +92,22 @@ func (h *Messaging) Consumer(targetName string) { // error {
 			// unmarshal the body into a lagoonbuild
 			newBuild := &lagoonv1alpha1.LagoonBuild{}
 			json.Unmarshal(message.Body(), newBuild)
-			opLog.Info(fmt.Sprintf("Received builddeploy task for project %s, environment %s", newBuild.Spec.Project.Name, newBuild.Spec.Project.Environment))
+			opLog.Info(
+				fmt.Sprintf(
+					"Received builddeploy task for project %s, environment %s",
+					newBuild.Spec.Project.Name,
+					newBuild.Spec.Project.Environment,
+				),
+			)
 			// create it now
 			if err := h.Client.Create(context.Background(), newBuild); err != nil {
-				fmt.Println(err)
+				opLog.Info(
+					fmt.Sprintf(
+						"Failed to create builddeploy task for project %s, environment %s",
+						newBuild.Spec.Project.Name,
+						newBuild.Spec.Project.Environment,
+					),
+				)
 				return
 			}
 		}
@@ -87,20 +124,50 @@ func (h *Messaging) Consumer(targetName string) { // error {
 			// unmarshall the message into a remove task to be processed
 			removeTask := &removeTask{}
 			json.Unmarshal(message.Body(), removeTask)
-			opLog.Info(fmt.Sprintf("Received remove task for project %s, branch %s - %s", removeTask.ProjectName, removeTask.Branch, removeTask.OpenshiftProjectName))
+			opLog.Info(
+				fmt.Sprintf(
+					"Received remove task for project %s, branch %s - %s",
+					removeTask.ProjectName,
+					removeTask.Branch,
+					removeTask.OpenshiftProjectName,
+				),
+			)
 			namespace := &corev1.Namespace{}
 			err := h.Client.Get(context.Background(), types.NamespacedName{
 				Name: removeTask.OpenshiftProjectName,
 			}, namespace)
 			if err != nil {
-				opLog.Info(fmt.Sprintf("Unable to get namespace %s for project %s, branch %s: %v", removeTask.OpenshiftProjectName, removeTask.ProjectName, removeTask.Branch, err))
+				opLog.Info(
+					fmt.Sprintf(
+						"Unable to get namespace %s for project %s, branch %s: %v",
+						removeTask.OpenshiftProjectName,
+						removeTask.ProjectName,
+						removeTask.Branch,
+						err,
+					),
+				)
 				return
 			}
 			if err := h.Client.Delete(context.Background(), namespace); err != nil {
-				opLog.Info(fmt.Sprintf("Unable to delete namespace %s for project %s, branch %s: %v", removeTask.OpenshiftProjectName, removeTask.ProjectName, removeTask.Branch, err))
+				opLog.Info(
+					fmt.Sprintf(
+						"Unable to delete namespace %s for project %s, branch %s: %v",
+						removeTask.OpenshiftProjectName,
+						removeTask.ProjectName,
+						removeTask.Branch,
+						err,
+					),
+				)
 				return
 			}
-			opLog.Info(fmt.Sprintf("Deleted project %s, branch %s - %s", removeTask.ProjectName, removeTask.Branch, removeTask.OpenshiftProjectName))
+			opLog.Info(
+				fmt.Sprintf(
+					"Deleted project %s, branch %s - %s",
+					removeTask.ProjectName,
+					removeTask.Branch,
+					removeTask.OpenshiftProjectName,
+				),
+			)
 			operatorMsg := lagoonv1alpha1.LagoonMessage{
 				Type:      "remove",
 				Namespace: removeTask.OpenshiftProjectName,
@@ -123,6 +190,7 @@ func (h *Messaging) Consumer(targetName string) { // error {
 // Publish publishes a message to a given queue
 func (h *Messaging) Publish(queue string, message []byte) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
+	// no need to re-try here, this is on a cron schedule and the error is returned, cron will try again whenever it is set to run next
 	messageQueue, err := mq.New(h.Config)
 	if err != nil {
 		opLog.Info(fmt.Sprintf("Failed to initialize message queue manager: %v", err))

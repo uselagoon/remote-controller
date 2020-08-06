@@ -58,6 +58,10 @@ func main() {
 	var enableMQ bool
 	var leaderElectionID string
 	var pendingMessageCron string
+	var mqWorkers int
+	var rabbitRetryInterval int
+	var startupConnectionAttempts int
+	var startupConnectionInterval int
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-kubernetes",
@@ -70,9 +74,17 @@ func main() {
 		"The password for the rabbitmq user.")
 	flag.StringVar(&mqHost, "rabbitmq-hostname", "localhost:5672",
 		"The hostname:port for the rabbitmq host.")
+	flag.IntVar(&mqWorkers, "rabbitmq-queue-workers", 1,
+		"The hostname:port for the rabbitmq host.")
+	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
+		"The hostname:port for the rabbitmq host.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
 	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
+		"The hostname:port for the rabbitmq host.")
+	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
+		"The hostname:port for the rabbitmq host.")
+	flag.IntVar(&startupConnectionInterval, "startup-connection-interval-seconds", 30,
 		"The hostname:port for the rabbitmq host.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
@@ -104,7 +116,7 @@ func main() {
 	}
 
 	config := mq.Config{
-		ReconnectDelay: 30 * time.Second,
+		ReconnectDelay: time.Duration(rabbitRetryInterval) * time.Second,
 		Exchanges: mq.Exchanges{
 			{
 				Name: "lagoon-tasks",
@@ -121,7 +133,7 @@ func main() {
 			{
 				Name:    "remove-queue",
 				Queue:   fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
-				Workers: 1,
+				Workers: mqWorkers,
 				Options: mq.Options{
 					"durable":       true,
 					"delivery_mode": "2",
@@ -131,7 +143,7 @@ func main() {
 			}, {
 				Name:    "builddeploy-queue",
 				Queue:   fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
-				Workers: 1,
+				Workers: mqWorkers,
 				Options: mq.Options{
 					"durable":       true,
 					"delivery_mode": "2",
@@ -188,7 +200,7 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config, mgr.GetClient())
+	messaging := handlers.NewMessaging(config, mgr.GetClient(), startupConnectionAttempts, startupConnectionInterval)
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")

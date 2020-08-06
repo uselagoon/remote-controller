@@ -276,7 +276,9 @@ func getContainerLogs(containerName string, request ctrl.Request) ([]byte, error
 }
 
 // updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
-func (r *LagoonMonitorReconciler) updateStatusCondition(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, condition lagoonv1alpha1.LagoonBuildConditions, log []byte) error {
+func (r *LagoonMonitorReconciler) updateStatusCondition(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	condition lagoonv1alpha1.LagoonBuildConditions, log []byte) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
 	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
@@ -295,7 +297,9 @@ func (r *LagoonMonitorReconciler) updateStatusCondition(ctx context.Context, lag
 }
 
 // updateStatusMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonMonitorReconciler) updateStatusMessage(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, statusMessage lagoonv1alpha1.LagoonLog) error {
+func (r *LagoonMonitorReconciler) updateStatusMessage(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	statusMessage lagoonv1alpha1.LagoonLog) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -314,7 +318,9 @@ func (r *LagoonMonitorReconciler) updateStatusMessage(ctx context.Context, lagoo
 }
 
 // updateEnvironmentMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, envMessage lagoonv1alpha1.LagoonMessage) error {
+func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	envMessage lagoonv1alpha1.LagoonMessage) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -333,7 +339,9 @@ func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context, 
 }
 
 // updateBuildLogMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonMonitorReconciler) updateBuildLogMessage(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, buildMessage lagoonv1alpha1.LagoonLog) error {
+func (r *LagoonMonitorReconciler) updateBuildLogMessage(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	buildMessage lagoonv1alpha1.LagoonLog) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -374,7 +382,9 @@ func (r *LagoonMonitorReconciler) removePendingMessageStatus(ctx context.Context
 }
 
 // statusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild, buildPod *corev1.Pod, lagoonEnv *corev1.ConfigMap) {
+func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	buildPod *corev1.Pod,
+	lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
 		condition := "pending"
 		switch buildPod.Status.Phase {
@@ -435,7 +445,9 @@ func (r *LagoonMonitorReconciler) statusLogsToLagoonLogs(lagoonBuild *lagoonv1al
 
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the operatorhandler message queue in lagoon,
 // this is for the operatorhandler to process.
-func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild *lagoonv1alpha1.LagoonBuild, buildPod *corev1.Pod, lagoonEnv *corev1.ConfigMap) {
+func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	buildPod *corev1.Pod,
+	lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
 		condition := "pending"
 		switch buildPod.Status.Phase {

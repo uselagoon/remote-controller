@@ -465,7 +465,10 @@ func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alp
 }
 
 // updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
-func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild, condition lagoonv1alpha1.LagoonBuildConditions, log string) error {
+func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	condition lagoonv1alpha1.LagoonBuildConditions,
+	log string) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
 	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
@@ -576,7 +579,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 }
 
 // getCreateOrUpdateSSHKeySecret will create or update the ssh key.
-func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Context, sshKey *corev1.Secret, spec lagoonv1alpha1.LagoonBuildSpec, ns string) error {
+func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Context,
+	sshKey *corev1.Secret,
+	spec lagoonv1alpha1.LagoonBuildSpec,
+	ns string) error {
 	sshKey.ObjectMeta = metav1.ObjectMeta{
 		Name:      "lagoon-sshkey",
 		Namespace: ns,

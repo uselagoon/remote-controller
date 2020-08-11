@@ -150,6 +150,16 @@ func main() {
 					"headers":       "",
 					"content_type":  "",
 				},
+			}, {
+				Name:    "jobs-queue",
+				Queue:   fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
+				Workers: mqWorkers,
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
 			},
 		},
 		Queues: mq.Queues{
@@ -167,6 +177,16 @@ func main() {
 				Name:       fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
 				Exchange:   "lagoon-tasks",
 				RoutingKey: fmt.Sprintf("%s:remove", lagoonTargetName),
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
+			}, {
+				Name:       fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
+				Exchange:   "lagoon-tasks",
+				RoutingKey: fmt.Sprintf("%s:jobs", lagoonTargetName),
 				Options: mq.Options{
 					"durable":       true,
 					"delivery_mode": "2",
@@ -234,6 +254,14 @@ func main() {
 		Messaging: messaging,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
+		os.Exit(1)
+	}
+	if err = (&controllers.LagoonTaskReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("LagoonTask"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

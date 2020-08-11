@@ -41,7 +41,7 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func buildContainsStatus(slice []lagoonv1alpha1.LagoonBuildConditions, s lagoonv1alpha1.LagoonBuildConditions) bool {
+func jobContainsStatus(slice []lagoonv1alpha1.LagoonConditions, s lagoonv1alpha1.LagoonConditions) bool {
 	for _, item := range slice {
 		if item == s {
 			return true

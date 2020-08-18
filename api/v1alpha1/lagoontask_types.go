@@ -34,12 +34,12 @@ type LagoonTaskSpec struct {
 
 type LagoonTaskInfo struct {
 	ID      string `json:"id"` // should be int, but the api sends it as a string :\
-	Name    string `json:"name"`
-	Service string `json:"service"`
-	Command string `json:"command"`
-	SSHHost string `json:"sshHost"`
-	SSHPort string `json:"sshPort"`
-	APIHost string `json:"apiHost"`
+	Name    string `json:"name,omitempty"`
+	Service string `json:"service,omitempty"`
+	Command string `json:"command,omitempty"`
+	SSHHost string `json:"sshHost,omitempty"`
+	SSHPort string `json:"sshPort,omitempty"`
+	APIHost string `json:"apiHost,omitempty"`
 }
 
 type LagoonTaskProject struct {

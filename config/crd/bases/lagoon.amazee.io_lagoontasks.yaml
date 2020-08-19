@@ -53,6 +53,19 @@ spec:
               - openshiftProjectName
               - project
               type: object
+            key:
+              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                Important: Run "make" to regenerate code after modifying this file'
+              type: string
+            misc:
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+              required:
+              - id
+              type: object
             project:
               properties:
                 id:

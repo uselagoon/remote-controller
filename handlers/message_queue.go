@@ -228,7 +228,30 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
+	}
+
+	// Handle any tasks that go to the `jobs` queue
+	opLog.Info("Listening for lagoon-tasks:" + targetName + ":misc")
+	err = messageQueue.SetConsumerHandler("misc-queue", func(message mq.Message) {
+		if err == nil {
+			// unmarshall the message into a remove task to be processed
+			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
+			fmt.Println(string(message.Body()))
+			json.Unmarshal(message.Body(), jobSpec)
+			if jobSpec.Key == "kubernetes:build:cancel" {
+				err := h.CancelDeployment(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			}
+		}
+		message.Ack(false) // ack to remove from queue
+	})
+	if err != nil {
+		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
 	}
 	<-forever
 }

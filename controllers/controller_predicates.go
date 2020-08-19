@@ -20,6 +20,11 @@ func (PodPredicates) Create(e event.CreateEvent) bool {
 		match, _ := regexp.MatchString("^lagoon-build", value)
 		return match
 	}
+	if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+		if value == "task" {
+			return true
+		}
+	}
 	return false
 }
 
@@ -28,6 +33,11 @@ func (PodPredicates) Delete(e event.DeleteEvent) bool {
 	if value, ok := e.Meta.GetLabels()["lagoon.sh/buildName"]; ok {
 		match, _ := regexp.MatchString("^lagoon-build", value)
 		return match
+	}
+	if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+		if value == "task" {
+			return true
+		}
 	}
 	return false
 }
@@ -40,6 +50,13 @@ func (PodPredicates) Update(e event.UpdateEvent) bool {
 			return match
 		}
 	}
+	if _, ok := e.MetaOld.GetLabels()["lagoon.sh/jobType"]; ok {
+		if value, ok := e.MetaNew.GetLabels()["lagoon.sh/jobType"]; ok {
+			if value == "task" {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -48,6 +65,11 @@ func (PodPredicates) Generic(e event.GenericEvent) bool {
 	if value, ok := e.Meta.GetLabels()["lagoon.sh/buildName"]; ok {
 		match, _ := regexp.MatchString("^lagoon-build", value)
 		return match
+	}
+	if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+		if value == "task" {
+			return true
+		}
 	}
 	return false
 }

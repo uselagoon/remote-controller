@@ -20,15 +20,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// BuildConditionType const for the status type
-type BuildConditionType string
+// JobConditionType const for the status type
+type JobConditionType string
 
 // These are valid conditions of a job.
 const (
 	// BuildComplete means the build has completed its execution.
-	BuildComplete BuildConditionType = "Complete"
+	JobComplete JobConditionType = "Complete"
 	// BuildFailed means the job has failed its execution.
-	BuildFailed BuildConditionType = "Failed"
+	JobFailed JobConditionType = "Failed"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -53,15 +53,15 @@ type LagoonBuildSpec struct {
 type LagoonBuildStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
-	Log        []byte                  `json:"log,omitempty"`
+	Conditions []LagoonConditions `json:"conditions,omitempty"`
+	Log        []byte             `json:"log,omitempty"`
 }
 
-// LagoonBuildConditions defines the observed conditions of the migrations
-type LagoonBuildConditions struct {
+// LagoonConditions defines the observed conditions of the pods.
+type LagoonConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
-	Type               BuildConditionType     `json:"type"`
+	Type               JobConditionType       `json:"type"`
 	// Condition          string                 `json:"condition"`
 }
 
@@ -75,13 +75,6 @@ type LagoonBuild struct {
 	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
 	Status         LagoonBuildStatus     `json:"status,omitempty"`
 	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
-}
-
-// LagoonStatusMessages is where unsent messages are stored for re-sending.
-type LagoonStatusMessages struct {
-	StatusMessage      *LagoonLog     `json:"statusMessage,omitempty"`
-	BuildLogMessage    *LagoonLog     `json:"buildLogMessage,omitempty"`
-	EnvironmentMessage *LagoonMessage `json:"environmentMessage,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -155,44 +148,4 @@ type Promote struct {
 type Monitoring struct {
 	Contact      string `json:"contact,omitempty"`
 	StatuspageID string `json:"statuspageID,omitempty"`
-}
-
-// LagoonMessaging
-
-// LagoonLog is used to sendToLagoonLogs messaging queue
-// this is general logging information
-type LagoonLog struct {
-	Severity string         `json:"severity,omitempty"`
-	Project  string         `json:"project,omitempty"`
-	UUID     string         `json:"uuid,omitempty"`
-	Event    string         `json:"event,omitempty"`
-	Meta     *LagoonLogMeta `json:"meta,omitempty"`
-	Message  string         `json:"message,omitempty"`
-}
-
-// LagoonLogMeta is the metadata that is used by logging in Lagoon.
-type LagoonLogMeta struct {
-	BranchName     string   `json:"branchName,omitempty"`
-	BuildName      string   `json:"buildName,omitempty"`
-	BuildPhase     string   `json:"buildPhase,omitempty"`
-	EndTime        string   `json:"endTime,omitempty"`
-	Environment    string   `json:"environment,omitempty"`
-	JobName        string   `json:"jobName,omitempty"`
-	LogLink        string   `json:"logLink,omitempty"`
-	MonitoringURLs []string `json:"monitoringUrls,omitempty"`
-	Project        string   `json:"project,omitempty"`
-	ProjectName    string   `json:"projectName,omitempty"`
-	RemoteID       string   `json:"remoteId,omitempty"`
-	Route          string   `json:"route,omitempty"`
-	Routes         []string `json:"routes,omitempty"`
-	StartTime      string   `json:"startTime,omitempty"`
-}
-
-// LagoonMessage is used for sending build info back to Lagoon
-// messaging queue to update the environment or deployment
-type LagoonMessage struct {
-	Type      string         `json:"type,omitempty"`
-	Namespace string         `json:"namespace,omitempty"`
-	Meta      *LagoonLogMeta `json:"meta,omitempty"`
-	// BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
 }

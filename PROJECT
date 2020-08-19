@@ -4,4 +4,7 @@ resources:
 - group: lagoon
   kind: LagoonBuild
   version: v1alpha1
+- group: lagoon
+  kind: LagoonTask
+  version: v1alpha1
 version: "2"

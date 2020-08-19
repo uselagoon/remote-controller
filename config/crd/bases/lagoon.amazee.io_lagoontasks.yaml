@@ -6,18 +6,18 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.2.4
   creationTimestamp: null
-  name: lagoonbuilds.lagoon.amazee.io
+  name: lagoontasks.lagoon.amazee.io
 spec:
   group: lagoon.amazee.io
   names:
-    kind: LagoonBuild
-    listKind: LagoonBuildList
-    plural: lagoonbuilds
-    singular: lagoonbuild
+    kind: LagoonTask
+    listKind: LagoonTaskList
+    plural: lagoontasks
+    singular: lagoontask
   scope: Namespaced
   validation:
     openAPIV3Schema:
-      description: LagoonBuild is the Schema for the lagoonbuilds API
+      description: LagoonTask is the Schema for the lagoontasks API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -32,127 +32,59 @@ spec:
         metadata:
           type: object
         spec:
-          description: LagoonBuildSpec defines the desired state of LagoonBuild
+          description: LagoonTaskSpec defines the desired state of LagoonTask
           properties:
-            branch:
-              description: Branch contains the branch name used for a branch deployment.
+            environment:
               properties:
-                name:
-                  type: string
-              type: object
-            build:
-              description: Build contains the type of build, and the image to use
-                for the builder.
-              properties:
-                ci:
-                  type: string
-                image:
-                  type: string
-                type:
-                  type: string
-              required:
-              - image
-              - type
-              type: object
-            gitReference:
-              type: string
-            project:
-              description: Project contains the project information from lagoon.
-              properties:
-                deployTarget:
-                  type: string
-                environment:
-                  type: string
                 environmentType:
                   type: string
-                gitUrl:
+                id:
                   type: string
-                key:
-                  format: byte
-                  type: string
-                monitoring:
-                  description: Monitoring contains the monitoring information for
-                    the project in Lagoon.
-                  properties:
-                    contact:
-                      type: string
-                    statuspageID:
-                      type: string
-                  type: object
                 name:
                   type: string
-                namespacePattern:
+                openshiftProjectName:
                   type: string
-                productionEnvironment:
+                project:
                   type: string
-                projectSecret:
-                  type: string
-                registry:
-                  type: string
-                routerPattern:
-                  type: string
-                standbyEnvironment:
-                  type: string
-                subfolder:
-                  type: string
-                uiLink:
-                  type: string
-                variables:
-                  description: Variables contains the project and environment variables
-                    from lagoon.
-                  properties:
-                    environment:
-                      format: byte
-                      type: string
-                    project:
-                      format: byte
-                      type: string
-                  type: object
               required:
-              - deployTarget
-              - environment
               - environmentType
-              - gitUrl
-              - key
-              - monitoring
+              - id
               - name
-              - productionEnvironment
-              - projectSecret
-              - standbyEnvironment
-              - variables
+              - openshiftProjectName
+              - project
               type: object
-            promote:
-              description: Promote contains the information for a promote deployment.
+            project:
               properties:
-                sourceEnvironment:
+                id:
                   type: string
-                sourceProject:
+                name:
                   type: string
+              required:
+              - id
+              - name
               type: object
-            pullrequest:
-              description: Pullrequest contains the information for a pullrequest
-                deployment.
+            task:
               properties:
-                baseBranch:
+                apiHost:
                   type: string
-                baseSha:
+                command:
                   type: string
-                headBranch:
+                id:
                   type: string
-                headSha:
+                name:
                   type: string
-                number:
-                  type: integer
-                title:
+                service:
                   type: string
+                sshHost:
+                  type: string
+                sshPort:
+                  type: string
+              required:
+              - id
               type: object
-          required:
-          - build
-          - gitReference
-          - project
           type: object
         status:
-          description: LagoonBuildStatus defines the observed state of LagoonBuild
+          description: LagoonTaskStatus defines the observed state of LagoonTask
           properties:
             conditions:
               description: 'INSERT ADDITIONAL STATUS FIELD - define observed state

@@ -32,3 +32,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - lagoon.amazee.io
+  resources:
+  - lagoontasks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lagoon.amazee.io
+  resources:
+  - lagoontasks/status
+  verbs:
+  - get
+  - patch
+  - update

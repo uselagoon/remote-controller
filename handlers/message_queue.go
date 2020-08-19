@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -108,10 +109,12 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						newBuild.Spec.Project.Environment,
 					),
 				)
+				//@TODO: send msg back to lagoon and update task to failed?
+				message.Ack(false) // ack to remove from queue
 				return
 			}
 		}
-		message.Ack(false)
+		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
 		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
@@ -146,6 +149,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						err,
 					),
 				)
+				//@TODO: send msg back to lagoon and update task to failed?
+				message.Ack(false) // ack to remove from queue
 				return
 			}
 			if err := h.Client.Delete(context.Background(), namespace); err != nil {
@@ -158,6 +163,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						err,
 					),
 				)
+				//@TODO: send msg back to lagoon and update task to failed?
+				message.Ack(false) // ack to remove from queue
 				return
 			}
 			opLog.Info(
@@ -179,7 +186,46 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			operatorMsgBytes, _ := json.Marshal(operatorMsg)
 			h.Publish("lagoon-tasks:operator", operatorMsgBytes)
 		}
-		message.Ack(false)
+		message.Ack(false) // ack to remove from queue
+	})
+	if err != nil {
+		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+	}
+
+	// Handle any tasks that go to the `jobs` queue
+	opLog.Info("Listening for lagoon-tasks:" + targetName + ":jobs")
+	err = messageQueue.SetConsumerHandler("jobs-queue", func(message mq.Message) {
+		if err == nil {
+			// unmarshall the message into a remove task to be processed
+			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
+			json.Unmarshal(message.Body(), jobSpec)
+			job := &lagoonv1alpha1.LagoonTask{}
+			job.Spec = *jobSpec
+			// set the namespace to the `openshiftProjectName` from the environment
+			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
+			job.SetLabels(
+				map[string]string{
+					"lagoon.sh/taskStatus": "Pending",
+				},
+			)
+			// job.ObjectMeta.Name = fmt.Sprintf("%s-%s", job.Spec.Environment.OpenshiftProjectName, job.Spec.Task.ID)
+			// use lagoon-task-<ID>-<RANDOM> as the job/pod name instead
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
+			if err := h.Client.Create(context.Background(), job); err != nil {
+				opLog.Info(
+					fmt.Sprintf(
+						"Unable to create job task for project %s, environment %s: %v",
+						job.Spec.Project.Name,
+						job.Spec.Environment.Name,
+						err,
+					),
+				)
+				//@TODO: send msg back to lagoon and update task to failed?
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+		}
+		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
 		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
@@ -271,4 +317,16 @@ func (h *Messaging) GetPendingMessages() {
 		}
 	}
 	return
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func randString(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }

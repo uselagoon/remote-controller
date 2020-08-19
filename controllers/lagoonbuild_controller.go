@@ -467,11 +467,11 @@ func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alp
 // updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	condition lagoonv1alpha1.LagoonBuildConditions,
+	condition lagoonv1alpha1.LagoonConditions,
 	log string) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
+	if !jobContainsStatus(lagoonBuild.Status.Conditions, condition) {
 		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{

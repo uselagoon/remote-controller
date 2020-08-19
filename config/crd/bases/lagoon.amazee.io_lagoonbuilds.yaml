@@ -229,6 +229,25 @@ spec:
                       type: array
                     startTime:
                       type: string
+                    task:
+                      properties:
+                        apiHost:
+                          type: string
+                        command:
+                          type: string
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        service:
+                          type: string
+                        sshHost:
+                          type: string
+                        sshPort:
+                          type: string
+                      required:
+                      - id
+                      type: object
                   type: object
                 project:
                   type: string
@@ -279,6 +298,25 @@ spec:
                       type: array
                     startTime:
                       type: string
+                    task:
+                      properties:
+                        apiHost:
+                          type: string
+                        command:
+                          type: string
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        service:
+                          type: string
+                        sshHost:
+                          type: string
+                        sshPort:
+                          type: string
+                      required:
+                      - id
+                      type: object
                   type: object
                 namespace:
                   type: string
@@ -331,6 +369,25 @@ spec:
                       type: array
                     startTime:
                       type: string
+                    task:
+                      properties:
+                        apiHost:
+                          type: string
+                        command:
+                          type: string
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        service:
+                          type: string
+                        sshHost:
+                          type: string
+                        sshPort:
+                          type: string
+                      required:
+                      - id
+                      type: object
                   type: object
                 project:
                   type: string

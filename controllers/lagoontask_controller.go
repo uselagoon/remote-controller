@@ -136,19 +136,32 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 								},
 								Spec: dep.Spec.Template.Spec,
 							}
-							if err := r.Create(context.Background(), newPod); err != nil {
-								opLog.Info(
-									fmt.Sprintf(
-										"Unable to create task pod for project %s, environment %s: %v",
-										lagoonTask.Spec.Project.Name,
-										lagoonTask.Spec.Environment.Name,
-										err,
-									),
-								)
-								//@TODO: send msg back and update task to failed?
-								return ctrl.Result{}, nil
+							opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
+							// once the pod spec has been defined, check if it isn't already created
+							err = r.Get(ctx, types.NamespacedName{
+								Namespace: lagoonTask.ObjectMeta.Namespace,
+								Name:      newPod.ObjectMeta.Name,
+							}, newPod)
+							if err != nil {
+								// if it doesn't exist, then create the build pod
+								opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
+								if err := r.Create(ctx, newPod); err != nil {
+									opLog.Info(
+										fmt.Sprintf(
+											"Unable to create task pod for project %s, environment %s: %v",
+											lagoonTask.Spec.Project.Name,
+											lagoonTask.Spec.Environment.Name,
+											err,
+										),
+									)
+									//@TODO: send msg back and update task to failed?
+									return ctrl.Result{}, nil
+								}
+								// then break out of the build
+								break
+							} else {
+								opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 							}
-
 						}
 					}
 				}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -207,7 +208,9 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/taskStatus": "Pending",
 				},
 			)
-			job.ObjectMeta.Name = fmt.Sprintf("%s-%s", job.Spec.Environment.OpenshiftProjectName, job.Spec.Task.ID)
+			// job.ObjectMeta.Name = fmt.Sprintf("%s-%s", job.Spec.Environment.OpenshiftProjectName, job.Spec.Task.ID)
+			// use lagoon-task-<ID>-<RANDOM> as the job/pod name instead
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
 			if err := h.Client.Create(context.Background(), job); err != nil {
 				opLog.Info(
 					fmt.Sprintf(
@@ -314,4 +317,16 @@ func (h *Messaging) GetPendingMessages() {
 		}
 	}
 	return
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func randString(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }

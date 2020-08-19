@@ -13,19 +13,29 @@ import (
 )
 
 // taskLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
+// it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
 func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(lagoonTask *lagoonv1alpha1.LagoonTask, jobPod *corev1.Pod, logs []byte) {
 	if r.EnableMQ {
+		condition := "active"
+		switch jobPod.Status.Phase {
+		case corev1.PodFailed:
+			condition = "failed"
+		case corev1.PodRunning:
+			condition = "active"
+		case corev1.PodSucceeded:
+			condition = "succeeded"
+		}
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
 			Event:    "build-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
+				Task:      &lagoonTask.Spec.Task,
 				JobName:   lagoonTask.ObjectMeta.Name,
-				JobStatus: string(jobPod.Status.Phase),
+				JobStatus: condition,
 				RemoteID:  string(jobPod.ObjectMeta.UID),
 			},
-			Message: fmt.Sprintf(`
-========================================
+			Message: fmt.Sprintf(`========================================
 Logs on pod %s
 ========================================
 %s`, jobPod.ObjectMeta.Name, logs),
@@ -45,24 +55,25 @@ Logs on pod %s
 }
 
 // updateLagoonTask sends the status of the build and deployment to the operatorhandler message queue in lagoon,
-// this is for the operatorhandler to process.
+// this is for the handler in lagoon to process.
 func (r *LagoonMonitorReconciler) updateLagoonTask(lagoonTask *lagoonv1alpha1.LagoonTask,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
-		condition := "pending"
+		condition := "active"
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
 			condition = "failed"
 		case corev1.PodRunning:
-			condition = "running"
+			condition = "active"
 		case corev1.PodSucceeded:
-			condition = "complete"
+			condition = "succeeded"
 		}
 		operatorMsg := lagoonv1alpha1.LagoonMessage{
 			Type:      "task",
 			Namespace: lagoonTask.ObjectMeta.Namespace,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
+				Task:        &lagoonTask.Spec.Task,
 				Environment: lagoonTask.Spec.Environment.Name,
 				Project:     lagoonTask.Spec.Project.Name,
 				JobName:     lagoonTask.ObjectMeta.Name,
@@ -86,6 +97,53 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(lagoonTask *lagoonv1alpha1.La
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
 			r.updateTaskEnvironmentMessage(context.Background(), lagoonTask, operatorMsg)
+			return
+		}
+		// if we are able to publish the message, then we need to remove any pending messages from the resource
+		// and make sure we don't try and publish again
+		r.removeTaskPendingMessageStatus(context.Background(), lagoonTask)
+	}
+}
+
+// taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
+func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(lagoonTask *lagoonv1alpha1.LagoonTask,
+	jobPod *corev1.Pod,
+	lagoonEnv *corev1.ConfigMap) {
+	if r.EnableMQ {
+		condition := "active"
+		switch jobPod.Status.Phase {
+		case corev1.PodFailed:
+			condition = "failed"
+		case corev1.PodRunning:
+			condition = "active"
+		case corev1.PodSucceeded:
+			condition = "succeeded"
+		}
+		msg := lagoonv1alpha1.LagoonLog{
+			Severity: "info",
+			Project:  lagoonTask.Spec.Project.Name,
+			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the operator
+			Meta: &lagoonv1alpha1.LagoonLogMeta{
+				Task:        &lagoonTask.Spec.Task,
+				ProjectName: lagoonTask.Spec.Project.Name,
+				Environment: lagoonTask.Spec.Environment.Name,
+				JobName:     lagoonTask.ObjectMeta.Name,
+				JobStatus:   condition,
+				RemoteID:    string(jobPod.ObjectMeta.UID),
+			},
+			Message: fmt.Sprintf("*[%s]* Task `%s` *%s* %s",
+				lagoonTask.Spec.Project.Name,
+				lagoonTask.Spec.Task.ID,
+				lagoonTask.Spec.Task.Name,
+				condition,
+			),
+		}
+		msgBytes, _ := json.Marshal(msg)
+		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
+			// if we can't publish the message, set it as a pending message
+			// overwrite whatever is there as these are just current state messages so it doesn't
+			// really matter if we don't smootly transition in what we send back to lagoon
+			r.updateTaskStatusMessage(context.Background(), lagoonTask, msg)
 			return
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
@@ -176,52 +234,6 @@ func (r *LagoonMonitorReconciler) updateTaskStatusMessage(ctx context.Context,
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
-}
-
-// taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(lagoonTask *lagoonv1alpha1.LagoonTask,
-	jobPod *corev1.Pod,
-	lagoonEnv *corev1.ConfigMap) {
-	if r.EnableMQ {
-		condition := "active"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-		case corev1.PodRunning:
-			condition = "active"
-		case corev1.PodSucceeded:
-			condition = "succeeded"
-		}
-		msg := lagoonv1alpha1.LagoonLog{
-			Severity: "info",
-			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the operator
-			Meta: &lagoonv1alpha1.LagoonLogMeta{
-				ProjectName: lagoonTask.Spec.Project.Name,
-				Environment: lagoonTask.Spec.Environment.Name,
-				JobName:     lagoonTask.ObjectMeta.Name,
-				JobStatus:   string(jobPod.Status.Phase),
-				RemoteID:    string(jobPod.ObjectMeta.UID),
-			},
-			Message: fmt.Sprintf("*[%s]* Task `%s` *%s* %s",
-				lagoonTask.Spec.Project.Name,
-				lagoonTask.Spec.Task.ID,
-				lagoonTask.Spec.Task.Name,
-				condition,
-			),
-		}
-		msgBytes, _ := json.Marshal(msg)
-		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
-			// if we can't publish the message, set it as a pending message
-			// overwrite whatever is there as these are just current state messages so it doesn't
-			// really matter if we don't smootly transition in what we send back to lagoon
-			r.updateTaskStatusMessage(context.Background(), lagoonTask, msg)
-			return
-		}
-		// if we are able to publish the message, then we need to remove any pending messages from the resource
-		// and make sure we don't try and publish again
-		r.removeTaskPendingMessageStatus(context.Background(), lagoonTask)
-	}
 }
 
 // removeTaskPendingMessageStatus purges the status messages from the resource once they are successfully re-sent

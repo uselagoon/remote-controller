@@ -26,10 +26,11 @@ import (
 type LagoonTaskSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
+	Key         string                `json:"key,omitempty"`
 	Task        LagoonTaskInfo        `json:"task,omitempty"`
 	Project     LagoonTaskProject     `json:"project,omitempty"`
 	Environment LagoonTaskEnvironment `json:"environment,omitempty"`
+	Misc        *LagoonMiscInfo       `json:"misc,omitempty"`
 }
 
 type LagoonTaskInfo struct {
@@ -40,6 +41,11 @@ type LagoonTaskInfo struct {
 	SSHHost string `json:"sshHost,omitempty"`
 	SSHPort string `json:"sshPort,omitempty"`
 	APIHost string `json:"apiHost,omitempty"`
+}
+
+type LagoonMiscInfo struct {
+	ID   string `json:"id"` // should be int, but the api sends it as a string :\
+	Name string `json:"name,omitempty"`
 }
 
 type LagoonTaskProject struct {

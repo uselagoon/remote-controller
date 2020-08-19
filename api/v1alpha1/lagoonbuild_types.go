@@ -29,6 +29,8 @@ const (
 	JobComplete JobConditionType = "Complete"
 	// BuildFailed means the job has failed its execution.
 	JobFailed JobConditionType = "Failed"
+	// BuildFailed means the job has failed its execution.
+	JobCancelled JobConditionType = "Cancelled"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!

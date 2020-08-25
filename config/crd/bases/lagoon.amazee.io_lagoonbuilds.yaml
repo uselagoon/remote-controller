@@ -195,6 +195,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -208,6 +210,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -227,9 +231,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string
@@ -264,6 +274,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -277,6 +289,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -296,9 +310,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string
@@ -335,6 +355,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -348,6 +370,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -367,9 +391,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string

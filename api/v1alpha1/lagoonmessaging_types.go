@@ -30,15 +30,11 @@ type LagoonLogMeta struct {
 	Route          string          `json:"route,omitempty"`
 	Routes         []string        `json:"routes,omitempty"`
 	StartTime      string          `json:"startTime,omitempty"`
+	Services       []string        `json:"services,omitempty"`
 	Task           *LagoonTaskInfo `json:"task,omitempty"`
+	Key            string          `json:"key,omitempty"`
+	AdvancedData   string          `json:"advancedData,omitempty"`
 }
-
-// // LagoonTaskMeta is use for the tasks metadata
-// type LagoonTaskMeta struct {
-// 	ID     int    `json:"id"`
-// 	Name   string `json:"name"`
-// 	Status string `json:"status"`
-// }
 
 // LagoonMessage is used for sending build info back to Lagoon
 // messaging queue to update the environment or deployment

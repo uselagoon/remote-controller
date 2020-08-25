@@ -26,13 +26,15 @@ import (
 type LagoonTaskSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Key         string                `json:"key,omitempty"`
-	Task        LagoonTaskInfo        `json:"task,omitempty"`
-	Project     LagoonTaskProject     `json:"project,omitempty"`
-	Environment LagoonTaskEnvironment `json:"environment,omitempty"`
-	Misc        *LagoonMiscInfo       `json:"misc,omitempty"`
+	Key          string                  `json:"key,omitempty"`
+	Task         LagoonTaskInfo          `json:"task,omitempty"`
+	Project      LagoonTaskProject       `json:"project,omitempty"`
+	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
+	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`
+	AdvancedTask *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
 }
 
+// LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.
 type LagoonTaskInfo struct {
 	ID      string `json:"id"` // should be int, but the api sends it as a string :\
 	Name    string `json:"name,omitempty"`
@@ -43,16 +45,34 @@ type LagoonTaskInfo struct {
 	APIHost string `json:"apiHost,omitempty"`
 }
 
-type LagoonMiscInfo struct {
-	ID   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name string `json:"name,omitempty"`
+// LagoonAdvancedTaskInfo defines what an advanced task can use for the creation of the pod.
+type LagoonAdvancedTaskInfo struct {
+	RunnerImage string `json:"runnerImage,omitempty"`
+	JSONPayload string `json:"JSONPayload,omitempty"`
 }
 
+// LagoonMiscInfo defines the resource or backup information for a misc task.
+type LagoonMiscInfo struct {
+	ID           string                `json:"id"` // should be int, but the api sends it as a string :\
+	Name         string                `json:"name,omitempty"`
+	Backup       *LagoonMiscBackupInfo `json:"backup,omitempty"`
+	MiscResource []byte                `json:"miscResource,omitempty"`
+}
+
+// LagoonMiscBackupInfo defines the information for a backup.
+type LagoonMiscBackupInfo struct {
+	ID       string `json:"id"` // should be int, but the api sends it as a string :\
+	Source   string `json:"source"`
+	BackupID string `json:"backupId"`
+}
+
+// LagoonTaskProject defines the lagoon project information.
 type LagoonTaskProject struct {
 	ID   string `json:"id"` // should be int, but the api sends it as a string :\
 	Name string `json:"name"`
 }
 
+// LagoonTaskEnvironment defines the lagoon environment information.
 type LagoonTaskEnvironment struct {
 	ID                   string `json:"id"` // should be int, but the api sends it as a string :\
 	Name                 string `json:"name"`
@@ -68,14 +88,6 @@ type LagoonTaskStatus struct {
 	Conditions []LagoonConditions `json:"conditions,omitempty"`
 	Log        []byte             `json:"log,omitempty"`
 }
-
-// // LagoonTaskConditions defines the observed conditions of the pods.
-// type LagoonTaskConditions struct {
-// 	LastTransitionTime string                 `json:"lastTransitionTime"`
-// 	Status             corev1.ConditionStatus `json:"status"`
-// 	Type               BuildConditionType     `json:"type"`
-// 	// Condition          string                 `json:"condition"`
-// }
 
 // +kubebuilder:object:root=true
 

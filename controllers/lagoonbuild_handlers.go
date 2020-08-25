@@ -4,14 +4,114 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context, opLog logr.Logger, req ctrl.Request, jobPod corev1.Pod) error {
+	// get the build associated to this pod, we wil need update it at some point
+	var lagoonBuild lagoonv1alpha1.LagoonBuild
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: jobPod.ObjectMeta.Namespace,
+		Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+	}, &lagoonBuild)
+	if err != nil {
+		return err
+	}
+	if cancelBuild, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"]; ok {
+		cancel, _ := strconv.ParseBool(cancelBuild)
+		if cancel {
+			return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, cancel)
+		}
+	}
+	// check if the build pod is in pending, a container in the pod could be failed in this state
+	if jobPod.Status.Phase == corev1.PodPending {
+		opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
+		// send any messages to lagoon message queues
+		r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, nil)
+		r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, nil)
+		// check each container in the pod
+		for _, container := range jobPod.Status.ContainerStatuses {
+			// if the container is a lagoon-build container
+			// which currently it will be as only one container is spawned in a build
+			if container.Name == "lagoon-build" {
+				// check if the state of the pod is one of our failure states
+				if container.State.Waiting != nil && containsString(failureStates, container.State.Waiting.Reason) {
+					// if we have a failure state, then fail the build and get the logs from the container
+					opLog.Info(fmt.Sprintf("Build failed, container exit reason was: %v", container.State.Waiting.Reason))
+					lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1alpha1.JobFailed)
+					if err := r.Update(ctx, &lagoonBuild); err != nil {
+						return err
+					}
+					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, string(lagoonv1alpha1.JobFailed)))
+					if err := r.Delete(ctx, &jobPod); err != nil {
+						return err
+					}
+					opLog.Info(fmt.Sprintf("Deleted failed build pod: %s", jobPod.ObjectMeta.Name))
+					// update the status to failed on the deleted pod
+					// and set the terminate time to now, it is used when we update the deployment and environment
+					jobPod.Status.Phase = corev1.PodFailed
+					state := corev1.ContainerStatus{
+						State: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								FinishedAt: metav1.Time{Time: time.Now().UTC()},
+							},
+						},
+					}
+					jobPod.Status.ContainerStatuses[0] = state
+					r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonConditions{
+						Type:   lagoonv1alpha1.JobFailed,
+						Status: corev1.ConditionTrue,
+					}, []byte(container.State.Waiting.Message))
+
+					// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
+					var lagoonEnv corev1.ConfigMap
+					err := r.Get(ctx, types.NamespacedName{Namespace: jobPod.ObjectMeta.Namespace, Name: "lagoon-env"}, &lagoonEnv)
+					if err != nil {
+						// if there isn't a configmap, just info it and move on
+						// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
+						opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+					}
+					// send any messages to lagoon message queues
+					r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, &lagoonEnv)
+					r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, &lagoonEnv)
+					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
+					r.buildLogsToLagoonLogs(&lagoonBuild, &jobPod, []byte(logMsg))
+					return nil
+				}
+			}
+		}
+		return nil
+	}
+	// if the buildpod status is failed or succeeded
+	// mark the build accordingly and ship the information back to lagoon
+	if jobPod.Status.Phase == corev1.PodFailed || jobPod.Status.Phase == corev1.PodSucceeded {
+		// get the build associated to this pod, we wil need update it at some point
+		var lagoonBuild lagoonv1alpha1.LagoonBuild
+		err := r.Get(ctx, types.NamespacedName{Namespace: jobPod.ObjectMeta.Namespace, Name: jobPod.ObjectMeta.Labels["lagoon.sh/buildName"]}, &lagoonBuild)
+		if err != nil {
+			return err
+		}
+		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, false)
+	}
+	// if it isn't pending, failed, or complete, it will be running, we should tell lagoon
+	opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
+	// send any messages to lagoon message queues
+	r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, nil)
+	r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, nil)
+	return nil
+}
 
 // buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
@@ -25,6 +125,11 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(lagoonBuild *lagoonv1alp
 			condition = "running"
 		case corev1.PodSucceeded:
 			condition = "complete"
+		}
+		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if bStatus == "Cancelled" {
+				condition = "cancelled"
+			}
 		}
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
@@ -71,6 +176,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 		case corev1.PodSucceeded:
 			condition = "complete"
 		}
+		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if bStatus == "Cancelled" {
+				condition = "cancelled"
+			}
+		}
 		operatorMsg := lagoonv1alpha1.LagoonMessage{
 			Type:      "build",
 			Namespace: lagoonBuild.ObjectMeta.Namespace,
@@ -82,6 +192,26 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				RemoteID:    string(jobPod.ObjectMeta.UID),
 			},
+		}
+		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
+		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
+			client.MatchingLabelsSelector{
+				Selector: labels.NewSelector().Add(*labelRequirements1),
+			},
+		})
+		podList := &corev1.PodList{}
+		serviceNames := []string{}
+		if err := r.List(context.TODO(), podList, listOption); err == nil {
+			// generate the list of services to add to the environment
+			for _, pod := range podList.Items {
+				if _, ok := pod.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+					for _, container := range pod.Spec.Containers {
+						serviceNames = append(serviceNames, container.Name)
+					}
+				}
+			}
+			operatorMsg.Meta.Services = serviceNames
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if lagoonEnv != nil {
@@ -135,6 +265,11 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(lagoonBuild *lagoo
 			condition = "running"
 		case corev1.PodSucceeded:
 			condition = "complete"
+		}
+		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if bStatus == "Cancelled" {
+				condition = "cancelled"
+			}
 		}
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
@@ -283,6 +418,87 @@ func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Co
 			})
 			if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
 				return fmt.Errorf("Unable to update status condition: %v", err)
+			}
+		}
+	}
+	return nil
+}
+func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
+	req ctrl.Request, lagoonBuild lagoonv1alpha1.LagoonBuild, jobPod corev1.Pod, cancel bool) error {
+
+	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
+	var jobCondition lagoonv1alpha1.JobConditionType
+	switch jobPod.Status.Phase {
+	case corev1.PodFailed:
+		jobCondition = lagoonv1alpha1.JobFailed
+	case corev1.PodSucceeded:
+		jobCondition = lagoonv1alpha1.JobComplete
+	}
+	if cancel {
+		jobCondition = lagoonv1alpha1.JobCancelled
+	}
+	// if the build status doesn't equal the status of the pod
+	// then update the build to reflect the current pod status
+	// we do this so we don't update the status of the build again
+	if lagoonBuild.Labels["lagoon.sh/buildStatus"] != string(jobCondition) {
+		opLog.Info(
+			fmt.Sprintf(
+				"Cancelling build %s %v",
+				jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+				jobPod.Status.Phase,
+			),
+		)
+		var allContainerLogs []byte
+		// grab all the logs from the containers in the build pod and just merge them all together
+		// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
+		// if we do move to multi container builds, then worry about it
+		for _, container := range jobPod.Spec.Containers {
+			cLogs, err := getContainerLogs(container.Name, req)
+			if err != nil {
+				opLog.Info(fmt.Sprintf("LogsErr: %v", err))
+				return nil
+			}
+			allContainerLogs = append(allContainerLogs, cLogs...)
+		}
+		if cancel {
+			allContainerLogs = append(allContainerLogs, []byte(fmt.Sprintf(`
+========================================
+Build cancelled
+========================================`))...)
+		}
+		// set the status to the build condition
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+		if err := r.Update(ctx, &lagoonBuild); err != nil {
+			return err
+		}
+		r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonConditions{
+			Type:   jobCondition,
+			Status: corev1.ConditionTrue,
+		}, allContainerLogs)
+
+		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
+		var lagoonEnv corev1.ConfigMap
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: jobPod.ObjectMeta.Namespace,
+			Name:      "lagoon-env",
+		},
+			&lagoonEnv,
+		)
+		if err != nil {
+			// if there isn't a configmap, just info it and move on
+			// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
+			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+		}
+		// send any messages to lagoon message queues
+		// update the deployment with the status
+		r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, &lagoonEnv)
+		r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, &lagoonEnv)
+		r.buildLogsToLagoonLogs(&lagoonBuild, &jobPod, allContainerLogs)
+		// just delete the pod
+		// maybe if we move away from using BASH for the kubectl-build-deploy-dind scripts we could handle cancellations better
+		if cancel {
+			if err := r.Delete(ctx, &jobPod); err != nil {
+				return err
 			}
 		}
 	}

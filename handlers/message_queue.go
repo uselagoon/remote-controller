@@ -32,7 +32,7 @@ type messaging interface {
 	GetPendingMessages()
 }
 
-// Messaging is used for the config and client information for the messaging queue
+// Messaging is used for the config and client information for the messaging queue.
 type Messaging struct {
 	Config                  mq.Config
 	Client                  client.Client
@@ -199,12 +199,21 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshall the message into a remove task to be processed
 			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
+			opLog.Info(
+				fmt.Sprintf(
+					"Received task for project %s, environment %s - %s",
+					jobSpec.Project.Name,
+					jobSpec.Environment.Name,
+					jobSpec.Environment.OpenshiftProjectName,
+				),
+			)
 			job := &lagoonv1alpha1.LagoonTask{}
 			job.Spec = *jobSpec
 			// set the namespace to the `openshiftProjectName` from the environment
 			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
 			job.SetLabels(
 				map[string]string{
+					"lagoon.sh/taskType":   "standard",
 					"lagoon.sh/taskStatus": "Pending",
 				},
 			)
@@ -228,7 +237,76 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
+	}
+
+	// Handle any tasks that go to the `misc` queue
+	opLog.Info("Listening for lagoon-tasks:" + targetName + ":misc")
+	err = messageQueue.SetConsumerHandler("misc-queue", func(message mq.Message) {
+		if err == nil {
+			opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
+			// unmarshall the message into a remove task to be processed
+			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
+			json.Unmarshal(message.Body(), jobSpec)
+			// check which key has been received
+			switch jobSpec.Key {
+			case "kubernetes:build:cancel":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received build cancellation for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						jobSpec.Environment.OpenshiftProjectName,
+					),
+				)
+				err := h.CancelDeployment(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "kubernetes:restic:backup:restore":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received backup restoration for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						jobSpec.Misc.Backup.ID,
+					),
+				)
+				err := h.ResticRestore(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "kubernetes:route:migrate":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received ingress migration for project %s",
+						jobSpec.Project.Name,
+					),
+				)
+				err := h.IngressMigration(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			default:
+				// if we get something that we don't know about, spit out the entire message
+				opLog.Info(
+					fmt.Sprintf(
+						"Received unknown message: %s",
+						string(message.Body()),
+					),
+				)
+			}
+		}
+		message.Ack(false) // ack to remove from queue
+	})
+	if err != nil {
+		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
 	}
 	<-forever
 }

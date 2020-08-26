@@ -160,6 +160,16 @@ func main() {
 					"headers":       "",
 					"content_type":  "",
 				},
+			}, {
+				Name:    "misc-queue",
+				Queue:   fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
+				Workers: mqWorkers,
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
 			},
 		},
 		Queues: mq.Queues{
@@ -187,6 +197,16 @@ func main() {
 				Name:       fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
 				Exchange:   "lagoon-tasks",
 				RoutingKey: fmt.Sprintf("%s:jobs", lagoonTargetName),
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
+			}, {
+				Name:       fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
+				Exchange:   "lagoon-tasks",
+				RoutingKey: fmt.Sprintf("%s:misc", lagoonTargetName),
 				Options: mq.Options{
 					"durable":       true,
 					"delivery_mode": "2",

@@ -50,6 +50,7 @@ type LagoonBuildReconciler struct {
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds/status,verbs=get;update;patch
 
+// @TODO: all the things for now, review later
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"
 
 // Reconcile runs when a request comes through
@@ -542,21 +543,18 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		nsPattern = DefaultNamespacePattern
 	}
 	// lowercase and dnsify the namespace against the namespace pattern
-	ns := regexp.MustCompile(`[^0-9a-z-]`).ReplaceAllString(
-		strings.ToLower(
+	ns := makeSafe(
+		strings.Replace(
 			strings.Replace(
-				strings.Replace(
-					nsPattern,
-					"${environment}",
-					spec.Project.Environment,
-					-1,
-				),
-				"${project}",
-				spec.Project.Name,
+				nsPattern,
+				"${environment}",
+				spec.Project.Environment,
 				-1,
 			),
+			"${project}",
+			spec.Project.Name,
+			-1,
 		),
-		`$1-$2`,
 	)
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{

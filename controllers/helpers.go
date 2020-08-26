@@ -1,6 +1,11 @@
 package controllers
 
 import (
+	"math/rand"
+	"regexp"
+	"strings"
+	"time"
+
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -55,4 +60,25 @@ func intPtr(i int32) *int32 {
 	iPtr = new(int32)
 	*iPtr = i
 	return iPtr
+}
+
+// make safe ensures that any string is dns safe
+func makeSafe(in string) string {
+	out := regexp.MustCompile(`[^0-9a-z-]`).ReplaceAllString(
+		strings.ToLower(in),
+		"$1-$2",
+	)
+	return out
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func randString(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }

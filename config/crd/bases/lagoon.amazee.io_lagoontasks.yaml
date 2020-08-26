@@ -34,7 +34,17 @@ spec:
         spec:
           description: LagoonTaskSpec defines the desired state of LagoonTask
           properties:
+            advancedTask:
+              description: LagoonAdvancedTaskInfo defines what an advanced task can
+                use for the creation of the pod.
+              properties:
+                JSONPayload:
+                  type: string
+                runnerImage:
+                  type: string
+              type: object
             environment:
+              description: LagoonTaskEnvironment defines the lagoon environment information.
               properties:
                 environmentType:
                   type: string
@@ -53,7 +63,41 @@ spec:
               - openshiftProjectName
               - project
               type: object
+            key:
+              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                Important: Run "make" to regenerate code after modifying this file'
+              type: string
+            misc:
+              description: LagoonMiscInfo defines the resource or backup information
+                for a misc task.
+              properties:
+                backup:
+                  description: LagoonMiscBackupInfo defines the information for a
+                    backup.
+                  properties:
+                    backupId:
+                      type: string
+                    id:
+                      type: string
+                    source:
+                      type: string
+                  required:
+                  - backupId
+                  - id
+                  - source
+                  type: object
+                id:
+                  type: string
+                miscResource:
+                  format: byte
+                  type: string
+                name:
+                  type: string
+              required:
+              - id
+              type: object
             project:
+              description: LagoonTaskProject defines the lagoon project information.
               properties:
                 id:
                   type: string
@@ -64,6 +108,8 @@ spec:
               - name
               type: object
             task:
+              description: LagoonTaskInfo defines what a task can use to communicate
+                with Lagoon via SSH/API.
               properties:
                 apiHost:
                   type: string
@@ -127,6 +173,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -140,6 +188,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -159,9 +209,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string
@@ -196,6 +252,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -209,6 +267,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -228,9 +288,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string
@@ -267,6 +333,8 @@ spec:
                   description: LagoonLogMeta is the metadata that is used by logging
                     in Lagoon.
                   properties:
+                    advancedData:
+                      type: string
                     branchName:
                       type: string
                     buildName:
@@ -280,6 +348,8 @@ spec:
                     jobName:
                       type: string
                     jobStatus:
+                      type: string
+                    key:
                       type: string
                     logLink:
                       type: string
@@ -299,9 +369,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    services:
+                      items:
+                        type: string
+                      type: array
                     startTime:
                       type: string
                     task:
+                      description: LagoonTaskInfo defines what a task can use to communicate
+                        with Lagoon via SSH/API.
                       properties:
                         apiHost:
                           type: string

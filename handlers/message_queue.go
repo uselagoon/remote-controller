@@ -50,7 +50,7 @@ func NewMessaging(config mq.Config, client client.Client, startupAttempts int, s
 	}
 }
 
-// Consumer handles consuming messages sent to the queue that this operator is connected to and processes them accordingly
+// Consumer handles consuming messages sent to the queue that these controllers are connected to and processes them accordingly
 func (h *Messaging) Consumer(targetName string) { //error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	var messageQueue mq.MQ
@@ -175,7 +175,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					removeTask.OpenshiftProjectName,
 				),
 			)
-			operatorMsg := lagoonv1alpha1.LagoonMessage{
+			msg := lagoonv1alpha1.LagoonMessage{
 				Type:      "remove",
 				Namespace: removeTask.OpenshiftProjectName,
 				Meta: &lagoonv1alpha1.LagoonLogMeta{
@@ -183,8 +183,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					Environment: removeTask.Branch,
 				},
 			}
-			operatorMsgBytes, _ := json.Marshal(operatorMsg)
-			h.Publish("lagoon-tasks:operator", operatorMsgBytes)
+			msgBytes, _ := json.Marshal(msg)
+			h.Publish("lagoon-tasks:controller", msgBytes)
 		}
 		message.Ack(false) // ack to remove from queue
 	})
@@ -373,7 +373,7 @@ func (h *Messaging) GetPendingMessages() {
 			}
 		}
 		if build.StatusMessages.EnvironmentMessage != nil {
-			if err := h.Publish("lagoon-tasks:operator", envBytes); err != nil {
+			if err := h.Publish("lagoon-tasks:controller", envBytes); err != nil {
 				opLog.Info(fmt.Sprintf("Unable to publush message: %v", err))
 				break
 			}

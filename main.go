@@ -227,9 +227,9 @@ func main() {
 				},
 			},
 			{
-				Name:       "lagoon-tasks:operator",
+				Name:       "lagoon-tasks:controller",
 				Exchange:   "lagoon-tasks",
-				RoutingKey: "operator",
+				RoutingKey: "controller",
 				Options: mq.Options{
 					"app_id":        lagoonAppID,
 					"delivery_mode": "2",

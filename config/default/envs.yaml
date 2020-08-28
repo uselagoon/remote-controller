@@ -16,4 +16,4 @@ spec:
             - name: RABBITMQ_HOSTNAME
               value: '172.17.0.1:5672'
             - name: LAGOON_TARGET_NAME
-              value: 'ci-local-operator-k8s'
+              value: 'ci-local-controller-kubernetes'

@@ -79,8 +79,8 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-operator-test:
-	./operator-test.sh
+controller-test:
+	./controller-test.sh
 
 clean:
 	docker-compose down

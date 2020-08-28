@@ -7,24 +7,24 @@
 KIND_VER=v1.17.5
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
-KIND_NAME=kbd-operator-test
-OPERATOR_IMAGE=amazeeio/lagoon-builddeploy:test-tag
+KIND_NAME=kbd-controller-test
+CONTROLLER_IMAGE=amazeeio/lagoon-builddeploy:test-tag
 
 
-BUILD_OPERATOR=true
-OPERATOR_NAMESPACE=lagoon-builddeploy
-if [ ! -z "$BUILD_OPERATOR" ]; then
-    OPERATOR_NAMESPACE=lagoon-kbd-system
+BUILD_CONTROLLER=true
+CONTROLLER_NAMESPACE=lagoon-builddeploy
+if [ ! -z "$BUILD_CONTROLLER" ]; then
+    CONTROLLER_NAMESPACE=lagoon-kbd-system
 fi
 CHECK_TIMEOUT=10
 
 NS=drupal-example-install
 LBUILD=lagoon-build-7m5zypx
 
-check_operator_log () {
-    echo "=========== OPERATOR LOG ============"
-    kubectl logs $(kubectl get pods  -n ${OPERATOR_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${OPERATOR_NAMESPACE}
-    if $(kubectl logs $(kubectl get pods  -n ${OPERATOR_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${OPERATOR_NAMESPACE} | grep -q "Build ${LBUILD} Failed")
+check_controller_log () {
+    echo "=========== CONTROLLER LOG ============"
+    kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
+    if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Build ${LBUILD} Failed")
     then
         # build failed, exit 1
         tear_down
@@ -95,30 +95,30 @@ volumeBindingMode: WaitForFirstConsumer
 EOF
 }
 
-build_deploy_operator () {
-    echo "==> Build and deploy operator"
+build_deploy_controller () {
+    echo "==> Build and deploy controller"
     make test
-    make docker-build IMG=${OPERATOR_IMAGE}
-    kind load docker-image ${OPERATOR_IMAGE} --name ${KIND_NAME}
-    make deploy IMG=${OPERATOR_IMAGE}
+    make docker-build IMG=${CONTROLLER_IMAGE}
+    kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
+    make deploy IMG=${CONTROLLER_IMAGE}
 
     CHECK_COUNTER=1
-    echo "==> Ensure operator is running"
-    until $(kubectl get pods  -n ${OPERATOR_NAMESPACE} --no-headers | grep -q "Running")
+    echo "==> Ensure controller is running"
+    until $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | grep -q "Running")
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
-        echo "Operator not running yet"
+        echo "Controller not running yet"
         sleep 5
     else
-        echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
-        check_operator_log
+        echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
+        check_controller_log
         tear_down
         echo "================ END ================"
         exit 1
     fi
     done
-    echo "==> Operator is running"
+    echo "==> Controller is running"
 }
 
 
@@ -129,44 +129,35 @@ check_lagoon_build () {
     until $(kubectl get pods  -n ${NS} --no-headers | grep -iq "Running")
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
-        # if $(kubectl -n ${NS} get lagoonbuilds/${LBUILD} -o yaml | grep -q "lagoon.sh/buildStatus: Failed"); then
-        #     echo "=========== BUILD LOG ============"
-        #     kubectl -n ${NS} get lagoonbuilds/${LBUILD} -o yaml
-        #     kubectl logs $(kubectl get pods  -n ${NS} --no-headers | awk '{print $1}') -c lagoon-build -n ${NS}
-        #     exit 1
-        # fi
         let CHECK_COUNTER=CHECK_COUNTER+1
         echo "Build not running yet"
         sleep 30
     else
-        echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
+        echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
         echo "=========== BUILD LOG ============"
-        kubectl -n ${NS} get lagoonbuilds/${LBUILD} -o yaml
-        # kubectl -n ${NS} logs lagoon-build-7m5zypx -f
-        # kubectl logs $(kubectl get pods  -n ${NS} --no-headers | awk '{print $1}') -c lagoon-build -n ${NS}
-        check_operator_log
+        kubectl -n ${NS} logs ${LBUILD} -f
+        check_controller_log
         tear_down
         echo "================ END ================"
         exit 1
     fi
     done
     echo "==> Build running"
-    kubectl -n ${NS} logs lagoon-build-7m5zypx -f
-    # kubectl -n ${NS} get lagoonbuilds/${LBUILD} -o yaml
+    kubectl -n ${NS} logs ${LBUILD} -f
 }
 
 start_up
 start_kind
 
 echo "==> Configure example environment"
-echo "====> Install build deploy operator"
-if [ ! -z "$BUILD_OPERATOR" ]; then
-    build_deploy_operator
+echo "====> Install build deploy controllers"
+if [ ! -z "$BUILD_CONTROLLER" ]; then
+    build_deploy_controller
 else
     kubectl create namespace lagoon-builddeploy
     helm repo add lagoon-builddeploy https://raw.githubusercontent.com/amazeeio/lagoon-kbd/main/charts
     helm upgrade --install -n lagoon-builddeploy lagoon-builddeploy lagoon-builddeploy/lagoon-builddeploy \
-        --set vars.lagoonTargetName=ci-local-operator-k8s \
+        --set vars.lagoonTargetName=ci-local-controller-kubernetes \
         --set vars.rabbitPassword=guest \
         --set vars.rabbitUsername=guest \
         --set vars.rabbitHostname=172.17.0.1:5672
@@ -192,6 +183,6 @@ kubectl -n default apply -f test-resources/example-project1.yaml
 sleep 10
 check_lagoon_build
 
-check_operator_log
+check_controller_log
 tear_down
 echo "================ END ================"

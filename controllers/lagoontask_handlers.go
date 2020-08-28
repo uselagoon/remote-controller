@@ -169,7 +169,7 @@ Logs on pod %s
 	}
 }
 
-// updateLagoonTask sends the status of the build and deployment to the operatorhandler message queue in lagoon,
+// updateLagoonTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
 func (r *LagoonMonitorReconciler) updateLagoonTask(lagoonTask *lagoonv1alpha1.LagoonTask,
 	jobPod *corev1.Pod) {
@@ -183,7 +183,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(lagoonTask *lagoonv1alpha1.La
 		case corev1.PodSucceeded:
 			condition = "succeeded"
 		}
-		operatorMsg := lagoonv1alpha1.LagoonMessage{
+		msg := lagoonv1alpha1.LagoonMessage{
 			Type:      "task",
 			Namespace: lagoonTask.ObjectMeta.Namespace,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
@@ -200,24 +200,24 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(lagoonTask *lagoonv1alpha1.La
 			// if the task contains `taskData` annotation, this is used to send data back to lagoon
 			// lagoon will use the data to perform an action against the api or something else
 			// the data in taskData should be base64 encoded
-			operatorMsg.Meta.AdvancedData = jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]
+			msg.Meta.AdvancedData = jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]
 		}
 		// we can add the build start time here
 		if jobPod.Status.StartTime != nil {
-			operatorMsg.Meta.StartTime = jobPod.Status.StartTime.Time.UTC().Format("2006-01-02 15:04:05")
+			msg.Meta.StartTime = jobPod.Status.StartTime.Time.UTC().Format("2006-01-02 15:04:05")
 		}
 		// and then once the pod is terminated we can add the terminated time here
 		if jobPod.Status.ContainerStatuses != nil {
 			if jobPod.Status.ContainerStatuses[0].State.Terminated != nil {
-				operatorMsg.Meta.EndTime = jobPod.Status.ContainerStatuses[0].State.Terminated.FinishedAt.Time.UTC().Format("2006-01-02 15:04:05")
+				msg.Meta.EndTime = jobPod.Status.ContainerStatuses[0].State.Terminated.FinishedAt.Time.UTC().Format("2006-01-02 15:04:05")
 			}
 		}
-		operatorMsgBytes, _ := json.Marshal(operatorMsg)
-		if err := r.Messaging.Publish("lagoon-tasks:operator", operatorMsgBytes); err != nil {
+		msgBytes, _ := json.Marshal(msg)
+		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
-			r.updateTaskEnvironmentMessage(context.Background(), lagoonTask, operatorMsg)
+			r.updateTaskEnvironmentMessage(context.Background(), lagoonTask, msg)
 			return
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
@@ -242,7 +242,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(lagoonTask *lagoonv
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the operator
+			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
 				Task:        &lagoonTask.Spec.Task,
 				ProjectName: lagoonTask.Spec.Project.Name,

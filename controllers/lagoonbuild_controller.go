@@ -277,16 +277,24 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					})
 				}
 				if lagoonBuild.Spec.Project.Variables.Project != nil {
-					podEnvs = append(podEnvs, corev1.EnvVar{
-						Name:  "LAGOON_PROJECT_VARIABLES",
-						Value: string(lagoonBuild.Spec.Project.Variables.Project),
-					})
+					// if this is 2 bytes long, then it means its just an empty json array
+					// we only want to add it if it is more than 2 bytes
+					if len(lagoonBuild.Spec.Project.Variables.Project) > 2 {
+						podEnvs = append(podEnvs, corev1.EnvVar{
+							Name:  "LAGOON_PROJECT_VARIABLES",
+							Value: string(lagoonBuild.Spec.Project.Variables.Project),
+						})
+					}
 				}
 				if lagoonBuild.Spec.Project.Variables.Environment != nil {
-					podEnvs = append(podEnvs, corev1.EnvVar{
-						Name:  "LAGOON_ENVIRONMENT_VARIABLES",
-						Value: string(lagoonBuild.Spec.Project.Variables.Environment),
-					})
+					// if this is 2 bytes long, then it means its just an empty json array
+					// we only want to add it if it is more than 2 bytes
+					if len(lagoonBuild.Spec.Project.Variables.Environment) > 2 {
+						podEnvs = append(podEnvs, corev1.EnvVar{
+							Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+							Value: string(lagoonBuild.Spec.Project.Variables.Environment),
+						})
+					}
 				}
 				if lagoonBuild.Spec.Project.Monitoring.StatuspageID != "" {
 					podEnvs = append(podEnvs, corev1.EnvVar{

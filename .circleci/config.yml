@@ -53,4 +53,4 @@ jobs:
             export PATH=$PATH:/usr/local/go/bin
             export GOPATH=$HOME/go
             # export GO111MODULE=on
-            make operator-test
+            make controller-test

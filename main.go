@@ -31,6 +31,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	// Openshift
+	projectv1 "github.com/openshift/api/project/v1"
+
 	"gopkg.in/robfig/cron.v2"
 	// +kubebuilder:scaffold:imports
 )
@@ -50,6 +53,7 @@ func init() {
 
 	_ = lagoonv1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
+	_ = projectv1.AddToScheme(scheme)
 }
 
 func main() {

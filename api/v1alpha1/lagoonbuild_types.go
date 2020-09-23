@@ -49,6 +49,7 @@ type LagoonBuildSpec struct {
 	Pullrequest  Pullrequest `json:"pullrequest,omitempty"`
 	Promote      Promote     `json:"promote,omitempty"`
 	GitReference string      `json:"gitReference"`
+	Openshift    bool        `json:"openshift"`
 }
 
 // LagoonBuildStatus defines the observed state of LagoonBuild

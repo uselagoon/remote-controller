@@ -443,7 +443,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
 	if lagoonBuild.Labels["lagoon.sh/buildStatus"] != string(jobCondition) {
 		opLog.Info(
 			fmt.Sprintf(
-				"Cancelling build %s %v",
+				"Updating build status for %s to %v",
 				jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 				jobPod.Status.Phase,
 			),

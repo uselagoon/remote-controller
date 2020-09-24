@@ -287,7 +287,20 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.IngressMigration(jobSpec)
+				err := h.IngressRouteMigration(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "openshift:route:migrate":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received route migration for project %s",
+						jobSpec.Project.Name,
+					),
+				)
+				err := h.IngressRouteMigration(jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

@@ -49,7 +49,8 @@ type LagoonBuildSpec struct {
 	Pullrequest  Pullrequest `json:"pullrequest,omitempty"`
 	Promote      Promote     `json:"promote,omitempty"`
 	GitReference string      `json:"gitReference"`
-	Openshift    bool        `json:"openshift"`
+	// @TODO: Openshift should be deprecated as the controller will define if it is openshift or not
+	// Openshift    bool        `json:"openshift"`
 }
 
 // LagoonBuildStatus defines the observed state of LagoonBuild
@@ -96,7 +97,7 @@ func init() {
 // Build contains the type of build, and the image to use for the builder.
 type Build struct {
 	CI    string `json:"ci,omitempty"`
-	Image string `json:"image"`
+	Image string `json:"image,omitempty"`
 	Type  string `json:"type"`
 }
 

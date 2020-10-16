@@ -46,10 +46,12 @@ import (
 // LagoonBuildReconciler reconciles a LagoonBuild object
 type LagoonBuildReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	EnableMQ  bool
-	Messaging *handlers.Messaging
+	Log         logr.Logger
+	Scheme      *runtime.Scheme
+	EnableMQ    bool
+	Messaging   *handlers.Messaging
+	BuildImage  string
+	IsOpenshift bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -100,7 +102,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				return ctrl.Result{}, err
 			}
 
-			if lagoonBuild.Spec.Openshift && lagoonBuild.Spec.Build.Type == "promote" {
+			if r.IsOpenshift && lagoonBuild.Spec.Build.Type == "promote" {
 				err := r.getOrCreatePromoteSARoleBinding(ctx, lagoonBuild.Spec.Promote.SourceProject, namespace.ObjectMeta.Name)
 				if err != nil {
 					return ctrl.Result{}, err
@@ -160,7 +162,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					return ctrl.Result{}, err
 				}
 
-				if lagoonBuild.Spec.Openshift && lagoonBuild.Spec.Build.Type == "promote" {
+				if r.IsOpenshift && lagoonBuild.Spec.Build.Type == "promote" {
 					err := r.getOrCreatePromoteSARoleBinding(ctx, lagoonBuild.Spec.Promote.SourceProject, lagoonBuild.ObjectMeta.Namespace)
 					if err != nil {
 						return ctrl.Result{}, err
@@ -183,7 +185,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				// openshift uses a builder service account to be able to push images to the openshift registry
 				// lets load this in exactly the same way an openshift build would
 				var builderServiceaccountTokenSecret string
-				if lagoonBuild.Spec.Openshift {
+				if r.IsOpenshift {
 					builderAccount := &corev1.ServiceAccount{}
 					err := r.Get(ctx, types.NamespacedName{
 						Namespace: lagoonBuild.ObjectMeta.Namespace,
@@ -248,7 +250,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
 					},
 				}
-				if lagoonBuild.Spec.Openshift {
+				if r.IsOpenshift {
 					// openshift builds have different names for some things, and also additional values to add
 					podEnvs = append(podEnvs, corev1.EnvVar{
 						Name:  "TYPE",
@@ -343,7 +345,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:  "PR_TITLE",
 						Value: lagoonBuild.Spec.Pullrequest.Title,
 					})
-					if !lagoonBuild.Spec.Openshift {
+					if !r.IsOpenshift {
 						// we don't use PR_NUMBER in openshift builds
 						podEnvs = append(podEnvs, corev1.EnvVar{
 							Name:  "PR_NUMBER",
@@ -356,7 +358,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:  "PROMOTION_SOURCE_ENVIRONMENT",
 						Value: lagoonBuild.Spec.Promote.SourceEnvironment,
 					})
-					if lagoonBuild.Spec.Openshift {
+					if r.IsOpenshift {
 						// openshift does promotions differently
 						podEnvs = append(podEnvs, corev1.EnvVar{
 							Name:  "PROMOTION_SOURCE_OPENSHIFT_PROJECT",
@@ -394,6 +396,12 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:  "MONITORING_STATUSPAGEID",
 						Value: lagoonBuild.Spec.Project.Monitoring.StatuspageID,
 					})
+				}
+				// Use the build image in the controller definition
+				buildImage := r.BuildImage
+				if lagoonBuild.Spec.Build.Image != "" {
+					// otherwise if the build spec contains an image definition, use it instead.
+					buildImage = lagoonBuild.Spec.Build.Image
 				}
 				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -449,7 +457,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Containers: []corev1.Container{
 							{
 								Name:            "lagoon-build",
-								Image:           lagoonBuild.Spec.Build.Image,
+								Image:           buildImage,
 								ImagePullPolicy: "Always",
 								Env:             podEnvs,
 								VolumeMounts: []corev1.VolumeMount{
@@ -471,7 +479,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 				// openshift uses a builder service account to be able to push images to the openshift registry
 				// load that into the podspec here
-				if lagoonBuild.Spec.Openshift {
+				if r.IsOpenshift {
 					newPod.Spec.ServiceAccountName = "builder"
 					builderToken := corev1.VolumeMount{
 						Name:      builderServiceaccountTokenSecret,
@@ -692,7 +700,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	// this is an openshift build, then we need to create a projectrequest
 	// we use projectrequest so that we ensure any openshift specific things can happen.
-	if spec.Openshift {
+	if r.IsOpenshift {
 		projectRequest := &projectv1.ProjectRequest{}
 		projectRequest.ObjectMeta.Name = ns
 		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, spec.Project.Name, spec.Project.Environment)

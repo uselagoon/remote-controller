@@ -3,9 +3,9 @@ entries:
   lagoon-builddeploy:
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2020-10-27T09:52:37.319294+11:00"
+    created: "2020-10-27T09:55:47.071834+11:00"
     description: A Helm chart for lagoon-builddeploy
-    digest: 07d03b36584bc26d43fe3b50bbf8b0566b81cd5520a41b5d7a4f0057cd3ff299
+    digest: 54e10fb69334bb73fadfd3dc603cf17efd110e3d53a37e19684c5a57dbd4ca59
     name: lagoon-builddeploy
     type: application
     urls:
@@ -13,7 +13,7 @@ entries:
     version: 0.1.4
   - apiVersion: v2
     appVersion: 0.1.3
-    created: "2020-10-27T09:52:37.318497+11:00"
+    created: "2020-10-27T09:55:47.071284+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 7c97f2815d38e0a2f6d1041670eec750dcb88484105b9b231746a6649915ab0f
     name: lagoon-builddeploy
@@ -23,7 +23,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.2
-    created: "2020-10-27T09:52:37.317149+11:00"
+    created: "2020-10-27T09:55:47.070129+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 7616e507ebdac9a8fa081b1925428dff700cee46e3d0948ee5f343864bf73873
     name: lagoon-builddeploy
@@ -33,7 +33,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.1
-    created: "2020-10-27T09:52:37.314948+11:00"
+    created: "2020-10-27T09:55:47.06887+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 1fa0435d49d0dd2762029cf140d5c6e233f00253bcdf60ca9a113d7dac3a73fd
     name: lagoon-builddeploy
@@ -43,7 +43,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-10-27T09:52:37.311257+11:00"
+    created: "2020-10-27T09:55:47.067529+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: de42c5e64e32c18a5ad15e138afe1eadec4e742eeb42f77faaf3188a8d25d1e3
     name: lagoon-builddeploy
@@ -51,4 +51,4 @@ entries:
     urls:
     - lagoon-builddeploy-0.1.0.tgz
     version: 0.1.0
-generated: "2020-10-27T09:52:37.309525+11:00"
+generated: "2020-10-27T09:55:47.06474+11:00"

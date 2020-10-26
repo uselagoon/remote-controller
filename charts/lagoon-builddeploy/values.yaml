@@ -21,7 +21,8 @@ fullnameOverride: ""
 extraArgs:
   metrics-addr: 127.0.0.1:8080
   enable-leader-election: true
-  is-openshift: false
+
+isopenshift: false
 
 vars:
   rabbitUsername: ''

@@ -40,6 +40,9 @@ spec:
           - --{{ $key }}
           {{- end }}
       {{- end }}
+          {{- if .Values.isopenshift }}
+          - --is-openshift
+          {{- end }}
           command:
           - /manager
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

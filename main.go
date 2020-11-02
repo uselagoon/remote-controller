@@ -66,6 +66,9 @@ func main() {
 	var rabbitRetryInterval int
 	var startupConnectionAttempts int
 	var startupConnectionInterval int
+	var overrideBuildDeployImage string
+	var isOpenshift bool
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-kubernetes",
@@ -94,6 +97,10 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,
 		"Enable message queue to provide updates back to Lagoon.")
+	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
+		"The build and deploy image that should be used by builds started by the controller.")
+	flag.BoolVar(&isOpenshift, "is-openshift", false,
+		"Flag to determine if the controller is running in an openshift")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -103,6 +110,7 @@ func main() {
 	lagoonTargetName = getEnv("LAGOON_TARGET_NAME", lagoonTargetName)
 	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
 	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
+	overrideBuildDeployImage = getEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -262,10 +270,12 @@ func main() {
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme:   mgr.GetScheme(),
-		EnableMQ: enableMQ,
+		Client:      mgr.GetClient(),
+		Log:         ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:      mgr.GetScheme(),
+		EnableMQ:    enableMQ,
+		BuildImage:  overrideBuildDeployImage,
+		IsOpenshift: isOpenshift,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

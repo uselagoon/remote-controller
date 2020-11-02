@@ -40,6 +40,9 @@ spec:
           - --{{ $key }}
           {{- end }}
       {{- end }}
+          {{- if .Values.isopenshift }}
+          - --is-openshift
+          {{- end }}
           command:
           - /manager
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -55,6 +58,8 @@ spec:
               value: '{{ .Values.vars.lagoonTargetName }}'
             - name: PENDING_MESSAGE_CRON
               value: '{{ .Values.vars.pendingMessageCron }}'
+            - name: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE
+              value: '{{ .Values.vars.overrideBuildDeployImage }}'
           name: manager
           resources:
             limits:

@@ -51,13 +51,10 @@ spec:
                 type:
                   type: string
               required:
-              - image
               - type
               type: object
             gitReference:
               type: string
-            openshift:
-              type: boolean
             project:
               description: Project contains the project information from lagoon.
               properties:
@@ -151,7 +148,6 @@ spec:
           required:
           - build
           - gitReference
-          - openshift
           - project
           type: object
         status:

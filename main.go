@@ -67,6 +67,8 @@ func main() {
 	var startupConnectionAttempts int
 	var startupConnectionInterval int
 	var overrideBuildDeployImage string
+	var namespacePrefix string
+	var randomPrefix bool
 	var isOpenshift bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
@@ -100,7 +102,11 @@ func main() {
 	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
 		"The build and deploy image that should be used by builds started by the controller.")
 	flag.BoolVar(&isOpenshift, "is-openshift", false,
-		"Flag to determine if the controller is running in an openshift")
+		"Flag to determine if the controller is running in an openshift.")
+	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
+		"The prefix that will be added to all namespaces that are generated. (only used if random-prefix is set false)")
+	flag.BoolVar(&randomPrefix, "random-prefix", false,
+		"Flag to determine if the all namespaces should be prefixed with 5 random characters.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -111,6 +117,7 @@ func main() {
 	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
 	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 	overrideBuildDeployImage = getEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
+	namespacePrefix = getEnv("NAMESPACE_PREFIX", namespacePrefix)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -270,12 +277,14 @@ func main() {
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme:      mgr.GetScheme(),
-		EnableMQ:    enableMQ,
-		BuildImage:  overrideBuildDeployImage,
-		IsOpenshift: isOpenshift,
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		BuildImage:            overrideBuildDeployImage,
+		IsOpenshift:           isOpenshift,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

@@ -60,6 +60,8 @@ spec:
               value: '{{ .Values.vars.pendingMessageCron }}'
             - name: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE
               value: '{{ .Values.vars.overrideBuildDeployImage }}'
+            - name: NAMESPACE_PREFIX
+              value: '{{ .Values.vars.namespacePrefix }}'
           name: manager
           resources:
             limits:

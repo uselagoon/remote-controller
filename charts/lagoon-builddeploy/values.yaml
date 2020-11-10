@@ -36,6 +36,7 @@ vars:
   lagoonTargetName: ''
   pendingMessageCron: '*/5 * * * *'
   overrideBuildDeployImage: ''
+  namespacePrefix: ''
 
 serviceAccount:
   # The name of the service account to use.

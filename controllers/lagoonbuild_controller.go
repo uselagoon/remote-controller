@@ -696,12 +696,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	// If the randomprefix is enabled, then add a random prefix
 	if r.RandomNamespacePrefix {
-		ns = fmt.Sprintf("%s-%s", randString(5), ns)
+		ns = fmt.Sprintf("%s-%s", hashString(ns)[0:8], ns)
 	}
 	// Once the namespace is fully calculated, then truncate the generated namespace
 	// to 63 characters to not exceed the kubernetes namespace limit
 	if len(ns) > 63 {
-		ns = fmt.Sprintf("%s-%s", ns[0:57], randString(5))
+		ns = fmt.Sprintf("%s-%s", ns[0:58], hashString(ns)[0:4])
 	}
 	nsLabels := map[string]string{
 		"lagoon.sh/project":         spec.Project.Name,

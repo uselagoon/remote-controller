@@ -29,6 +29,7 @@ extraArgs:
 
 isopenshift: false
 
+# namespacePrefix is limited to 8 characters, and will be automatically truncated
 vars:
   rabbitUsername: ''
   rabbitPassword: ''
@@ -37,6 +38,7 @@ vars:
   pendingMessageCron: '*/5 * * * *'
   overrideBuildDeployImage: ''
   namespacePrefix: ''
+  controllerNamespace: 'lagoon-builddeploy'
 
 serviceAccount:
   # The name of the service account to use.

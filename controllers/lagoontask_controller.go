@@ -36,8 +36,9 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log                 logr.Logger
+	Scheme              *runtime.Scheme
+	ControllerNamespace string
 }
 
 var (
@@ -56,6 +57,15 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	var lagoonTask lagoonv1alpha1.LagoonTask
 	if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
+	}
+
+	// check if the task that is received has the lagoon.sh/controller label
+	// if it does, check if the label value matches this controllers namespace
+	if controllerNamespace, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
+		if controllerNamespace != r.ControllerNamespace {
+			// this task is not handled by this controller, so don't do anything
+			return ctrl.Result{}, nil
+		}
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -170,8 +180,9 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 							Name:      lagoonTask.ObjectMeta.Name,
 							Namespace: lagoonTask.ObjectMeta.Namespace,
 							Labels: map[string]string{
-								"lagoon.sh/jobType":  "task",
-								"lagoon.sh/taskName": lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/jobType":    "task",
+								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/controller": r.ControllerNamespace,
 							},
 							OwnerReferences: []metav1.OwnerReference{
 								{
@@ -280,8 +291,9 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			Name:      lagoonTask.ObjectMeta.Name,
 			Namespace: lagoonTask.Spec.Environment.OpenshiftProjectName,
 			Labels: map[string]string{
-				"lagoon.sh/jobType":  "task",
-				"lagoon.sh/taskName": lagoonTask.ObjectMeta.Name,
+				"lagoon.sh/jobType":    "task",
+				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+				"lagoon.sh/controller": r.ControllerNamespace,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{

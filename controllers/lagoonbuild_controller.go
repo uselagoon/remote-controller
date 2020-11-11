@@ -54,6 +54,7 @@ type LagoonBuildReconciler struct {
 	IsOpenshift           bool
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
+	ControllerNamespace   string
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -71,6 +72,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	var lagoonBuild lagoonv1alpha1.LagoonBuild
 	if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
+	}
+
+	// check if the build that is received has the lagoon.sh/controller label
+	// if it does, check if the label value matches this controllers namespace
+	// if no label exists, or the label matches, then it will continue on
+	if controllerNamespace, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
+		if controllerNamespace != r.ControllerNamespace {
+			// this build is not handled by this controller, so don't do anything
+			return ctrl.Result{}, nil
+		}
 	}
 
 	finalizerName := "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
@@ -129,6 +140,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			client.InNamespace(req.Namespace),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/buildStatus": "Running",
+				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
 		// list any builds that are running
@@ -410,8 +422,9 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:      lagoonBuild.ObjectMeta.Name,
 						Namespace: lagoonBuild.ObjectMeta.Namespace,
 						Labels: map[string]string{
-							"lagoon.sh/jobType":   "build",
-							"lagoon.sh/buildName": lagoonBuild.ObjectMeta.Name,
+							"lagoon.sh/jobType":    "build",
+							"lagoon.sh/buildName":  lagoonBuild.ObjectMeta.Name,
+							"lagoon.sh/controller": r.ControllerNamespace,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -527,6 +540,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				client.InNamespace(req.Namespace),
 				client.MatchingLabels(map[string]string{
 					"lagoon.sh/buildStatus": "Pending",
+					"lagoon.sh/controller":  r.ControllerNamespace,
 				}),
 			})
 			if err := r.List(ctx, pendingBuilds, listOption); err != nil {
@@ -694,9 +708,9 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if r.NamespacePrefix != "" && r.RandomNamespacePrefix == false {
 		ns = fmt.Sprintf("%s-%s", r.NamespacePrefix, ns)
 	}
-	// If the randomprefix is enabled, then add a random prefix
+	// If the randomprefix is enabled, then add a prefix based on the hash of the controller namespace
 	if r.RandomNamespacePrefix {
-		ns = fmt.Sprintf("%s-%s", hashString(ns)[0:8], ns)
+		ns = fmt.Sprintf("%s-%s", hashString(r.ControllerNamespace)[0:8], ns)
 	}
 	// Once the namespace is fully calculated, then truncate the generated namespace
 	// to 63 characters to not exceed the kubernetes namespace limit
@@ -809,6 +823,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, bu
 	newBuild.SetLabels(
 		map[string]string{
 			"lagoon.sh/buildStatus": "Pending",
+			"lagoon.sh/controller":  r.ControllerNamespace,
 		},
 	)
 	err := r.Get(ctx, types.NamespacedName{

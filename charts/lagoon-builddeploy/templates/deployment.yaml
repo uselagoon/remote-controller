@@ -62,6 +62,8 @@ spec:
               value: '{{ .Values.vars.overrideBuildDeployImage }}'
             - name: NAMESPACE_PREFIX
               value: '{{ .Values.vars.namespacePrefix }}'
+            - name: CONTROLLER_NAMESPACE
+              value: '{{ .Values.vars.controllerNamespace }}'
           name: manager
           resources:
             limits:

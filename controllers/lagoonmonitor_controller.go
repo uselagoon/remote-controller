@@ -36,10 +36,11 @@ import (
 // LagoonMonitorReconciler reconciles a LagoonBuild object
 type LagoonMonitorReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	EnableMQ  bool
-	Messaging *handlers.Messaging
+	Log                 logr.Logger
+	Scheme              *runtime.Scheme
+	EnableMQ            bool
+	Messaging           *handlers.Messaging
+	ControllerNamespace string
 }
 
 // slice of the different failure states of pods that we care about
@@ -60,6 +61,15 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var jobPod corev1.Pod
 	if err := r.Get(ctx, req.NamespacedName, &jobPod); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
+	}
+
+	// check if the pod that is received has the lagoon.sh/controller label
+	// if it does, check if the label value matches this controllers namespace
+	if controllerNamespace, ok := jobPod.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
+		if controllerNamespace != r.ControllerNamespace {
+			// this job is not handled by this controller, so don't do anything
+			return ctrl.Result{}, nil
+		}
 	}
 
 	// if this is a lagoon task, then run the handle task monitoring process

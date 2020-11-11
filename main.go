@@ -70,6 +70,7 @@ func main() {
 	var namespacePrefix string
 	var randomPrefix bool
 	var isOpenshift bool
+	var controllerNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -104,9 +105,11 @@ func main() {
 	flag.BoolVar(&isOpenshift, "is-openshift", false,
 		"Flag to determine if the controller is running in an openshift.")
 	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
-		"The prefix that will be added to all namespaces that are generated. (only used if random-prefix is set false)")
+		"The prefix that will be added to all namespaces that are generated, maximum 8 characters. (only used if random-prefix is set false)")
 	flag.BoolVar(&randomPrefix, "random-prefix", false,
 		"Flag to determine if the all namespaces should be prefixed with 5 random characters.")
+	flag.StringVar(&controllerNamespace, "controller-namespace", "",
+		"The name of the namespace the controller is deployed in.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -118,6 +121,19 @@ func main() {
 	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 	overrideBuildDeployImage = getEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
 	namespacePrefix = getEnv("NAMESPACE_PREFIX", namespacePrefix)
+	if len(namespacePrefix) > 8 {
+		// truncate the namespace prefix to 8 characters so that a really long prefix
+		// does not become a problem, and namespaces are still somewhat identifiable.
+		setupLog.Info(fmt.Sprintf("provided namespace prefix exceeds 8 characters, truncating prefix to %s", namespacePrefix[0:8]))
+		namespacePrefix = namespacePrefix[0:8]
+	}
+	// controllerNamespace is used to label all resources created by this controller
+	// this is to ensure that if multiple controllers are running, they only watch ones that are labelled accordingly
+	controllerNamespace = getEnv("CONTROLLER_NAMESPACE", controllerNamespace)
+	if controllerNamespace == "" {
+		setupLog.Error(fmt.Errorf("controller-namespace is empty"), "unable to start manager")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -259,7 +275,7 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config, mgr.GetClient(), startupConnectionAttempts, startupConnectionInterval)
+	messaging := handlers.NewMessaging(config, mgr.GetClient(), startupConnectionAttempts, startupConnectionInterval, controllerNamespace)
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
@@ -285,24 +301,27 @@ func main() {
 		IsOpenshift:           isOpenshift,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
+		ControllerNamespace:   controllerNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
 	}
 	if err = (&controllers.LagoonMonitorReconciler{
-		Client:    mgr.GetClient(),
-		Log:       ctrl.Log.WithName("controllers").WithName("LagoonMonitor"),
-		Scheme:    mgr.GetScheme(),
-		EnableMQ:  enableMQ,
-		Messaging: messaging,
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("LagoonMonitor"),
+		Scheme:              mgr.GetScheme(),
+		EnableMQ:            enableMQ,
+		Messaging:           messaging,
+		ControllerNamespace: controllerNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
 	}
 	if err = (&controllers.LagoonTaskReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("LagoonTask"),
-		Scheme: mgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("LagoonTask"),
+		Scheme:              mgr.GetScheme(),
+		ControllerNamespace: controllerNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

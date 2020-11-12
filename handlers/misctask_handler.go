@@ -82,6 +82,7 @@ func (h *Messaging) IngressRouteMigration(jobSpec *lagoonv1alpha1.LagoonTaskSpec
 			Labels: map[string]string{
 				"lagoon.sh/taskType":   "advanced",
 				"lagoon.sh/taskStatus": "Pending",
+				"lagoon.sh/controller": h.ControllerNamespace,
 			},
 		},
 		Spec: *jobSpec,

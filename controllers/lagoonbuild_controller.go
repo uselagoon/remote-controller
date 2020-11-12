@@ -594,7 +594,9 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonBuild{}).
-		WithEventFilter(BuildPredicates{ControllerNamespace: r.ControllerNamespace}).
+		WithEventFilter(BuildPredicates{
+			ControllerNamespace: r.ControllerNamespace,
+		}).
 		Complete(r)
 }
 

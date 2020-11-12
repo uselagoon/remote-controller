@@ -98,7 +98,9 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonTask{}).
-		WithEventFilter(TaskPredicates{ControllerNamespace: r.ControllerNamespace}).
+		WithEventFilter(TaskPredicates{
+			ControllerNamespace: r.ControllerNamespace,
+		}).
 		Complete(r)
 }
 

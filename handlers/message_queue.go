@@ -95,6 +95,9 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshal the body into a lagoonbuild
 			newBuild := &lagoonv1alpha1.LagoonBuild{}
 			json.Unmarshal(message.Body(), newBuild)
+			// new builds that come in should initially get created in the controllers own
+			// namespace before being handled and re-created in the correct namespace
+			// so set the controller namespace to the build namespace here
 			newBuild.ObjectMeta.Namespace = h.ControllerNamespace
 			newBuild.SetLabels(
 				map[string]string{

@@ -126,7 +126,9 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 func (r *LagoonMonitorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
-		WithEventFilter(PodPredicates{ControllerNamespace: r.ControllerNamespace}).
+		WithEventFilter(PodPredicates{
+			ControllerNamespace: r.ControllerNamespace,
+		}).
 		Complete(r)
 }
 

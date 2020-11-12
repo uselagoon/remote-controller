@@ -74,16 +74,6 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	// check if the build that is received has the lagoon.sh/controller label
-	// if it does, check if the label value matches this controllers namespace
-	// if no label exists, or the label matches, then it will continue on
-	if controllerNamespace, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
-		if controllerNamespace != r.ControllerNamespace {
-			// this build is not handled by this controller, so don't do anything
-			return ctrl.Result{}, nil
-		}
-	}
-
 	finalizerName := "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -604,6 +594,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonBuild{}).
+		WithEventFilter(BuildPredicates{ControllerNamespace: r.ControllerNamespace}).
 		Complete(r)
 }
 

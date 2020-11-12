@@ -59,15 +59,6 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	// check if the task that is received has the lagoon.sh/controller label
-	// if it does, check if the label value matches this controllers namespace
-	if controllerNamespace, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
-		if controllerNamespace != r.ControllerNamespace {
-			// this task is not handled by this controller, so don't do anything
-			return ctrl.Result{}, nil
-		}
-	}
-
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
 		// check if the task that has been recieved is a standard or advanced task
@@ -107,6 +98,7 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonTask{}).
+		WithEventFilter(TaskPredicates{ControllerNamespace: r.ControllerNamespace}).
 		Complete(r)
 }
 

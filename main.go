@@ -129,6 +129,9 @@ func main() {
 	}
 	// controllerNamespace is used to label all resources created by this controller
 	// this is to ensure that if multiple controllers are running, they only watch ones that are labelled accordingly
+	// this is also used by the controller as the namespace that resources will be created in initially when received by the queue
+	// this can be defined using `valueFrom.fieldRef.fieldPath: metadata.namespace` in any deployments to get the
+	// namespace from where the controller is running
 	controllerNamespace = getEnv("CONTROLLER_NAMESPACE", controllerNamespace)
 	if controllerNamespace == "" {
 		setupLog.Error(fmt.Errorf("controller-namespace is empty"), "unable to start manager")

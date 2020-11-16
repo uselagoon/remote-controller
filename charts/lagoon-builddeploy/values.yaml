@@ -27,7 +27,6 @@ extraArgs:
 # it is ingored in favor of the random prefix.
 # random-prefix: true
 
-isopenshift: false
 
 # namespacePrefix is limited to 8 characters, and will be automatically truncated
 vars:
@@ -38,7 +37,8 @@ vars:
   pendingMessageCron: '*/5 * * * *'
   overrideBuildDeployImage: ''
   namespacePrefix: ''
-  controllerNamespace: 'lagoon-builddeploy'
+  randomPrefix: false
+  isOpenshift: false
 
 serviceAccount:
   # The name of the service account to use.

@@ -364,11 +364,6 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							Name:  "PROMOTION_SOURCE_OPENSHIFT_PROJECT",
 							Value: lagoonBuild.Spec.Promote.SourceProject,
 						})
-					} else {
-						podEnvs = append(podEnvs, corev1.EnvVar{
-							Name:  "PROMOTION_SOURCE_NAMESPACE",
-							Value: lagoonBuild.Spec.Promote.SourceProject,
-						})
 					}
 				}
 				if lagoonBuild.Spec.Project.Variables.Project != nil {

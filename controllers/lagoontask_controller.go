@@ -139,39 +139,18 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 				hasService = true
 				// grab the container
 				for idx, depCon := range dep.Spec.Template.Spec.Containers {
-					if lagoonTask.Spec.Task.APIHost != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_API_HOST",
-							Value: lagoonTask.Spec.Task.APIHost,
-						})
-					} else {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_API_HOST",
-							Value: r.TaskSettings.APIHost,
-						})
-					}
-					if lagoonTask.Spec.Task.APIHost != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_SSH_HOST",
-							Value: lagoonTask.Spec.Task.SSHHost,
-						})
-					} else {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_SSH_HOST",
-							Value: r.TaskSettings.SSHHost,
-						})
-					}
-					if lagoonTask.Spec.Task.APIHost != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_SSH_PORT",
-							Value: lagoonTask.Spec.Task.SSHPort,
-						})
-					} else {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "TASK_SSH_PORT",
-							Value: r.TaskSettings.SSHPort,
-						})
-					}
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "TASK_API_HOST",
+						Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "TASK_SSH_HOST",
+						Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "TASK_SSH_PORT",
+						Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
+					})
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
@@ -363,15 +342,15 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						},
 						{
 							Name:  "TASK_API_HOST",
-							Value: lagoonTask.Spec.Task.APIHost,
+							Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
 						},
 						{
 							Name:  "TASK_SSH_HOST",
-							Value: lagoonTask.Spec.Task.SSHHost,
+							Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
 						},
 						{
 							Name:  "TASK_SSH_PORT",
-							Value: lagoonTask.Spec.Task.SSHPort,
+							Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
 						},
 						{
 							Name:  "TASK_DATA_ID",
@@ -414,4 +393,26 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 		return err
 	}
 	return nil
+}
+
+// check for the API/SSH settings in the task spec first, if nothing there use the one from our settings.
+func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1alpha1.LagoonTask, value string) string {
+	switch value {
+	case "TASK_API_HOST":
+		if lagoonTask.Spec.Task.APIHost == "" {
+			return r.TaskSettings.APIHost
+		}
+		return lagoonTask.Spec.Task.APIHost
+	case "TASK_SSH_HOST":
+		if lagoonTask.Spec.Task.SSHHost == "" {
+			return r.TaskSettings.SSHHost
+		}
+		return lagoonTask.Spec.Task.SSHHost
+	case "TASK_SSH_PORT":
+		if lagoonTask.Spec.Task.SSHPort == "" {
+			return r.TaskSettings.SSHPort
+		}
+		return lagoonTask.Spec.Task.SSHPort
+	}
+	return ""
 }

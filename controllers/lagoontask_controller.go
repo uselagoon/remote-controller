@@ -286,7 +286,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
-					Kind:       "LagoonBuild",
+					Kind:       "LagoonTask",
 					Name:       lagoonTask.ObjectMeta.Name,
 					UID:        lagoonTask.UID,
 				},

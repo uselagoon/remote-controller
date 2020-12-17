@@ -46,6 +46,9 @@ var (
 	mqUser           string
 	mqPass           string
 	mqHost           string
+	lagoonAPIHost    string
+	lagoonSSHHost    string
+	lagoonSSHPort    string
 )
 
 func init() {
@@ -101,6 +104,12 @@ func main() {
 		"The build and deploy image that should be used by builds started by the controller.")
 	flag.BoolVar(&isOpenshift, "is-openshift", false,
 		"Flag to determine if the controller is running in an openshift")
+	flag.StringVar(&lagoonAPIHost, "lagoon-api-host", "http://10.0.2.2:3000",
+		"The host address for the lagoon API.")
+	flag.StringVar(&lagoonSSHHost, "lagoon-ssh-host", "ssh.lagoon.svc",
+		"The host address for the Lagoon SSH service.")
+	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
+		"The port for the Lagoon SSH service.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -111,6 +120,9 @@ func main() {
 	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
 	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 	overrideBuildDeployImage = getEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
+	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
+	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
+	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -294,6 +306,11 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("LagoonTask"),
 		Scheme: mgr.GetScheme(),
+		TaskSettings: controllers.LagoonTaskSettings{
+			APIHost: lagoonAPIHost,
+			SSHHost: lagoonSSHHost,
+			SSHPort: lagoonSSHPort,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

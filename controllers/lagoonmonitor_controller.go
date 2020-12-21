@@ -130,7 +130,7 @@ func (r *LagoonMonitorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // getContainerLogs grabs the logs from a given container
-func getContainerLogs(containerName string, request ctrl.Request) ([]byte, error) {
+func getContainerLogs(containerName string, request ctrl.Request, timestamps bool) ([]byte, error) {
 	restCfg, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get config: %v", err)
@@ -139,7 +139,7 @@ func getContainerLogs(containerName string, request ctrl.Request) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("unable to create client: %v", err)
 	}
-	req := clientset.CoreV1().Pods(request.Namespace).GetLogs(request.Name, &corev1.PodLogOptions{Container: containerName})
+	req := clientset.CoreV1().Pods(request.Namespace).GetLogs(request.Name, &corev1.PodLogOptions{Container: containerName, Timestamps: timestamps})
 	podLogs, err := req.Stream()
 	if err != nil {
 		return nil, fmt.Errorf("error in opening stream: %v", err)

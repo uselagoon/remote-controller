@@ -91,7 +91,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
 			// if we do move to multi container builds, then worry about it
 			for _, container := range jobPod.Spec.Containers {
-				cLogs, err := getContainerLogs(container.Name, req)
+				cLogs, err := getContainerLogs(container.Name, req, false)
 				if err != nil {
 					opLog.Info(fmt.Sprintf("LogsErr: %v", err))
 					return nil

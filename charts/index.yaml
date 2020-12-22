@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   lagoon-builddeploy:
   - apiVersion: v2
+    appVersion: 0.1.5
+    created: "2020-11-16T15:53:27.795625+11:00"
+    description: A Helm chart for lagoon-builddeploy
+    digest: 0033c3373d792df52213d2829280894df7f7570630e3dd774b478e753659d7e6
+    name: lagoon-builddeploy
+    type: application
+    urls:
+    - lagoon-builddeploy-0.1.8.tgz
+    version: 0.1.8
+  - apiVersion: v2
     appVersion: 0.1.4
-    created: "2020-11-02T11:33:49.117302+11:00"
+    created: "2020-11-16T15:53:27.795026+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 99be1a9a9f264170f52b4ce3df14bf95b8e54fd7e9b08d71b2f83b123700d63f
     name: lagoon-builddeploy
@@ -13,7 +23,7 @@ entries:
     version: 0.1.7
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2020-11-02T11:33:49.116743+11:00"
+    created: "2020-11-16T15:53:27.794145+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 0a0f4a4625c0f78a94b7c90a5ee9e2b5cd23d79781b55df8d9286a51cce7996c
     name: lagoon-builddeploy
@@ -23,7 +33,7 @@ entries:
     version: 0.1.6
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2020-11-02T11:33:49.116177+11:00"
+    created: "2020-11-16T15:53:27.793427+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 2398c2988750eeb3d0019f53de8efdc79b76512f84204ce36488cd10e836ed54
     name: lagoon-builddeploy
@@ -33,7 +43,7 @@ entries:
     version: 0.1.5
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2020-11-02T11:33:49.115507+11:00"
+    created: "2020-11-16T15:53:27.792241+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 54e10fb69334bb73fadfd3dc603cf17efd110e3d53a37e19684c5a57dbd4ca59
     name: lagoon-builddeploy
@@ -43,7 +53,7 @@ entries:
     version: 0.1.4
   - apiVersion: v2
     appVersion: 0.1.3
-    created: "2020-11-02T11:33:49.11488+11:00"
+    created: "2020-11-16T15:53:27.791102+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 7c97f2815d38e0a2f6d1041670eec750dcb88484105b9b231746a6649915ab0f
     name: lagoon-builddeploy
@@ -53,7 +63,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.2
-    created: "2020-11-02T11:33:49.114359+11:00"
+    created: "2020-11-16T15:53:27.789758+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 7616e507ebdac9a8fa081b1925428dff700cee46e3d0948ee5f343864bf73873
     name: lagoon-builddeploy
@@ -63,7 +73,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.1
-    created: "2020-11-02T11:33:49.113874+11:00"
+    created: "2020-11-16T15:53:27.78734+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: 1fa0435d49d0dd2762029cf140d5c6e233f00253bcdf60ca9a113d7dac3a73fd
     name: lagoon-builddeploy
@@ -73,7 +83,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-11-02T11:33:49.113396+11:00"
+    created: "2020-11-16T15:53:27.78472+11:00"
     description: A Helm chart for lagoon-builddeploy
     digest: de42c5e64e32c18a5ad15e138afe1eadec4e742eeb42f77faaf3188a8d25d1e3
     name: lagoon-builddeploy
@@ -81,4 +91,4 @@ entries:
     urls:
     - lagoon-builddeploy-0.1.0.tgz
     version: 0.1.0
-generated: "2020-11-02T11:33:49.112749+11:00"
+generated: "2020-11-16T15:53:27.781241+11:00"

@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"crypto/sha1"
+	"fmt"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -81,4 +83,12 @@ func randString(length int) string {
 		b[i] = charset[seededRand.Intn(len(charset))]
 	}
 	return string(b)
+}
+
+// get the hash of a given string.
+func hashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	bs := h.Sum(nil)
+	return fmt.Sprintf("%x", bs)
 }

@@ -21,9 +21,14 @@ fullnameOverride: ""
 extraArgs:
   metrics-addr: 127.0.0.1:8080
   enable-leader-election: true
+# If set, all namespaces will be generated with a specific prefix defined here.
+# namespace-prefix: cluster-environment-or-name
+# If set, all namespaces will be generated with a specific random prefix, if namespace-prefix is defined,
+# it is ingored in favor of the random prefix.
+# random-prefix: true
 
-isopenshift: false
 
+# namespacePrefix is limited to 8 characters, and will be automatically truncated
 vars:
   rabbitUsername: ''
   rabbitPassword: ''
@@ -31,6 +36,9 @@ vars:
   lagoonTargetName: ''
   pendingMessageCron: '*/5 * * * *'
   overrideBuildDeployImage: ''
+  namespacePrefix: ''
+  randomPrefix: false
+  isOpenshift: false
 
 serviceAccount:
   # The name of the service account to use.

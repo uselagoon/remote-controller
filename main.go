@@ -46,6 +46,9 @@ var (
 	mqUser           string
 	mqPass           string
 	mqHost           string
+	lagoonAPIHost    string
+	lagoonSSHHost    string
+	lagoonSSHPort    string
 )
 
 func init() {
@@ -110,6 +113,12 @@ func main() {
 		"Flag to determine if the all namespaces should be prefixed with 5 random characters.")
 	flag.StringVar(&controllerNamespace, "controller-namespace", "",
 		"The name of the namespace the controller is deployed in.")
+	flag.StringVar(&lagoonAPIHost, "lagoon-api-host", "http://10.0.2.2:3000",
+		"The host address for the lagoon API.")
+	flag.StringVar(&lagoonSSHHost, "lagoon-ssh-host", "ssh.lagoon.svc",
+		"The host address for the Lagoon SSH service.")
+	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
+		"The port for the Lagoon SSH service.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -137,6 +146,9 @@ func main() {
 		setupLog.Error(fmt.Errorf("controller-namespace is empty"), "unable to start manager")
 		os.Exit(1)
 	}
+	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
+	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
+	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -325,6 +337,11 @@ func main() {
 		Log:                 ctrl.Log.WithName("controllers").WithName("LagoonTask"),
 		Scheme:              mgr.GetScheme(),
 		ControllerNamespace: controllerNamespace,
+		TaskSettings: controllers.LagoonTaskSettings{
+			APIHost: lagoonAPIHost,
+			SSHHost: lagoonSSHHost,
+			SSHPort: lagoonSSHPort,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

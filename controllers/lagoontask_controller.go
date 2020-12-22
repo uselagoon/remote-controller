@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -205,8 +206,25 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 					}, newPod)
 					if err != nil {
 						// if it doesn't exist, then create the build pod
+						token, err := r.getDeployerToken(ctx, lagoonTask)
+						if err != nil {
+							return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
+						}
+						config := &rest.Config{
+							BearerToken: token,
+							Host:        "https://kubernetes.default.svc",
+							TLSClientConfig: rest.TLSClientConfig{
+								Insecure: true,
+							},
+						}
+						// create the client using the rest config.
+						c, err := client.New(config, client.Options{})
+						if err != nil {
+							return fmt.Errorf("Task failed creating the client, error was: %v", err)
+						}
 						opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
-						if err := r.Create(ctx, newPod); err != nil {
+						// use the client that was created with the deployer-token to create the task pod
+						if err := c.Create(ctx, newPod); err != nil {
 							opLog.Info(
 								fmt.Sprintf(
 									"Unable to create task pod for project %s, environment %s: %v",
@@ -379,23 +397,24 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			},
 		},
 	}
-	if err := r.Create(ctx, newPod); err != nil {
-		return err
-	}
-	return nil
-}
-
-// getServiceAccount will get the service account if it exists
-func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAccount *corev1.ServiceAccount, ns string) error {
-	serviceAccount.ObjectMeta = metav1.ObjectMeta{
-		Name:      "lagoon-deployer",
-		Namespace: ns,
-	}
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: ns,
-		Name:      "lagoon-deployer",
-	}, serviceAccount)
+	token, err := r.getDeployerToken(ctx, lagoonTask)
 	if err != nil {
+		return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
+	}
+	config := &rest.Config{
+		BearerToken: token,
+		Host:        "https://kubernetes.default.svc",
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: true,
+		},
+	}
+	// create the client using the rest config.
+	c, err := client.New(config, client.Options{})
+	if err != nil {
+		return fmt.Errorf("Task failed creating the client, error was: %v", err)
+	}
+	// use the client that was created with the deployer-token to create the task pod
+	if err := c.Create(ctx, newPod); err != nil {
 		return err
 	}
 	return nil
@@ -421,4 +440,53 @@ func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1alpha1.LagoonTas
 		return lagoonTask.Spec.Task.SSHPort
 	}
 	return ""
+}
+
+// getServiceAccount will get the service account if it exists
+func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAccount *corev1.ServiceAccount, ns string) error {
+	serviceAccount.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-deployer",
+		Namespace: ns,
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-deployer",
+	}, serviceAccount)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// getDeployerToken will get the deployer token from the service account if it exists
+func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (string, error) {
+	serviceAccount := &corev1.ServiceAccount{}
+	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
+	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
+	if err != nil {
+		return "", err
+	}
+	var serviceaccountTokenSecret string
+	for _, secret := range serviceAccount.Secrets {
+		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+		if match {
+			serviceaccountTokenSecret = secret.Name
+			break
+		}
+	}
+	if serviceaccountTokenSecret == "" {
+		return "", fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
+	}
+	saSecret := &corev1.Secret{}
+	err = r.Get(ctx, types.NamespacedName{
+		Namespace: lagoonTask.ObjectMeta.Namespace,
+		Name:      serviceaccountTokenSecret,
+	}, saSecret)
+	if err != nil {
+		return "", fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
+	}
+	if string(saSecret.Data["token"]) == "" {
+		return "", fmt.Errorf("There is no token field in the deployer token secret")
+	}
+	return string(saSecret.Data["token"]), nil
 }

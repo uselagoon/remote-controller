@@ -36,9 +36,10 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log          logr.Logger
-	Scheme       *runtime.Scheme
-	TaskSettings LagoonTaskSettings
+	Log                 logr.Logger
+	Scheme              *runtime.Scheme
+	ControllerNamespace string
+	TaskSettings        LagoonTaskSettings
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -105,6 +106,9 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&lagoonv1alpha1.LagoonTask{}).
+		WithEventFilter(TaskPredicates{
+			ControllerNamespace: r.ControllerNamespace,
+		}).
 		Complete(r)
 }
 
@@ -178,8 +182,9 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 							Name:      lagoonTask.ObjectMeta.Name,
 							Namespace: lagoonTask.ObjectMeta.Namespace,
 							Labels: map[string]string{
-								"lagoon.sh/jobType":  "task",
-								"lagoon.sh/taskName": lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/jobType":    "task",
+								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/controller": r.ControllerNamespace,
 							},
 							OwnerReferences: []metav1.OwnerReference{
 								{
@@ -288,8 +293,9 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			Name:      lagoonTask.ObjectMeta.Name,
 			Namespace: lagoonTask.Spec.Environment.OpenshiftProjectName,
 			Labels: map[string]string{
-				"lagoon.sh/jobType":  "task",
-				"lagoon.sh/taskName": lagoonTask.ObjectMeta.Name,
+				"lagoon.sh/jobType":    "task",
+				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+				"lagoon.sh/controller": r.ControllerNamespace,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{

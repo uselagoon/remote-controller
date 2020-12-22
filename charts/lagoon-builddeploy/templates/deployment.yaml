@@ -40,8 +40,11 @@ spec:
           - --{{ $key }}
           {{- end }}
       {{- end }}
-          {{- if .Values.isopenshift }}
+          {{- if .Values.vars.isOpenshift }}
           - --is-openshift
+          {{- end }}
+          {{- if .Values.vars.randomPrefix }}
+          - --random-prefix
           {{- end }}
           command:
           - /manager
@@ -60,6 +63,12 @@ spec:
               value: '{{ .Values.vars.pendingMessageCron }}'
             - name: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE
               value: '{{ .Values.vars.overrideBuildDeployImage }}'
+            - name: NAMESPACE_PREFIX
+              value: '{{ .Values.vars.namespacePrefix }}'
+            - name: CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           name: manager
           resources:
             limits:

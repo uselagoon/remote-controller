@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	// Openshift
+	oappsv1 "github.com/openshift/api/apps/v1"
 	projectv1 "github.com/openshift/api/project/v1"
 
 	"gopkg.in/robfig/cron.v2"
@@ -57,6 +58,7 @@ func init() {
 	_ = lagoonv1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 	_ = projectv1.AddToScheme(scheme)
+	_ = oappsv1.AddToScheme(scheme)
 }
 
 func main() {
@@ -336,6 +338,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		Log:                 ctrl.Log.WithName("controllers").WithName("LagoonTask"),
 		Scheme:              mgr.GetScheme(),
+		IsOpenshift:         isOpenshift,
 		ControllerNamespace: controllerNamespace,
 		TaskSettings: controllers.LagoonTaskSettings{
 			APIHost: lagoonAPIHost,

@@ -73,6 +73,8 @@ func main() {
 	var namespacePrefix string
 	var randomPrefix bool
 	var isOpenshift bool
+	var buildLogTimestamps bool
+	var taskLogTimestamps bool
 	var controllerNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
@@ -119,6 +121,10 @@ func main() {
 		"The host address for the Lagoon SSH service.")
 	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
 		"The port for the Lagoon SSH service.")
+	flag.BoolVar(&buildLogTimestamps, "build-log-timestamps", false,
+		"Flag to determine if the controller should put timestamps in build logs.")
+	flag.BoolVar(&taskLogTimestamps, "task-log-timestamps", false,
+		"Flag to determine if the controller should put timestamps in task logs.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -328,6 +334,8 @@ func main() {
 		EnableMQ:            enableMQ,
 		Messaging:           messaging,
 		ControllerNamespace: controllerNamespace,
+		BuildLogTimestamps:  buildLogTimestamps,
+		TaskLogTimestamps:   taskLogTimestamps,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)

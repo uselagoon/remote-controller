@@ -41,6 +41,8 @@ type LagoonMonitorReconciler struct {
 	EnableMQ            bool
 	Messaging           *handlers.Messaging
 	ControllerNamespace string
+	BuildLogTimestamps  bool
+	TaskLogTimestamps   bool
 }
 
 // slice of the different failure states of pods that we care about

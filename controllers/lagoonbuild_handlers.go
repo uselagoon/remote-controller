@@ -210,6 +210,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 						serviceNames = append(serviceNames, container.Name)
 					}
 				}
+				if _, ok := pod.ObjectMeta.Labels["service"]; ok {
+					for _, container := range pod.Spec.Containers {
+						serviceNames = append(serviceNames, container.Name)
+					}
+				}
 			}
 			msg.Meta.Services = serviceNames
 		}

@@ -139,7 +139,7 @@ type Pullrequest struct {
 	BaseBranch string `json:"baseBranch,omitempty"`
 	BaseSha    string `json:"baseSha,omitempty"`
 	Title      string `json:"title,omitempty"`
-	Number     int    `json:"number,omitempty"`
+	Number     string `json:"number,omitempty"`
 }
 
 // Promote contains the information for a promote deployment.

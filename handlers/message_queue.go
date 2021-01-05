@@ -38,15 +38,17 @@ type Messaging struct {
 	Client                  client.Client
 	ConnectionAttempts      int
 	ConnectionRetryInterval int
+	ControllerNamespace     string
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int) *Messaging {
+func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace string) *Messaging {
 	return &Messaging{
 		Config:                  config,
 		Client:                  client,
 		ConnectionAttempts:      startupAttempts,
 		ConnectionRetryInterval: startupInterval,
+		ControllerNamespace:     controllerNamespace,
 	}
 }
 
@@ -93,6 +95,15 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshal the body into a lagoonbuild
 			newBuild := &lagoonv1alpha1.LagoonBuild{}
 			json.Unmarshal(message.Body(), newBuild)
+			// new builds that come in should initially get created in the controllers own
+			// namespace before being handled and re-created in the correct namespace
+			// so set the controller namespace to the build namespace here
+			newBuild.ObjectMeta.Namespace = h.ControllerNamespace
+			newBuild.SetLabels(
+				map[string]string{
+					"lagoon.sh/controller": h.ControllerNamespace,
+				},
+			)
 			opLog.Info(
 				fmt.Sprintf(
 					"Received builddeploy task for project %s, environment %s",
@@ -215,6 +226,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				map[string]string{
 					"lagoon.sh/taskType":   "standard",
 					"lagoon.sh/taskStatus": "Pending",
+					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
 			// job.ObjectMeta.Name = fmt.Sprintf("%s-%s", job.Spec.Environment.OpenshiftProjectName, job.Spec.Task.ID)
@@ -352,6 +364,7 @@ func (h *Messaging) GetPendingMessages() {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
 			"lagoon.sh/pendingMessages": "true",
+			"lagoon.sh/controller":      h.ControllerNamespace,
 		}),
 	})
 	if err := h.Client.List(context.Background(), pendingMsgs, listOption); err != nil {

@@ -280,10 +280,9 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			case "kubernetes:restic:backup:restore":
 				opLog.Info(
 					fmt.Sprintf(
-						"Received backup restoration for project %s, environment %s - %s",
+						"Received backup restoration for project %s, environment %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						jobSpec.Misc.Backup.ID,
 					),
 				)
 				err := h.ResticRestore(jobSpec)

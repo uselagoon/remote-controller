@@ -74,6 +74,7 @@ func main() {
 	var randomPrefix bool
 	var isOpenshift bool
 	var controllerNamespace string
+	var enableDebug bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -119,6 +120,9 @@ func main() {
 		"The host address for the Lagoon SSH service.")
 	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
 		"The port for the Lagoon SSH service.")
+	// @TODO: Nothing uses this at the moment, but could be use in the future by controllers
+	flag.BoolVar(&enableDebug, "enable-debug", false,
+		"Flag to enable more verbose debugging logs.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -290,7 +294,13 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config, mgr.GetClient(), startupConnectionAttempts, startupConnectionInterval, controllerNamespace)
+	messaging := handlers.NewMessaging(config,
+		mgr.GetClient(),
+		startupConnectionAttempts,
+		startupConnectionInterval,
+		controllerNamespace,
+		enableDebug,
+	)
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
@@ -317,6 +327,7 @@ func main() {
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		ControllerNamespace:   controllerNamespace,
+		EnableDebug:           enableDebug,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -328,6 +339,7 @@ func main() {
 		EnableMQ:            enableMQ,
 		Messaging:           messaging,
 		ControllerNamespace: controllerNamespace,
+		EnableDebug:         enableDebug,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
@@ -342,6 +354,7 @@ func main() {
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,
 		},
+		EnableDebug: enableDebug,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

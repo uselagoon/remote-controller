@@ -55,6 +55,7 @@ type LagoonBuildReconciler struct {
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
 	ControllerNamespace   string
+	EnableDebug           bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -151,18 +152,41 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				Name: removeTask.OpenshiftProjectName,
 			}, namespace)
 			if err != nil {
-				opLog.Info(
-					fmt.Sprintf(
-						"Unable to get namespace %s for project %s, branch %s: %v",
-						removeTask.OpenshiftProjectName,
-						removeTask.ProjectName,
-						removeTask.Branch,
-						err,
-					),
-				)
+				if strings.Contains(err.Error(), "not found") {
+					opLog.Info(
+						fmt.Sprintf(
+							"Namespace %s for project %s, branch %s does not exist, marking deleted",
+							removeTask.OpenshiftProjectName,
+							removeTask.ProjectName,
+							removeTask.Branch,
+						),
+					)
+					msg := lagoonv1alpha1.LagoonMessage{
+						Type:      "remove",
+						Namespace: removeTask.OpenshiftProjectName,
+						Meta: &lagoonv1alpha1.LagoonLogMeta{
+							Project:     removeTask.ProjectName,
+							Environment: removeTask.Branch,
+						},
+					}
+					msgBytes, _ := json.Marshal(msg)
+					h.Publish("lagoon-tasks:controller", msgBytes)
+				} else {
+					opLog.Info(
+						fmt.Sprintf(
+							"Unable to get namespace %s for project %s, branch %s: %v",
+							removeTask.OpenshiftProjectName,
+							removeTask.ProjectName,
+							removeTask.Branch,
+							err,
+						),
+					)
+
+				}
 				//@TODO: send msg back to lagoon and update task to failed?
 				message.Ack(false) // ack to remove from queue
 				return
+
 			}
 			if err := h.Client.Delete(context.Background(), namespace); err != nil {
 				opLog.Info(

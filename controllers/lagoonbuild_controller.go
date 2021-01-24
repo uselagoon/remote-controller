@@ -56,6 +56,8 @@ type LagoonBuildReconciler struct {
 	RandomNamespacePrefix bool
 	ControllerNamespace   string
 	EnableDebug           bool
+	FastlyServiceID       string
+	FastlyWatchStatus     bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -395,6 +397,14 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					podEnvs = append(podEnvs, corev1.EnvVar{
 						Name:  "MONITORING_STATUSPAGEID",
 						Value: lagoonBuild.Spec.Project.Monitoring.StatuspageID,
+					})
+				}
+				// if the fastly watch status is set on the controller, inject the fastly service ID into the build pod to be consumed
+				// by the build-depoy-dind image
+				if r.FastlyWatchStatus {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FASTLY_NOCACHE_SERVICE_ID",
+						Value: r.FastlyServiceID,
 					})
 				}
 				// Use the build image in the controller definition

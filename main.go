@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -75,6 +76,8 @@ func main() {
 	var isOpenshift bool
 	var controllerNamespace string
 	var enableDebug bool
+	var fastlyServiceID string
+	var fastlyWatchStatus bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -123,6 +126,10 @@ func main() {
 	// @TODO: Nothing uses this at the moment, but could be use in the future by controllers
 	flag.BoolVar(&enableDebug, "enable-debug", false,
 		"Flag to enable more verbose debugging logs.")
+	flag.StringVar(&fastlyServiceID, "fastly-service-id", "",
+		"The service ID that should be added to any ingresses to use the lagoon no-cache service for this cluster.")
+	flag.BoolVar(&fastlyWatchStatus, "fastly-watch-status", false,
+		"Flag to determine if the fastly.amazee.io/watch status should be added to any ingresses to use the lagoon no-cache service for this cluster.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -153,6 +160,12 @@ func main() {
 	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
 	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
 	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
+
+	// Fastly configuration options
+	// the service id should be that for the cluster which will be used as the default no-cache passthrough
+	fastlyServiceID = getEnv("FASTLY_SERVICE_ID", fastlyServiceID)
+	// this is used to control setting the service id into build pods
+	fastlyWatchStatus = getEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -328,6 +341,8 @@ func main() {
 		RandomNamespacePrefix: randomPrefix,
 		ControllerNamespace:   controllerNamespace,
 		EnableDebug:           enableDebug,
+		FastlyServiceID:       fastlyServiceID,
+		FastlyWatchStatus:     fastlyWatchStatus,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -371,6 +386,16 @@ func main() {
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
+	}
+	return fallback
+}
+
+// accepts fallback values 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False
+// anything else is false.
+func getEnvBool(key string, fallback bool) bool {
+	if value, ok := os.LookupEnv(key); ok {
+		rVal, _ := strconv.ParseBool(value)
+		return rVal
 	}
 	return fallback
 }

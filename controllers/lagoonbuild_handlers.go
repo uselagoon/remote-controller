@@ -428,8 +428,13 @@ func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Co
 	}
 	return nil
 }
-func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
-	req ctrl.Request, lagoonBuild lagoonv1alpha1.LagoonBuild, jobPod corev1.Pod, cancel bool) error {
+func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
+	ctx context.Context,
+	req ctrl.Request,
+	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	jobPod corev1.Pod,
+	cancel bool,
+) error {
 
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
 	var jobCondition lagoonv1alpha1.JobConditionType
@@ -446,7 +451,13 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
 	// then the jobCondition is Failed, Complete, or Cancelled
 	// then update the build to reflect the current pod status
 	// we do this so we don't update the status of the build again
-	if containsString([]string{"Pending", "Running"}, lagoonBuild.Labels["lagoon.sh/buildStatus"]) {
+	if containsString(
+		[]string{
+			"Pending",
+			"Running",
+		},
+		lagoonBuild.Labels["lagoon.sh/buildStatus"],
+	) {
 		opLog.Info(
 			fmt.Sprintf(
 				"Updating build status for %s to %v",

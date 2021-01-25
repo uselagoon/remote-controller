@@ -576,7 +576,11 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			// our finalizer is present, so lets handle any external dependency
 			// first deleteExternalResources will try and check for any pending builds that it can
 			// can change to running to kick off the next pending build
-			if err := r.deleteExternalResources(ctx, opLog, &lagoonBuild, req.NamespacedName.Namespace); err != nil {
+			if err := r.deleteExternalResources(ctx,
+				opLog,
+				&lagoonBuild,
+				req.NamespacedName.Namespace,
+			); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err
@@ -609,7 +613,12 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonBuildReconciler) deleteExternalResources(ctx context.Context, opLog logr.Logger, lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
+func (r *LagoonBuildReconciler) deleteExternalResources(
+	ctx context.Context,
+	opLog logr.Logger,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	namespace string,
+) error {
 	// delete any external resources if required
 
 	// if the LagoonBuild is deleted, then check if the only running build is the one being deleted

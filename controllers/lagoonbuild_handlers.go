@@ -442,10 +442,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
 	if cancel {
 		jobCondition = lagoonv1alpha1.JobCancelled
 	}
-	// if the build status doesn't equal the status of the pod
+	// if the build status is Pending or Running
+	// then the jobCondition is Failed, Complete, or Cancelled
 	// then update the build to reflect the current pod status
 	// we do this so we don't update the status of the build again
-	if lagoonBuild.Labels["lagoon.sh/buildStatus"] != string(jobCondition) {
+	if containsString([]string{"Pending", "Running"}, lagoonBuild.Labels["lagoon.sh/buildStatus"]) {
 		opLog.Info(
 			fmt.Sprintf(
 				"Updating build status for %s to %v",

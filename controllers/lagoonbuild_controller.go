@@ -551,6 +551,8 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				if err := r.Update(ctx, pendingBuild); err != nil {
 					return ctrl.Result{}, err
 				}
+			} else {
+				opLog.Info(fmt.Sprintf("No pending builds"))
 			}
 		}
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -572,7 +574,9 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		// The object is being deleted
 		if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&lagoonBuild, req.NamespacedName.Namespace); err != nil {
+			// first deleteExternalResources will try and check for any pending builds that it can
+			// can change to running to kick off the next pending build
+			if err := r.deleteExternalResources(ctx, opLog, &lagoonBuild, req.NamespacedName.Namespace); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err
@@ -605,8 +609,73 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
+func (r *LagoonBuildReconciler) deleteExternalResources(ctx context.Context, opLog logr.Logger, lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
 	// delete any external resources if required
+
+	// if the LagoonBuild is deleted, then check if the only running build is the one being deleted
+	// or if there are any pending builds that can be started
+	runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/buildStatus": "Running",
+			"lagoon.sh/controller":  r.ControllerNamespace,
+		}),
+	})
+	// list any builds that are running
+	if err := r.List(ctx, runningBuilds, listOption); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to list builds in the namespace, there may be none or something went wrong"))
+		// just return nil so the deletion of the resource isn't held up
+		return nil
+	}
+	newRunningBuilds := runningBuilds.Items
+	for _, runningBuild := range runningBuilds.Items {
+		// if there are any running builds, check if it is the one currently being deleted
+		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+			// if the one being deleted is a running one, remove it from the list of running builds
+			newRunningBuilds = removeBuild(newRunningBuilds, runningBuild)
+		}
+	}
+	// if the number of runningBuilds is 0 (excluding the one being deleted)
+	if len(newRunningBuilds) == 0 {
+		pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+			client.InNamespace(namespace),
+			client.MatchingLabels(map[string]string{
+				"lagoon.sh/buildStatus": "Pending",
+				"lagoon.sh/controller":  r.ControllerNamespace,
+			}),
+		})
+		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to list builds in the namespace, there may be none or something went wrong"))
+			// just return nil so the deletion of the resource isn't held up
+			return nil
+		}
+		newPendingBuilds := pendingBuilds.Items
+		for _, pendingBuild := range pendingBuilds.Items {
+			// if there are any pending builds, check if it is the one currently being deleted
+			if lagoonBuild.ObjectMeta.Name == pendingBuild.ObjectMeta.Name {
+				// if the one being deleted a the pending one, remove it from the list of pending builds
+				newPendingBuilds = removeBuild(newPendingBuilds, pendingBuild)
+			}
+		}
+		// sort the pending builds by creation timestamp
+		sort.Slice(newPendingBuilds, func(i, j int) bool {
+			return newPendingBuilds[i].ObjectMeta.CreationTimestamp.Before(&newPendingBuilds[j].ObjectMeta.CreationTimestamp)
+		})
+		// if there are more than 1 pending builds (excluding the one being deleted), update the oldest one to running
+		if len(newPendingBuilds) > 0 {
+			pendingBuild := pendingBuilds.Items[0].DeepCopy()
+			pendingBuild.Labels["lagoon.sh/buildStatus"] = "Running"
+			if err := r.Update(ctx, pendingBuild); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable update pending build to running status"))
+				// just return nil so the deletion of the resource isn't held up
+				return nil
+			}
+		} else {
+			opLog.Info(fmt.Sprintf("No pending builds"))
+		}
+	}
 	return nil
 }
 

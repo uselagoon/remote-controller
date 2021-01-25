@@ -27,6 +27,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,15 +67,41 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	// if this is a lagoon task, then run the handle task monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
+			// pod is not being deleted
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
 		}
 	}
 	// if this is a lagoon build, then run the handle build monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
+			// pod is not being deleted
 			return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
-		} // else {
+		}
+
 		// a pod deletion request came through
+		// first try and clean up the pod and capture the logs and update
+		// the lagoonbuild that owns it with the status
+		var lagoonBuild lagoonv1alpha1.LagoonBuild
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: jobPod.ObjectMeta.Namespace,
+			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+		}, &lagoonBuild)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to get the build that started this pod"))
+		} else {
+			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with the deletion status"))
+			// this will update the deployment back to lagoon if it can do so
+			// and should only update if the LagoonBuild is Pending or Running
+			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
+			if err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild"))
+			}
+		}
+		// if the update is successful or not, it will just continue on to check for pending builds
+		// in the event pending builds are not processed and the build pod itself has been deleted
+		// then manually patching the `LagoonBuild` with the label
+		// "lagoon.sh/buildStatus=Cancelled"
+		// should be enough to get things rolling again if no pending builds are being picked up
 
 		// if we got any pending builds come through while one is running
 		// they will be processed here when any pods are cleaned up
@@ -116,7 +143,6 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				}
 			}
 		}
-		// }
 	}
 	return ctrl.Result{}, nil
 }

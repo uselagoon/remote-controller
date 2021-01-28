@@ -24,6 +24,7 @@ type removeTask struct {
 	ForceDeleteProductionEnvironment bool   `json:"forceDeleteProductionEnvironment"`
 	PullrequestNumber                string `json:"pullrequestNumber"`
 	Branch                           string `json:"branch"`
+	BranchName                       string `json:"branchName"`
 	OpenshiftProjectName             string `json:"openshiftProjectName"`
 }
 
@@ -139,6 +140,12 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshall the message into a remove task to be processed
 			removeTask := &removeTask{}
 			json.Unmarshal(message.Body(), removeTask)
+			// webhooks2tasks sends the `branch` field, but deletion from the API (UI/CLI) does not
+			// the tasks system crafts a field `branchName` which is passed through
+			// since webhooks2tasks uses the same underlying mechanism, we can still consume branchName even if branch is populated
+			if removeTask.Type == "pullrequest" {
+				removeTask.Branch = removeTask.BranchName
+			}
 			opLog.Info(
 				fmt.Sprintf(
 					"Received remove task for project %s, branch %s - %s",

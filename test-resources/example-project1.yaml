@@ -11,7 +11,7 @@ spec:
     project:
         name: drupal-example
         environment: install
-        uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-ysxf3a
+        uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-7m5zypx
         routerPattern: 'install-drupal-example'
         environmentType: production
         productionEnvironment: install

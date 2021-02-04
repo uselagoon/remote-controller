@@ -19,7 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context, opLog logr.Logger, req ctrl.Request, jobPod corev1.Pod) error {
+func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
+	opLog logr.Logger,
+	req ctrl.Request,
+	jobPod corev1.Pod,
+) error {
 	// get the build associated to this pod, we wil need update it at some point
 	var lagoonBuild lagoonv1alpha1.LagoonBuild
 	err := r.Get(ctx, types.NamespacedName{
@@ -39,8 +43,8 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context, opLog 
 	if jobPod.Status.Phase == corev1.PodPending {
 		opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
 		// send any messages to lagoon message queues
-		r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, nil)
-		r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, nil)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, nil)
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, nil)
 		// check each container in the pod
 		for _, container := range jobPod.Status.ContainerStatuses {
 			// if the container is a lagoon-build container
@@ -84,10 +88,10 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context, opLog 
 						opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
 					}
 					// send any messages to lagoon message queues
-					r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, &lagoonEnv)
-					r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, &lagoonEnv)
+					r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, &lagoonEnv)
+					r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, &lagoonEnv)
 					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
-					r.buildLogsToLagoonLogs(&lagoonBuild, &jobPod, []byte(logMsg))
+					r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, []byte(logMsg))
 					return nil
 				}
 			}
@@ -108,14 +112,18 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context, opLog 
 	// if it isn't pending, failed, or complete, it will be running, we should tell lagoon
 	opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
 	// send any messages to lagoon message queues
-	r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, nil)
-	r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, nil)
+	r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, nil)
+	r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, nil)
 	return nil
 }
 
 // buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild, jobPod *corev1.Pod, logs []byte) {
+func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(opLog logr.Logger,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	jobPod *corev1.Pod,
+	logs []byte,
+) {
 	if r.EnableMQ {
 		condition := "pending"
 		switch jobPod.Status.Phase {
@@ -142,12 +150,16 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(lagoonBuild *lagoonv1alp
 				RemoteID:   string(jobPod.ObjectMeta.UID),
 				LogLink:    lagoonBuild.Spec.Project.UILink,
 			},
-			Message: fmt.Sprintf(`========================================
+		}
+		// add the actual build log message
+		msg.Message = fmt.Sprintf(`========================================
 Logs on pod %s
 ========================================
-%s`, jobPod.ObjectMeta.Name, logs),
+%s`, jobPod.ObjectMeta.Name, logs)
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			opLog.Error(err, "Unable to encode message as JSON")
 		}
-		msgBytes, _ := json.Marshal(msg)
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
@@ -163,9 +175,11 @@ Logs on pod %s
 
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild *lagoonv1alpha1.LagoonBuild,
+func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(opLog logr.Logger,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	jobPod *corev1.Pod,
-	lagoonEnv *corev1.ConfigMap) {
+	lagoonEnv *corev1.ConfigMap,
+) {
 	if r.EnableMQ {
 		condition := "pending"
 		switch jobPod.Status.Phase {
@@ -243,7 +257,10 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 				msg.Meta.EndTime = jobPod.Status.ContainerStatuses[0].State.Terminated.FinishedAt.Time.UTC().Format("2006-01-02 15:04:05")
 			}
 		}
-		msgBytes, _ := json.Marshal(msg)
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			opLog.Error(err, "Unable to encode message as JSON")
+		}
 		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
@@ -258,7 +275,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(lagoonBuild
 }
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(lagoonBuild *lagoonv1alpha1.LagoonBuild,
+func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(opLog logr.Logger,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
@@ -309,7 +327,10 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(lagoonBuild *lagoo
 				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
-		msgBytes, _ := json.Marshal(msg)
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			opLog.Error(err, "Unable to encode message as JSON")
+		}
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
@@ -326,7 +347,8 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(lagoonBuild *lagoo
 // updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonMonitorReconciler) updateBuildStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	condition lagoonv1alpha1.LagoonConditions, log []byte) error {
+	condition lagoonv1alpha1.LagoonConditions, log []byte,
+) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
 	if !jobContainsStatus(lagoonBuild.Status.Conditions, condition) {
@@ -347,7 +369,8 @@ func (r *LagoonMonitorReconciler) updateBuildStatusCondition(ctx context.Context
 // updateBuildStatusMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonMonitorReconciler) updateBuildStatusMessage(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	statusMessage lagoonv1alpha1.LagoonLog) error {
+	statusMessage lagoonv1alpha1.LagoonLog,
+) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -368,7 +391,8 @@ func (r *LagoonMonitorReconciler) updateBuildStatusMessage(ctx context.Context,
 // updateEnvironmentMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	envMessage lagoonv1alpha1.LagoonMessage) error {
+	envMessage lagoonv1alpha1.LagoonMessage,
+) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -389,7 +413,8 @@ func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context,
 // updateBuildLogMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonMonitorReconciler) updateBuildLogMessage(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	buildMessage lagoonv1alpha1.LagoonLog) error {
+	buildMessage lagoonv1alpha1.LagoonLog,
+) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -408,7 +433,9 @@ func (r *LagoonMonitorReconciler) updateBuildLogMessage(ctx context.Context,
 }
 
 // removeBuildPendingMessageStatus purges the status messages from the resource once they are successfully re-sent
-func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Context, lagoonBuild *lagoonv1alpha1.LagoonBuild) error {
+func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Context,
+	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+) error {
 	// if we have the pending messages label as true, then we want to remove this label and any pending statusmessages
 	// so we can avoid double handling, or an old pending message from being sent after a new pending message
 	if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/pendingMessages"]; !ok {
@@ -429,8 +456,8 @@ func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Co
 	return nil
 }
 func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
-	req ctrl.Request, lagoonBuild lagoonv1alpha1.LagoonBuild, jobPod corev1.Pod, cancel bool) error {
-
+	req ctrl.Request, lagoonBuild lagoonv1alpha1.LagoonBuild, jobPod corev1.Pod, cancel bool,
+) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
 	var jobCondition lagoonv1alpha1.JobConditionType
 	switch jobPod.Status.Phase {
@@ -460,7 +487,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(ctx context.Context,
 		for _, container := range jobPod.Spec.Containers {
 			cLogs, err := getContainerLogs(container.Name, req)
 			if err != nil {
-				opLog.Info(fmt.Sprintf("LogsErr: %v", err))
+				opLog.Error(err, fmt.Sprintf("LogsErr"))
 				return nil
 			}
 			allContainerLogs = append(allContainerLogs, cLogs...)
@@ -496,9 +523,9 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		r.buildStatusLogsToLagoonLogs(&lagoonBuild, &jobPod, &lagoonEnv)
-		r.updateDeploymentAndEnvironmentTask(&lagoonBuild, &jobPod, &lagoonEnv)
-		r.buildLogsToLagoonLogs(&lagoonBuild, &jobPod, allContainerLogs)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, &lagoonEnv)
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, &lagoonEnv)
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, allContainerLogs)
 		// just delete the pod
 		// maybe if we move away from using BASH for the kubectl-build-deploy-dind scripts we could handle cancellations better
 		if cancel {

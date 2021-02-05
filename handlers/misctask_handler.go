@@ -20,22 +20,20 @@ func (h *Messaging) CancelDeployment(jobSpec *lagoonv1alpha1.LagoonTaskSpec) err
 		Name:      jobSpec.Misc.Name,
 		Namespace: jobSpec.Environment.OpenshiftProjectName,
 	}, &jobPod); err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to get job %s: %v",
+				"Unable to get job %s",
 				jobSpec.Misc.Name,
-				err,
 			),
 		)
 		return err
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
 	if err := h.Client.Update(context.Background(), &jobPod); err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to update job %s: %v",
+				"Unable to update job %s",
 				jobSpec.Misc.Name,
-				err,
 			),
 		)
 		return err
@@ -48,22 +46,20 @@ func (h *Messaging) ResticRestore(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error 
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	restore := unstructured.Unstructured{}
 	if err := restore.UnmarshalJSON(jobSpec.Misc.MiscResource); err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to unmarshal the json into a job %s: %v",
+				"Unable to unmarshal the json into a job %s",
 				jobSpec.Misc.Name,
-				err,
 			),
 		)
 		return err
 	}
 	restore.SetNamespace(jobSpec.Environment.OpenshiftProjectName)
 	if err := h.Client.Create(context.Background(), &restore); err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to create backup for job %s: %v",
+				"Unable to create backup for job %s",
 				jobSpec.Misc.Name,
-				err,
 			),
 		)
 		return err
@@ -88,11 +84,10 @@ func (h *Messaging) IngressRouteMigration(jobSpec *lagoonv1alpha1.LagoonTaskSpec
 		Spec: *jobSpec,
 	}
 	if err := h.Client.Create(context.Background(), &task); err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to create task for job %s: %v",
+				"Unable to create task for job %s",
 				jobSpec.Misc.Name,
-				err,
 			),
 		)
 		return err

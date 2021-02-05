@@ -41,6 +41,7 @@ type LagoonTaskReconciler struct {
 	Scheme              *runtime.Scheme
 	ControllerNamespace string
 	TaskSettings        LagoonTaskSettings
+	EnableDebug         bool
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -125,12 +126,11 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
-		opLog.Info(
+		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to get deployments for project %s, environment %s: %v",
+				"Unable to get deployments for project %s, environment %s",
 				lagoonTask.Spec.Project.Name,
 				lagoonTask.Spec.Environment.Name,
-				err,
 			),
 		)
 		//@TODO: send msg back and update task to failed?
@@ -225,12 +225,11 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 						opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
 						// use the client that was created with the deployer-token to create the task pod
 						if err := c.Create(ctx, newPod); err != nil {
-							opLog.Info(
+							opLog.Error(err,
 								fmt.Sprintf(
-									"Unable to create task pod for project %s, environment %s: %v",
+									"Unable to create task pod for project %s, environment %s",
 									lagoonTask.Spec.Project.Name,
 									lagoonTask.Spec.Environment.Name,
-									err,
 								),
 							)
 							//@TODO: send msg back and update task to failed?

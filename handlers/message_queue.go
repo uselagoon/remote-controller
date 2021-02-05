@@ -24,6 +24,7 @@ type removeTask struct {
 	ForceDeleteProductionEnvironment bool   `json:"forceDeleteProductionEnvironment"`
 	PullrequestNumber                string `json:"pullrequestNumber"`
 	Branch                           string `json:"branch"`
+	BranchName                       string `json:"branchName"`
 	OpenshiftProjectName             string `json:"openshiftProjectName"`
 }
 
@@ -40,16 +41,18 @@ type Messaging struct {
 	ConnectionAttempts      int
 	ConnectionRetryInterval int
 	ControllerNamespace     string
+	EnableDebug             bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace string) *Messaging {
+func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace string, enableDebug bool) *Messaging {
 	return &Messaging{
 		Config:                  config,
 		Client:                  client,
 		ConnectionAttempts:      startupAttempts,
 		ConnectionRetryInterval: startupInterval,
 		ControllerNamespace:     controllerNamespace,
+		EnableDebug:             enableDebug,
 	}
 }
 
@@ -63,13 +66,12 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		var err error
 		messageQueue, err = mq.New(h.Config)
 		if err != nil {
-			opLog.Info(
+			opLog.Error(err,
 				fmt.Sprintf(
-					"Failed to initialize message queue manager, retrying in %d seconds, attempt %d/%d: %v",
+					"Failed to initialize message queue manager, retrying in %d seconds, attempt %d/%d",
 					h.ConnectionRetryInterval,
 					attempt,
 					h.ConnectionAttempts,
-					err,
 				),
 			)
 			time.Sleep(60 * time.Second)
@@ -114,7 +116,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			)
 			// create it now
 			if err := h.Client.Create(context.Background(), newBuild); err != nil {
-				opLog.Info(
+				opLog.Error(err,
 					fmt.Sprintf(
 						"Failed to create builddeploy task for project %s, environment %s",
 						newBuild.Spec.Project.Name,
@@ -139,6 +141,12 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshall the message into a remove task to be processed
 			removeTask := &removeTask{}
 			json.Unmarshal(message.Body(), removeTask)
+			// webhooks2tasks sends the `branch` field, but deletion from the API (UI/CLI) does not
+			// the tasks system crafts a field `branchName` which is passed through
+			// since webhooks2tasks uses the same underlying mechanism, we can still consume branchName even if branch is populated
+			if removeTask.Type == "pullrequest" {
+				removeTask.Branch = removeTask.BranchName
+			}
 			opLog.Info(
 				fmt.Sprintf(
 					"Received remove task for project %s, branch %s - %s",
@@ -189,13 +197,12 @@ func (h *Messaging) Consumer(targetName string) { //error {
 
 			}
 			if err := h.Client.Delete(context.Background(), namespace); err != nil {
-				opLog.Info(
+				opLog.Error(err,
 					fmt.Sprintf(
-						"Unable to delete namespace %s for project %s, branch %s: %v",
+						"Unable to delete namespace %s for project %s, branch %s",
 						removeTask.OpenshiftProjectName,
 						removeTask.ProjectName,
 						removeTask.Branch,
-						err,
 					),
 				)
 				//@TODO: send msg back to lagoon and update task to failed?
@@ -257,12 +264,11 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// use lagoon-task-<ID>-<RANDOM> as the job/pod name instead
 			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
 			if err := h.Client.Create(context.Background(), job); err != nil {
-				opLog.Info(
+				opLog.Error(err,
 					fmt.Sprintf(
-						"Unable to create job task for project %s, environment %s: %v",
+						"Unable to create job task for project %s, environment %s",
 						job.Spec.Project.Name,
 						job.Spec.Environment.Name,
-						err,
 					),
 				)
 				//@TODO: send msg back to lagoon and update task to failed?
@@ -391,7 +397,7 @@ func (h *Messaging) GetPendingMessages() {
 		}),
 	})
 	if err := h.Client.List(context.Background(), pendingMsgs, listOption); err != nil {
-		opLog.Info(fmt.Sprintf("Unable to list LagoonBuilds, there may be none or something went wrong: %v", err))
+		opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuilds, there may be none or something went wrong"))
 		return
 	}
 	for _, build := range pendingMsgs.Items {
@@ -400,7 +406,7 @@ func (h *Messaging) GetPendingMessages() {
 			Name:      build.ObjectMeta.Name,
 			Namespace: build.ObjectMeta.Namespace,
 		}, &build); err != nil {
-			opLog.Info(fmt.Sprintf("Unable to get LagoonBuild, something went wrong: %v", err))
+			opLog.Error(err, fmt.Sprintf("Unable to get LagoonBuild, something went wrong"))
 			break
 		}
 		opLog.Info(fmt.Sprintf("LagoonBuild %s has pending messages, attempting to re-send", build.ObjectMeta.Name))
@@ -411,19 +417,19 @@ func (h *Messaging) GetPendingMessages() {
 		// try to re-publish message or break and try the next build with pending message
 		if build.StatusMessages.StatusMessage != nil {
 			if err := h.Publish("lagoon-logs", statusBytes); err != nil {
-				opLog.Info(fmt.Sprintf("Unable to publush message: %v", err))
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
 			}
 		}
 		if build.StatusMessages.BuildLogMessage != nil {
 			if err := h.Publish("lagoon-logs", logBytes); err != nil {
-				opLog.Info(fmt.Sprintf("Unable to publush message: %v", err))
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
 			}
 		}
 		if build.StatusMessages.EnvironmentMessage != nil {
 			if err := h.Publish("lagoon-tasks:controller", envBytes); err != nil {
-				opLog.Info(fmt.Sprintf("Unable to publush message: %v", err))
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
 			}
 		}
@@ -439,7 +445,7 @@ func (h *Messaging) GetPendingMessages() {
 			"statusMessages": nil,
 		})
 		if err := h.Client.Patch(context.Background(), &build, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Info(fmt.Sprintf("Unable to update status condition: %v", err))
+			opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
 			break
 		}
 	}

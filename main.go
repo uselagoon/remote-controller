@@ -75,6 +75,7 @@ func main() {
 	var randomPrefix bool
 	var isOpenshift bool
 	var controllerNamespace string
+	var enableDebug bool
 	var fastlyServiceID string
 	var fastlyWatchStatus bool
 
@@ -122,6 +123,9 @@ func main() {
 		"The host address for the Lagoon SSH service.")
 	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
 		"The port for the Lagoon SSH service.")
+	// @TODO: Nothing uses this at the moment, but could be use in the future by controllers
+	flag.BoolVar(&enableDebug, "enable-debug", false,
+		"Flag to enable more verbose debugging logs.")
 	flag.StringVar(&fastlyServiceID, "fastly-service-id", "",
 		"The service ID that should be added to any ingresses to use the lagoon no-cache service for this cluster.")
 	flag.BoolVar(&fastlyWatchStatus, "fastly-watch-status", false,
@@ -303,7 +307,13 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config, mgr.GetClient(), startupConnectionAttempts, startupConnectionInterval, controllerNamespace)
+	messaging := handlers.NewMessaging(config,
+		mgr.GetClient(),
+		startupConnectionAttempts,
+		startupConnectionInterval,
+		controllerNamespace,
+		enableDebug,
+	)
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
@@ -330,6 +340,7 @@ func main() {
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		ControllerNamespace:   controllerNamespace,
+		EnableDebug:           enableDebug,
 		FastlyServiceID:       fastlyServiceID,
 		FastlyWatchStatus:     fastlyWatchStatus,
 	}).SetupWithManager(mgr); err != nil {
@@ -343,6 +354,7 @@ func main() {
 		EnableMQ:            enableMQ,
 		Messaging:           messaging,
 		ControllerNamespace: controllerNamespace,
+		EnableDebug:         enableDebug,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
@@ -357,6 +369,7 @@ func main() {
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,
 		},
+		EnableDebug: enableDebug,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

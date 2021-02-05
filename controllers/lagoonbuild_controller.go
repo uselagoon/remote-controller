@@ -55,6 +55,7 @@ type LagoonBuildReconciler struct {
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
 	ControllerNamespace   string
+	EnableDebug           bool
 	FastlyServiceID       string
 	FastlyWatchStatus     bool
 }

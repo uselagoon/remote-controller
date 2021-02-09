@@ -324,6 +324,22 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							),
 						),
 					})
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name: "SHORT_ROUTER_URL",
+						Value: strings.ToLower(
+							strings.Replace(
+								strings.Replace(
+									lagoonBuild.Spec.Project.RouterPattern,
+									"${environment}",
+									shortName(lagoonBuild.Spec.Project.Environment),
+									-1,
+								),
+								"${project}",
+								shortName(lagoonBuild.Spec.Project.Name),
+								-1,
+							),
+						),
+					})
 				}
 				if lagoonBuild.Spec.Build.CI != "" {
 					podEnvs = append(podEnvs, corev1.EnvVar{

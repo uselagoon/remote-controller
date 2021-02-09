@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -91,4 +93,14 @@ func hashString(s string) string {
 	h.Write([]byte(s))
 	bs := h.Sum(nil)
 	return fmt.Sprintf("%x", bs)
+}
+
+var lowerAlNum = regexp.MustCompile("[^a-z0-9]+")
+
+// shortName returns a deterministic random short name of 8 lowercase
+// alphabetic and numeric characters. The short name is based
+// on hashing and encoding the given name.
+func shortName(name string) string {
+	hash := sha256.Sum256([]byte(name))
+	return lowerAlNum.ReplaceAllString(strings.ToLower(base32.StdEncoding.EncodeToString(hash[:])), "")[:8]
 }

@@ -88,14 +88,18 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 		}, &lagoonBuild)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to get the build that started this pod"))
+			opLog.Info(fmt.Sprintf("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required."))
+			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
+			if err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+			}
 		} else {
-			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with the deletion status"))
+			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
 			// this will update the deployment back to lagoon if it can do so
 			// and should only update if the LagoonBuild is Pending or Running
 			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
 			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild"))
+				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
 			}
 		}
 		// if the update is successful or not, it will just continue on to check for pending builds
@@ -109,7 +113,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		// we check all `LagoonBuild` in the requested namespace
 		// if there are no running jobs, we check for any pending jobs
 		// sorted by their creation timestamp and set the first to running
-		opLog.Info(fmt.Sprintf("Checking for any pending builds"))
+		opLog.Info(fmt.Sprintf("Checking for any pending builds."))
 		pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{

@@ -1,5 +1,7 @@
 package controllers
 
+// this file is used by the `lagoonmonitor` controller
+
 import (
 	"context"
 	"encoding/json"
@@ -93,8 +95,8 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			for _, container := range jobPod.Spec.Containers {
 				cLogs, err := getContainerLogs(container.Name, req)
 				if err != nil {
-					opLog.Info(fmt.Sprintf("LogsErr: %v", err))
-					return nil
+					opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from task pod"))
+					// log the error, but just continue
 				}
 				allContainerLogs = append(allContainerLogs, cLogs...)
 			}

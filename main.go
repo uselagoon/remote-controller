@@ -81,7 +81,7 @@ func main() {
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
-	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-kubernetes",
+	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
 		"The name of the target as it is in lagoon.")
 	flag.StringVar(&lagoonAppID, "lagoon-app-id", "builddeploymonitor",
 		"The appID to use that will be sent with messages.")
@@ -336,6 +336,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		EnableMQ:              enableMQ,
 		BuildImage:            overrideBuildDeployImage,
+		Messaging:             messaging,
 		IsOpenshift:           isOpenshift,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,

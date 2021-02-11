@@ -44,6 +44,7 @@ type LagoonTaskReconciler struct {
 	IsOpenshift         bool
 	ControllerNamespace string
 	TaskSettings        LagoonTaskSettings
+	EnableDebug         bool
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports

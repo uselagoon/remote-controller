@@ -17,3 +17,7 @@ spec:
               value: '172.17.0.1:5672'
             - name: LAGOON_TARGET_NAME
               value: 'ci-local-controller-kubernetes'
+            - name: CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

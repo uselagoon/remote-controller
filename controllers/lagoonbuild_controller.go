@@ -58,6 +58,12 @@ type LagoonBuildReconciler struct {
 	EnableDebug           bool
 	FastlyServiceID       string
 	FastlyWatchStatus     bool
+	// BuildPodRunAsUser sets the build pod securityContext.runAsUser value.
+	BuildPodRunAsUser int64
+	// BuildPodRunAsGroup sets the build pod securityContext.runAsGroup value.
+	BuildPodRunAsGroup int64
+	// BuildPodFSGroup sets the build pod securityContext.fsGroup value.
+	BuildPodFSGroup int64
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -502,6 +508,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							},
 						},
 					},
+				}
+
+				// set the pod security context, if defined to a non-default value
+				if r.BuildPodRunAsUser != 0 || r.BuildPodRunAsGroup != 0 ||
+					r.BuildPodFSGroup != 0 {
+					newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+						RunAsUser:  &r.BuildPodRunAsUser,
+						RunAsGroup: &r.BuildPodRunAsGroup,
+						FSGroup:    &r.BuildPodFSGroup,
+					}
 				}
 
 				// openshift uses a builder service account to be able to push images to the openshift registry

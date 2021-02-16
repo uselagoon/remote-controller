@@ -78,6 +78,9 @@ func main() {
 	var enableDebug bool
 	var fastlyServiceID string
 	var fastlyWatchStatus bool
+	var buildPodRunAsUser uint
+	var buildPodRunAsGroup uint
+	var buildPodFSGroup uint
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -130,6 +133,9 @@ func main() {
 		"The service ID that should be added to any ingresses to use the lagoon no-cache service for this cluster.")
 	flag.BoolVar(&fastlyWatchStatus, "fastly-watch-status", false,
 		"Flag to determine if the fastly.amazee.io/watch status should be added to any ingresses to use the lagoon no-cache service for this cluster.")
+	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
+	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
+	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -343,6 +349,9 @@ func main() {
 		EnableDebug:           enableDebug,
 		FastlyServiceID:       fastlyServiceID,
 		FastlyWatchStatus:     fastlyWatchStatus,
+		BuildPodRunAsUser:     int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
+		BuildPodFSGroup:       int64(buildPodFSGroup),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

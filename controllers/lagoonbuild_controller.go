@@ -64,6 +64,11 @@ type LagoonBuildReconciler struct {
 	BuildPodRunAsGroup int64
 	// BuildPodFSGroup sets the build pod securityContext.fsGroup value.
 	BuildPodFSGroup int64
+	// Lagoon feature flags
+	LFFForceRootlessWorkload         string
+	LFFDefaultRootlessWorkload       string
+	LFFForceIsolationNetworkPolicy   string
+	LFFDefaultIsolationNetworkPolicy string
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -427,6 +432,31 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					podEnvs = append(podEnvs, corev1.EnvVar{
 						Name:  "LAGOON_FASTLY_NOCACHE_SERVICE_ID",
 						Value: r.FastlyServiceID,
+					})
+				}
+				// Set any defined Lagoon feature flags in the build environment.
+				if r.LFFForceRootlessWorkload != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD",
+						Value: r.LFFForceRootlessWorkload,
+					})
+				}
+				if r.LFFDefaultRootlessWorkload != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_DEFAULT_ROOTLESS_WORKLOAD",
+						Value: r.LFFDefaultRootlessWorkload,
+					})
+				}
+				if r.LFFForceIsolationNetworkPolicy != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY",
+						Value: r.LFFForceIsolationNetworkPolicy,
+					})
+				}
+				if r.LFFDefaultIsolationNetworkPolicy != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY",
+						Value: r.LFFDefaultIsolationNetworkPolicy,
 					})
 				}
 				// Use the build image in the controller definition

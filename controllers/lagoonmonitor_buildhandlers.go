@@ -105,7 +105,11 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	if jobPod.Status.Phase == corev1.PodFailed || jobPod.Status.Phase == corev1.PodSucceeded {
 		// get the build associated to this pod, we wil need update it at some point
 		var lagoonBuild lagoonv1alpha1.LagoonBuild
-		err := r.Get(ctx, types.NamespacedName{Namespace: jobPod.ObjectMeta.Namespace, Name: jobPod.ObjectMeta.Labels["lagoon.sh/buildName"]}, &lagoonBuild)
+		err := r.Get(ctx,
+			types.NamespacedName{
+				Namespace: jobPod.ObjectMeta.Namespace,
+				Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+			}, &lagoonBuild)
 		if err != nil {
 			return err
 		}

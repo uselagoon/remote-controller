@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,25 +23,75 @@ func (h *Messaging) CancelDeployment(jobSpec *lagoonv1alpha1.LagoonTaskSpec) err
 		Name:      jobSpec.Misc.Name,
 		Namespace: jobSpec.Environment.OpenshiftProjectName,
 	}, &jobPod); err != nil {
-		opLog.Error(err,
-			fmt.Sprintf(
-				"Unable to get job %s",
+		// since there was no build pod, check for the lagoon build resource
+		var lagoonBuild lagoonv1alpha1.LagoonBuild
+		if err := h.Client.Get(context.Background(), types.NamespacedName{
+			Name:      jobSpec.Misc.Name,
+			Namespace: jobSpec.Environment.OpenshiftProjectName,
+		}, &lagoonBuild); err != nil {
+			opLog.Info(fmt.Sprintf(
+				"Unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
 				jobSpec.Misc.Name,
-			),
-		)
-		return err
+			))
+			// if there is no pod or build, update the build in Lagoon to cancelled
+			h.updateLagoonBuild(opLog, *jobSpec)
+			return nil
+		}
+		// as there is no build pod, but there is a lagoon build resource
+		// update it to cancelled so that the controller doesn't try to run it
+		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = "Cancelled"
+		if err := h.Client.Update(context.Background(), &lagoonBuild); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to update build %s to cancel it.",
+					jobSpec.Misc.Name,
+				),
+			)
+			return err
+		}
+		// and then send the response back to lagoon to say it was cancelled.
+		h.updateLagoonBuild(opLog, *jobSpec)
+		return nil
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
 	if err := h.Client.Update(context.Background(), &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to update job %s",
+				"Unable to update build %s to cancel it.",
 				jobSpec.Misc.Name,
 			),
 		)
 		return err
 	}
 	return nil
+}
+
+func (h *Messaging) updateLagoonBuild(opLog logr.Logger, jobSpec lagoonv1alpha1.LagoonTaskSpec) {
+	// if the build isn't found by the controller
+	// then publish a response back to controllerhandler to tell it to update the build to cancelled
+	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
+	msg := lagoonv1alpha1.LagoonMessage{
+		Type:      "build",
+		Namespace: jobSpec.Environment.OpenshiftProjectName,
+		Meta: &lagoonv1alpha1.LagoonLogMeta{
+			Environment: jobSpec.Environment.Name,
+			Project:     jobSpec.Project.Name,
+			BuildPhase:  "cancelled",
+			BuildName:   jobSpec.Misc.Name,
+		},
+	}
+	// if the build isn't found at all, then set the start/end time to be now
+	// to stop the duration counter in the ui
+	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		opLog.Error(err, "Unable to encode message as JSON")
+	}
+	// publish the cancellation result back to lagoon
+	if err := h.Publish("lagoon-tasks:controller", msgBytes); err != nil {
+		opLog.Error(err, "Unable to publish message.")
+	}
 }
 
 // ResticRestore handles creating the restic restore jobs.
@@ -48,21 +101,23 @@ func (h *Messaging) ResticRestore(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error 
 	if err := restore.UnmarshalJSON(jobSpec.Misc.MiscResource); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to unmarshal the json into a job %s",
+				"Unable to unmarshal the json into a job %s.",
 				jobSpec.Misc.Name,
 			),
 		)
-		return err
+		// just log the error then return
+		return nil
 	}
 	restore.SetNamespace(jobSpec.Environment.OpenshiftProjectName)
 	if err := h.Client.Create(context.Background(), &restore); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to create backup for job %s",
+				"Unable to create backup for job %s.",
 				jobSpec.Misc.Name,
 			),
 		)
-		return err
+		// just log the error then return
+		return nil
 	}
 	return nil
 }
@@ -86,7 +141,7 @@ func (h *Messaging) IngressRouteMigration(jobSpec *lagoonv1alpha1.LagoonTaskSpec
 	if err := h.Client.Create(context.Background(), &task); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to create task for job %s",
+				"Unable to create task for job %s.",
 				jobSpec.Misc.Name,
 			),
 		)

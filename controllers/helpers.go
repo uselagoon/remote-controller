@@ -95,6 +95,18 @@ func hashString(s string) string {
 	return fmt.Sprintf("%x", bs)
 }
 
+// removeBuild remove a LagoonBuild from a slice of LagoonBuilds
+func removeBuild(slice []lagoonv1alpha1.LagoonBuild, s lagoonv1alpha1.LagoonBuild) []lagoonv1alpha1.LagoonBuild {
+	result := []lagoonv1alpha1.LagoonBuild{}
+	for _, item := range slice {
+		if item.ObjectMeta.Name == s.ObjectMeta.Name {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 var lowerAlNum = regexp.MustCompile("[^a-z0-9]+")
 
 // shortName returns a deterministic random short name of 8 lowercase

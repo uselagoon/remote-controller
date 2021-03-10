@@ -440,9 +440,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:      lagoonBuild.ObjectMeta.Name,
 						Namespace: lagoonBuild.ObjectMeta.Namespace,
 						Labels: map[string]string{
-							"lagoon.sh/jobType":    "build",
-							"lagoon.sh/buildName":  lagoonBuild.ObjectMeta.Name,
-							"lagoon.sh/controller": r.ControllerNamespace,
+							"lagoon.sh/jobType":       "build",
+							"lagoon.sh/buildName":     lagoonBuild.ObjectMeta.Name,
+							"lagoon.sh/controller":    r.ControllerNamespace,
+							"lagoon.sh/buildRemoteID": string(lagoonBuild.ObjectMeta.UID),
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -551,7 +552,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					// if it doesn't exist, then create the build pod
 					opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 					if err := r.Create(ctx, newPod); err != nil {
-						return ctrl.Result{}, err
+						opLog.Error(err, fmt.Sprintf("Unable to create build pod"))
+						// log the error and just exit, don't continue to try and do anything
+						// @TODO: should update the build to failed
+						return ctrl.Result{}, nil
 					}
 					// then break out of the build
 					break
@@ -584,6 +588,8 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				if err := r.Update(ctx, pendingBuild); err != nil {
 					return ctrl.Result{}, err
 				}
+			} else {
+				opLog.Info(fmt.Sprintf("No pending builds"))
 			}
 		}
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -605,9 +611,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		// The object is being deleted
 		if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&lagoonBuild, req.NamespacedName.Namespace); err != nil {
+			// first deleteExternalResources will try and check for any pending builds that it can
+			// can change to running to kick off the next pending build
+			if err := r.deleteExternalResources(ctx,
+				opLog,
+				&lagoonBuild,
+				req,
+			); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
+				opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
 				return ctrl.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
@@ -619,7 +632,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				},
 			})
 			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, ignoreNotFound(err)
 			}
 		}
 	}
@@ -638,16 +651,12 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
-	// delete any external resources if required
-	return nil
-}
-
-// updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
-func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context,
+// updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
+func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	condition lagoonv1alpha1.LagoonConditions,
-	log string) error {
+	log []byte,
+) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
 	if !jobContainsStatus(lagoonBuild.Status.Conditions, condition) {

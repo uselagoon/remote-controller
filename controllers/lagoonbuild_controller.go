@@ -553,7 +553,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 					if err := r.Create(ctx, newPod); err != nil {
 						opLog.Error(err, fmt.Sprintf("Unable to create build pod"))
-						// log the error and just exist, don't continue to try and do anything
+						// log the error and just exit, don't continue to try and do anything
 						// @TODO: should update the build to failed
 						return ctrl.Result{}, nil
 					}

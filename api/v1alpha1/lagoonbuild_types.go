@@ -103,8 +103,10 @@ type Build struct {
 
 // Project contains the project information from lagoon.
 type Project struct {
+	ID                    *uint      `json:"id,omitempty"`
 	Name                  string     `json:"name"`
 	Environment           string     `json:"environment"`
+	EnvironmentID         *uint      `json:"environmentId,omitempty"`
 	UILink                string     `json:"uiLink,omitempty"`
 	GitURL                string     `json:"gitUrl"`
 	NamespacePattern      string     `json:"namespacePattern,omitempty"`

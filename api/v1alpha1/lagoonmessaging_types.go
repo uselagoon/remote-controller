@@ -20,11 +20,13 @@ type LagoonLogMeta struct {
 	BuildPhase     string          `json:"buildPhase,omitempty"`
 	EndTime        string          `json:"endTime,omitempty"`
 	Environment    string          `json:"environment,omitempty"`
+	EnvironmentID  *uint           `json:"environmentId,omitempty"`
 	JobName        string          `json:"jobName,omitempty"`
 	JobStatus      string          `json:"jobStatus,omitempty"`
 	LogLink        string          `json:"logLink,omitempty"`
 	MonitoringURLs []string        `json:"monitoringUrls,omitempty"`
 	Project        string          `json:"project,omitempty"`
+	ProjectID      *uint           `json:"projectId,omitempty"`
 	ProjectName    string          `json:"projectName,omitempty"`
 	RemoteID       string          `json:"remoteId,omitempty"`
 	Route          string          `json:"route,omitempty"`

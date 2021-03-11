@@ -725,6 +725,7 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 // getOrCreateNamespace will create the namespace if it doesn't exist.
 func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, spec lagoonv1alpha1.LagoonBuildSpec) error {
 	// parse the project/env through the project pattern, or use the default
+	var err error
 	nsPattern := spec.Project.NamespacePattern
 	if spec.Project.NamespacePattern == "" {
 		nsPattern = DefaultNamespacePattern
@@ -759,7 +760,9 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	nsLabels := map[string]string{
 		"lagoon.sh/project":         spec.Project.Name,
+		"lagoon.sh/projectId":       fmt.Sprint(*spec.Project.ID),
 		"lagoon.sh/environment":     spec.Project.Environment,
+		"lagoon.sh/environmentId":   fmt.Sprint(*spec.Project.EnvironmentID),
 		"lagoon.sh/environmentType": spec.Project.EnvironmentType,
 	}
 	// if it isn't an openshift build, then just create a normal namespace
@@ -774,10 +777,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		projectRequest := &projectv1.ProjectRequest{}
 		projectRequest.ObjectMeta.Name = ns
 		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, spec.Project.Name, spec.Project.Environment)
-		err := r.Get(ctx, types.NamespacedName{
-			Name: ns,
-		}, namespace)
-		if err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 			if err := r.Create(ctx, projectRequest); err != nil {
 				return err
 			}
@@ -787,10 +787,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		// this namespace check will also run to patch existing namespaces with labels when they are re-deployed
 		err = try.Do(func(attempt int) (bool, error) {
 			var err error
-			err = r.Get(ctx, types.NamespacedName{
-				Name: ns,
-			}, namespace)
-			if err != nil {
+			if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 				time.Sleep(10 * time.Second) // wait 10 seconds
 			}
 			return attempt < 6, err
@@ -798,24 +795,27 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		if err != nil {
 			return err
 		}
-		// once the namespace exists, then we can patch it with our labels
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": nsLabels,
-			},
-		})
-		if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-			return err
+	} else {
+		// if kubernetes, just create it if it doesn't exist
+		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+			if err := r.Create(ctx, namespace); err != nil {
+				return err
+			}
 		}
-		return nil
 	}
-	err := r.Get(ctx, types.NamespacedName{
-		Name: ns,
-	}, namespace)
-	if err != nil {
-		if err := r.Create(ctx, namespace); err != nil {
-			return err
-		}
+	// once the namespace exists, then we can patch it with our labels
+	// this means the labels will always get added or updated if we need to change them or add new labels
+	// after the namespace has been created
+	mergePatch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": nsLabels,
+		},
+	})
+	if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		return err
+	}
+	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		return err
 	}
 	return nil
 }

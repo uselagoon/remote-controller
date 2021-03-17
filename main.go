@@ -81,6 +81,13 @@ func main() {
 	var buildPodRunAsUser uint
 	var buildPodRunAsGroup uint
 	var buildPodFSGroup uint
+	// Lagoon Feature Flags options control features in Lagoon. Default options
+	// set a default cluster policy, while Force options enforce a cluster policy
+	// and cannot be overridden.
+	var lffForceRootlessWorkload string
+	var lffDefaultRootlessWorkload string
+	var lffForceIsolationNetworkPolicy string
+	var lffDefaultIsolationNetworkPolicy string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -136,6 +143,15 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
+	// Lagoon feature flags
+	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
+		"sets the LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD build environment variable to enforce cluster policy")
+	flag.StringVar(&lffDefaultRootlessWorkload, "lagoon-feature-flag-default-rootless-workload", "",
+		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ROOTLESS_WORKLOAD build environment variable to control default cluster policy")
+	flag.StringVar(&lffForceIsolationNetworkPolicy, "lagoon-feature-flag-force-isolation-network-policy", "",
+		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
+	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
+		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -353,6 +369,11 @@ func main() {
 		BuildPodRunAsUser:     int64(buildPodRunAsUser),
 		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
 		BuildPodFSGroup:       int64(buildPodFSGroup),
+		// Lagoon feature flags
+		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
+		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
+		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

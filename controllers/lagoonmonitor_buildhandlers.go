@@ -319,28 +319,34 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 			},
-			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
-				lagoonBuild.Spec.Project.Name,
-				lagoonBuild.Spec.Project.Environment,
-				lagoonBuild.ObjectMeta.Name,
-				string(jobPod.Status.Phase),
-			),
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
+		var addRoute, addRoutes string
 		if lagoonEnv != nil {
 			msg.Meta.Route = ""
 			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
 				msg.Meta.Route = route
+				addRoute = fmt.Sprintf("\n%s", route)
 			}
 			msg.Meta.Routes = []string{}
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
+				addRoutes = fmt.Sprintf("\n%s", strings.Join(strings.Split(routes, ","), "\n"))
 			}
 			msg.Meta.MonitoringURLs = []string{}
 			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
 				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
+		msg.Message = fmt.Sprintf("*[%s]* `%s` Build `%s` %s <%s|Logs>%s%s",
+			lagoonBuild.Spec.Project.Name,
+			lagoonBuild.Spec.Project.Environment,
+			lagoonBuild.ObjectMeta.Name,
+			string(jobPod.Status.Phase),
+			lagoonBuild.Spec.Project.UILink,
+			addRoute,
+			addRoutes,
+		)
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")

@@ -347,6 +347,19 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "kubernetes:task:advanced":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received advanced task for project %s",
+						jobSpec.Project.Name,
+					),
+				)
+				err := h.AdvancedTask(jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			default:
 				// if we get something that we don't know about, spit out the entire message
 				opLog.Info(

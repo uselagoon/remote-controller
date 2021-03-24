@@ -124,6 +124,16 @@ func (h *Messaging) ResticRestore(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error 
 
 // IngressRouteMigration handles running the ingress migrations.
 func (h *Messaging) IngressRouteMigration(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error {
+	return createAdvancedTask(jobSpec, h)
+}
+
+// AdvancedTask handles running the ingress migrations.
+func (h *Messaging) AdvancedTask(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error {
+	return createAdvancedTask(jobSpec, h)
+}
+
+// CreateAdvancedTask takes care of creating actual advanced tasks
+func createAdvancedTask(jobSpec *lagoonv1alpha1.LagoonTaskSpec, h *Messaging) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	// create the advanced task
 	task := lagoonv1alpha1.LagoonTask{

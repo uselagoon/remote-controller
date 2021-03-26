@@ -790,10 +790,14 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	nsLabels := map[string]string{
 		"lagoon.sh/project":         spec.Project.Name,
-		"lagoon.sh/projectId":       fmt.Sprint(*spec.Project.ID),
 		"lagoon.sh/environment":     spec.Project.Environment,
-		"lagoon.sh/environmentId":   fmt.Sprint(*spec.Project.EnvironmentID),
 		"lagoon.sh/environmentType": spec.Project.EnvironmentType,
+	}
+	if spec.Project.ID != nil {
+		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *spec.Project.ID)
+	}
+	if spec.Project.EnvironmentID != nil {
+		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *spec.Project.EnvironmentID)
 	}
 	// if it isn't an openshift build, then just create a normal namespace
 	// add the required lagoon labels to the namespace when creating

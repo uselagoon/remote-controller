@@ -517,6 +517,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 								Effect:   "PreferNoSchedule",
 								Operator: "Exists",
 							},
+							{
+								Key:      "lagoon.sh/build",
+								Effect:   "NoSchedule",
+								Operator: "Exists",
+							},
+							{
+								Key:      "lagoon.sh/build",
+								Effect:   "PreferNoSchedule",
+								Operator: "Exists",
+							},
 						},
 						Containers: []corev1.Container{
 							{

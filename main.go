@@ -373,6 +373,7 @@ func main() {
 	)
 	// if the build pod cleanup is enabled, add the cronjob for it
 	if enableBuildPodCleanUp {
+		setupLog.Info("starting build pod cleanup handler")
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c := cron.New()
@@ -383,6 +384,7 @@ func main() {
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
 	if enableTaskPodCleanUp {
+		setupLog.Info("starting task pod cleanup handler")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c := cron.New()

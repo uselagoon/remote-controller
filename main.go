@@ -88,6 +88,12 @@ func main() {
 	var lffDefaultRootlessWorkload string
 	var lffForceIsolationNetworkPolicy string
 	var lffDefaultIsolationNetworkPolicy string
+	var enableBuildPodCleanUp bool
+	var enableTaskPodCleanUp bool
+	var buildPodCleanUpCron string
+	var taskPodCleanUpCron string
+	var numBuildPodsToKeep int
+	var numTaskPodsToKeep int
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -152,6 +158,14 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
+	flag.BoolVar(&enableBuildPodCleanUp, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
+		"The cron definition for how often to run the build pod cleanup.")
+	flag.IntVar(&numBuildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
+	flag.BoolVar(&enableTaskPodCleanUp, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the task pod cleanup.")
+	flag.IntVar(&numTaskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -347,6 +361,33 @@ func main() {
 		c := cron.New()
 		c.AddFunc(pendingMessageCron, func() {
 			messaging.GetPendingMessages()
+		})
+		c.Start()
+	}
+
+	podCleanup := handlers.NewCleanup(mgr.GetClient(),
+		numBuildPodsToKeep,
+		numTaskPodsToKeep,
+		controllerNamespace,
+		enableDebug,
+	)
+	// if the build pod cleanup is enabled, add the cronjob for it
+	if enableBuildPodCleanUp {
+		// use cron to run a build pod cleanup task
+		// this will check any Lagoon build pods and attempt to delete them
+		c := cron.New()
+		c.AddFunc(buildPodCleanUpCron, func() {
+			podCleanup.BuildPodCleanup()
+		})
+		c.Start()
+	}
+	// if the task pod cleanup is enabled, add the cronjob for it
+	if enableTaskPodCleanUp {
+		// use cron to run a task pod cleanup task
+		// this will check any Lagoon task pods and attempt to delete them
+		c := cron.New()
+		c.AddFunc(taskPodCleanUpCron, func() {
+			podCleanup.TaskPodCleanup()
 		})
 		c.Start()
 	}

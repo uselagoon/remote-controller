@@ -350,6 +350,7 @@ func main() {
 		controllerNamespace,
 		enableDebug,
 	)
+	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
@@ -358,11 +359,9 @@ func main() {
 		// use cron to run a pending message task
 		// this will check any `LagoonBuild` resources for the pendingMessages label
 		// and attempt to re-publish them
-		c := cron.New()
 		c.AddFunc(pendingMessageCron, func() {
 			messaging.GetPendingMessages()
 		})
-		c.Start()
 	}
 
 	podCleanup := handlers.NewCleanup(mgr.GetClient(),
@@ -376,23 +375,20 @@ func main() {
 		setupLog.Info("starting build pod cleanup handler")
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
-		c := cron.New()
 		c.AddFunc(buildPodCleanUpCron, func() {
 			podCleanup.BuildPodCleanup()
 		})
-		c.Start()
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
 	if enableTaskPodCleanUp {
 		setupLog.Info("starting task pod cleanup handler")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
-		c := cron.New()
 		c.AddFunc(taskPodCleanUpCron, func() {
 			podCleanup.TaskPodCleanup()
 		})
-		c.Start()
 	}
+	c.Start()
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{

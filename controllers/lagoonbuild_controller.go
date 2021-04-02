@@ -286,7 +286,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					{	
 						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
 						Value: r.k8upWeeklyRandomFeatureFlag,
-					}
+					},
 				}
 				if r.IsOpenshift {
 					// openshift builds have different names for some things, and also additional values to add

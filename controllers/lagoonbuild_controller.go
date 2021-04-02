@@ -286,7 +286,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					},
 					{	
 						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
-						Value: strconv.FormatBool(r.k8upWeeklyRandomFeatureFlag),
+						Value: strconv.FormatBool(r.K8upWeeklyRandomFeatureFlag),
 					},
 				}
 				if r.IsOpenshift {

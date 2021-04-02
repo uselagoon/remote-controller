@@ -46,33 +46,33 @@ import (
 // LagoonBuildReconciler reconciles a LagoonBuild object
 type LagoonBuildReconciler struct {
 	client.Client
-	Log                   logr.Logger
-	Scheme                *runtime.Scheme
-	EnableMQ              bool
-	Messaging             *handlers.Messaging
-	BuildImage            string
-	IsOpenshift           bool
-	NamespacePrefix       string
-	RandomNamespacePrefix bool
-	ControllerNamespace   string
-	EnableDebug           bool
-	FastlyServiceID       string
-	FastlyWatchStatus     bool
+	Log                     logr.Logger
+	Scheme                  *runtime.Scheme
+	EnableMQ                bool
+	Messaging               *handlers.Messaging
+	BuildImage              string
+	IsOpenshift             bool
+	NamespacePrefix         string
+	RandomNamespacePrefix   bool
+	ControllerNamespace     string
+	EnableDebug             bool
+	FastlyServiceID         string
+	FastlyWatchStatus       bool
 	// BuildPodRunAsUser sets the build pod securityContext.runAsUser value.
-	BuildPodRunAsUser int64
+	BuildPodRunAsUser       int64
 	// BuildPodRunAsGroup sets the build pod securityContext.runAsGroup value.
-	BuildPodRunAsGroup int64
+	BuildPodRunAsGroup      int64
 	// BuildPodFSGroup sets the build pod securityContext.fsGroup value.
-	BuildPodFSGroup int64
+	BuildPodFSGroup         int64
 	// Lagoon feature flags
-	LFFForceRootlessWorkload         string
-	LFFDefaultRootlessWorkload       string
-	LFFForceIsolationNetworkPolicy   string
-	LFFDefaultIsolationNetworkPolicy string
-	MonthlyBackupDefaultRetention	int
-	WeeklyBackupDefaultRetention	int
-	DailyBackupDefaultRetention		int
-	k8upWeeklyRandomFeatureFlag		bool
+	LFFForceRootlessWorkload            string
+	LFFDefaultRootlessWorkload          string
+	LFFForceIsolationNetworkPolicy      string
+	LFFDefaultIsolationNetworkPolicy    string
+	MonthlyBackupDefaultRetention       int
+	WeeklyBackupDefaultRetention        int
+	DailyBackupDefaultRetention	        int
+	k8upWeeklyRandomFeatureFlag         bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete

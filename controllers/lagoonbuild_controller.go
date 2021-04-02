@@ -71,7 +71,7 @@ type LagoonBuildReconciler struct {
 	LFFDefaultIsolationNetworkPolicy    string
 	MonthlyBackupDefaultRetention       int
 	WeeklyBackupDefaultRetention        int
-	DailyBackupDefaultRetention	        int
+	DailyBackupDefaultRetention         int
 	k8upWeeklyRandomFeatureFlag         bool
 }
 

@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+    "strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -273,19 +274,19 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					},
 					{
 						Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
-						Value: r.MonthlyBackupDefaultRetention,
+						Value: strconv.Itoa(r.MonthlyBackupDefaultRetention),
 					},
 					{
 						Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
-						Value: r.WeeklyBackupDefaultRetention,
+						Value: strconv.Itoa(r.WeeklyBackupDefaultRetention),
 					},
 					{
 						Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
-						Value: r.DailyBackupDefaultRetention,
+						Value: strconv.Itoa(r.DailyBackupDefaultRetention),
 					},
 					{	
 						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
-						Value: r.k8upWeeklyRandomFeatureFlag,
+						Value: strconv.FormatBool(r.k8upWeeklyRandomFeatureFlag),
 					},
 				}
 				if r.IsOpenshift {

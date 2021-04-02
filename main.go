@@ -143,6 +143,12 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
+	flag.IntVar(&monthlyBackupDefaultRetention, "monthlyBackupDefaultRetention", 1,
+		"The number of monthly backups k8up should retain after a prune operation.")
+	flag.IntVar(&weeklyBackupDefaultRetention, "weeklyBackupDefaultRetention", 6,
+		"The number of weekly backups k8up should retain after a prune operation.")
+	flag.IntVar(&dailyBackupDefaultRetention, "dailyBackupDefaultRetention", 7,
+		"The number of daily backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD build environment variable to enforce cluster policy")
@@ -152,6 +158,8 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
+	flag.BoolVar(&k8upWeeklyRandomFeatureFlag, "k8upWeeklyRandomFeatureFlag", false,
+		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -353,27 +361,31 @@ func main() {
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme:                mgr.GetScheme(),
-		EnableMQ:              enableMQ,
-		BuildImage:            overrideBuildDeployImage,
-		Messaging:             messaging,
-		IsOpenshift:           isOpenshift,
-		NamespacePrefix:       namespacePrefix,
-		RandomNamespacePrefix: randomPrefix,
-		ControllerNamespace:   controllerNamespace,
-		EnableDebug:           enableDebug,
-		FastlyServiceID:       fastlyServiceID,
-		FastlyWatchStatus:     fastlyWatchStatus,
-		BuildPodRunAsUser:     int64(buildPodRunAsUser),
-		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
-		BuildPodFSGroup:       int64(buildPodFSGroup),
+		Client:                				mgr.GetClient(),
+		Log:                   				ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:                				mgr.GetScheme(),
+		EnableMQ:              				enableMQ,
+		BuildImage:            				overrideBuildDeployImage,
+		Messaging:             				messaging,
+		IsOpenshift:           				isOpenshift,
+		NamespacePrefix:       				namespacePrefix,
+		RandomNamespacePrefix: 				randomPrefix,
+		ControllerNamespace:   				controllerNamespace,
+		EnableDebug:           				enableDebug,
+		FastlyServiceID:       				fastlyServiceID,
+		FastlyWatchStatus:     				fastlyWatchStatus,
+		BuildPodRunAsUser:     				int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:    				int64(buildPodRunAsGroup),
+		BuildPodFSGroup:       				int64(buildPodFSGroup),
+		MonthlyBackupDefaultRetention: 		monthlyBackupDefaultRetention,
+		WeeklyBackupDefaultRetention: 		weeklyBackupDefaultRetention,
+		DailyBackupDefaultRetention: 		dailyBackupDefaultRetention,
 		// Lagoon feature flags
-		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
-		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
-		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
-		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
+		LFFForceRootlessWorkload:         	lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload:       	lffDefaultRootlessWorkload,
+		LFFForceIsolationNetworkPolicy:   	lffForceIsolationNetworkPolicy,
+		LFFDefaultIsolationNetworkPolicy: 	lffDefaultIsolationNetworkPolicy,
+		K8upWeeklyRandomFeatureFlag: 		k8upWeeklyRandomFeatureFlag,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

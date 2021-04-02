@@ -69,6 +69,10 @@ type LagoonBuildReconciler struct {
 	LFFDefaultRootlessWorkload       string
 	LFFForceIsolationNetworkPolicy   string
 	LFFDefaultIsolationNetworkPolicy string
+	MonthlyBackupDefaultRetention	int
+	WeeklyBackupDefaultRetention	int
+	DailyBackupDefaultRetention		int
+	k8upWeeklyRandomFeatureFlag		bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -267,6 +271,22 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:  "MONITORING_ALERTCONTACT",
 						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
 					},
+					{
+						Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
+						Value: r.MonthlyBackupDefaultRetention,
+					},
+					{
+						Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
+						Value: r.WeeklyBackupDefaultRetention,
+					},
+					{
+						Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
+						Value: r.DailyBackupDefaultRetention,
+					},
+					{	
+						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
+						Value: r.k8upWeeklyRandomFeatureFlag,
+					}
 				}
 				if r.IsOpenshift {
 					// openshift builds have different names for some things, and also additional values to add

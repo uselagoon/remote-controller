@@ -73,7 +73,7 @@ type LagoonBuildReconciler struct {
 	MonthlyBackupDefaultRetention       int
 	WeeklyBackupDefaultRetention        int
 	DailyBackupDefaultRetention         int
-	k8upWeeklyRandomFeatureFlag         bool
+	K8upWeeklyRandomFeatureFlag         bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete

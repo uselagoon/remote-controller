@@ -61,37 +61,37 @@ func init() {
 }
 
 func main() {
-	var metricsAddr                         string
-	var enableLeaderElection                bool
-	var enableMQ                            bool
-	var leaderElectionID                    string
-	var pendingMessageCron                  string
-	var mqWorkers                           int
-	var rabbitRetryInterval                 int
-	var startupConnectionAttempts           int
-	var startupConnectionInterval           int
-	var overrideBuildDeployImage            string
-	var namespacePrefix                     string
-	var randomPrefix                        bool
-	var isOpenshift                         bool
-	var controllerNamespace                 string
-	var enableDebug                         bool
-	var fastlyServiceID                     string
-	var fastlyWatchStatus                   bool
-	var buildPodRunAsUser                   uint
-	var buildPodRunAsGroup                  uint
-	var buildPodFSGroup                     uint
-	var dailyBackupDefaultRetention         int
-	var weeklyBackupDefaultRetention        int
-	var monthlyBackupDefaultRetention       int
+	var metricsAddr string
+	var enableLeaderElection bool
+	var enableMQ bool
+	var leaderElectionID string
+	var pendingMessageCron string
+	var mqWorkers int
+	var rabbitRetryInterval int
+	var startupConnectionAttempts int
+	var startupConnectionInterval int
+	var overrideBuildDeployImage string
+	var namespacePrefix string
+	var randomPrefix bool
+	var isOpenshift bool
+	var controllerNamespace string
+	var enableDebug bool
+	var fastlyServiceID string
+	var fastlyWatchStatus bool
+	var buildPodRunAsUser uint
+	var buildPodRunAsGroup uint
+	var buildPodFSGroup uint
+	var dailyBackupDefaultRetention int
+	var weeklyBackupDefaultRetention int
+	var monthlyBackupDefaultRetention int
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
-	var lffForceRootlessWorkload            string
-	var lffDefaultRootlessWorkload          string
-	var lffForceIsolationNetworkPolicy      string
-	var lffDefaultIsolationNetworkPolicy    string
-	var k8upWeeklyRandomFeatureFlag         bool
+	var lffForceRootlessWorkload string
+	var lffDefaultRootlessWorkload string
+	var lffForceIsolationNetworkPolicy string
+	var lffDefaultIsolationNetworkPolicy string
+	var k8upWeeklyRandomFeatureFlag bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -365,31 +365,31 @@ func main() {
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client:                             mgr.GetClient(),
-		Log:                                ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme:                             mgr.GetScheme(),
-		EnableMQ:                           enableMQ,
-		BuildImage:                         overrideBuildDeployImage,
-		Messaging:                          messaging,
-		IsOpenshift:                        isOpenshift,
-		NamespacePrefix:                    namespacePrefix,
-		RandomNamespacePrefix:              randomPrefix,
-		ControllerNamespace:                controllerNamespace,
-		EnableDebug:                        enableDebug,
-		FastlyServiceID:                    fastlyServiceID,
-		FastlyWatchStatus:                  fastlyWatchStatus,
-		BuildPodRunAsUser:                  int64(buildPodRunAsUser),
-		BuildPodRunAsGroup:                 int64(buildPodRunAsGroup),
-		BuildPodFSGroup:                    int64(buildPodFSGroup),
-		MonthlyBackupDefaultRetention:      monthlyBackupDefaultRetention,
-		WeeklyBackupDefaultRetention:       weeklyBackupDefaultRetention,
-		DailyBackupDefaultRetention:        dailyBackupDefaultRetention,
+		Client:                        mgr.GetClient(),
+		Log:                           ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:                        mgr.GetScheme(),
+		EnableMQ:                      enableMQ,
+		BuildImage:                    overrideBuildDeployImage,
+		Messaging:                     messaging,
+		IsOpenshift:                   isOpenshift,
+		NamespacePrefix:               namespacePrefix,
+		RandomNamespacePrefix:         randomPrefix,
+		ControllerNamespace:           controllerNamespace,
+		EnableDebug:                   enableDebug,
+		FastlyServiceID:               fastlyServiceID,
+		FastlyWatchStatus:             fastlyWatchStatus,
+		BuildPodRunAsUser:             int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
+		BuildPodFSGroup:               int64(buildPodFSGroup),
+		MonthlyBackupDefaultRetention: monthlyBackupDefaultRetention,
+		WeeklyBackupDefaultRetention:  weeklyBackupDefaultRetention,
+		DailyBackupDefaultRetention:   dailyBackupDefaultRetention,
 		// Lagoon feature flags
-		LFFForceRootlessWorkload:           lffForceRootlessWorkload,
-		LFFDefaultRootlessWorkload:         lffDefaultRootlessWorkload,
-		LFFForceIsolationNetworkPolicy:     lffForceIsolationNetworkPolicy,
-		LFFDefaultIsolationNetworkPolicy:   lffDefaultIsolationNetworkPolicy,
-		K8upWeeklyRandomFeatureFlag:        k8upWeeklyRandomFeatureFlag,
+		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
+		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
+		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
+		K8upWeeklyRandomFeatureFlag:      k8upWeeklyRandomFeatureFlag,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

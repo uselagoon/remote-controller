@@ -81,9 +81,9 @@ func main() {
 	var buildPodRunAsUser uint
 	var buildPodRunAsGroup uint
 	var buildPodFSGroup uint
-	var dailyBackupDefaultRetention int
-	var weeklyBackupDefaultRetention int
-	var monthlyBackupDefaultRetention int
+	var backupDefaultDailyRetention int
+	var backupDefaultWeeklyRetention int
+	var backupDefaultMonthlyRetention int
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
@@ -91,7 +91,7 @@ func main() {
 	var lffDefaultRootlessWorkload string
 	var lffForceIsolationNetworkPolicy string
 	var lffDefaultIsolationNetworkPolicy string
-	var k8upWeeklyRandomFeatureFlag bool
+	var lffBackupWeeklyRandom bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -147,11 +147,11 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
-	flag.IntVar(&monthlyBackupDefaultRetention, "monthlyBackupDefaultRetention", 1,
+	flag.IntVar(&backupDefaultMonthlyRetention, "backupDefaultMonthlyRetention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
-	flag.IntVar(&weeklyBackupDefaultRetention, "weeklyBackupDefaultRetention", 6,
+	flag.IntVar(&backupDefaultWeeklyRetention, "backupDefaultWeeklyRetention", 6,
 		"The number of weekly backups k8up should retain after a prune operation.")
-	flag.IntVar(&dailyBackupDefaultRetention, "dailyBackupDefaultRetention", 7,
+	flag.IntVar(&backupDefaultDailyRetention, "backupDefaultDailyRetention", 7,
 		"The number of daily backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
@@ -162,7 +162,7 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
-	flag.BoolVar(&k8upWeeklyRandomFeatureFlag, "k8upWeeklyRandomFeatureFlag", false,
+	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 	flag.Parse()
 
@@ -381,15 +381,15 @@ func main() {
 		BuildPodRunAsUser:             int64(buildPodRunAsUser),
 		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
 		BuildPodFSGroup:               int64(buildPodFSGroup),
-		MonthlyBackupDefaultRetention: monthlyBackupDefaultRetention,
-		WeeklyBackupDefaultRetention:  weeklyBackupDefaultRetention,
-		DailyBackupDefaultRetention:   dailyBackupDefaultRetention,
+		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
+		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
+		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
 		// Lagoon feature flags
 		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
 		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
 		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
-		K8upWeeklyRandomFeatureFlag:      k8upWeeklyRandomFeatureFlag,
+		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

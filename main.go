@@ -81,6 +81,9 @@ func main() {
 	var buildPodRunAsUser uint
 	var buildPodRunAsGroup uint
 	var buildPodFSGroup uint
+	var backupDefaultDailyRetention int
+	var backupDefaultWeeklyRetention int
+	var backupDefaultMonthlyRetention int
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
@@ -88,12 +91,13 @@ func main() {
 	var lffDefaultRootlessWorkload string
 	var lffForceIsolationNetworkPolicy string
 	var lffDefaultIsolationNetworkPolicy string
-	var enableBuildPodCleanUp bool
-	var enableTaskPodCleanUp bool
+	var buildPodCleanUpEnable bool
+	var taskPodCleanUpEnable bool
 	var buildPodCleanUpCron string
 	var taskPodCleanUpCron string
-	var numBuildPodsToKeep int
-	var numTaskPodsToKeep int
+	var buildPodsToKeep int
+	var taskPodsToKeep int
+	var lffBackupWeeklyRandom bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -149,6 +153,12 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
+	flag.IntVar(&backupDefaultMonthlyRetention, "backupDefaultMonthlyRetention", 1,
+		"The number of monthly backups k8up should retain after a prune operation.")
+	flag.IntVar(&backupDefaultWeeklyRetention, "backupDefaultWeeklyRetention", 6,
+		"The number of weekly backups k8up should retain after a prune operation.")
+	flag.IntVar(&backupDefaultDailyRetention, "backupDefaultDailyRetention", 7,
+		"The number of daily backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD build environment variable to enforce cluster policy")
@@ -158,14 +168,16 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
-	flag.BoolVar(&enableBuildPodCleanUp, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.BoolVar(&buildPodCleanUpEnable, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the build pod cleanup.")
-	flag.IntVar(&numBuildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
-	flag.BoolVar(&enableTaskPodCleanUp, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
+	flag.BoolVar(&taskPodCleanUpEnable, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the task pod cleanup.")
-	flag.IntVar(&numTaskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
+	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
+	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
+		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -365,13 +377,13 @@ func main() {
 	}
 
 	podCleanup := handlers.NewCleanup(mgr.GetClient(),
-		numBuildPodsToKeep,
-		numTaskPodsToKeep,
+		buildPodsToKeep,
+		taskPodsToKeep,
 		controllerNamespace,
 		enableDebug,
 	)
 	// if the build pod cleanup is enabled, add the cronjob for it
-	if enableBuildPodCleanUp {
+	if buildPodCleanUpEnable {
 		setupLog.Info("starting build pod cleanup handler")
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
@@ -380,7 +392,7 @@ func main() {
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
-	if enableTaskPodCleanUp {
+	if taskPodCleanUpEnable {
 		setupLog.Info("starting task pod cleanup handler")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
@@ -392,27 +404,31 @@ func main() {
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{
-		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
-		Scheme:                mgr.GetScheme(),
-		EnableMQ:              enableMQ,
-		BuildImage:            overrideBuildDeployImage,
-		Messaging:             messaging,
-		IsOpenshift:           isOpenshift,
-		NamespacePrefix:       namespacePrefix,
-		RandomNamespacePrefix: randomPrefix,
-		ControllerNamespace:   controllerNamespace,
-		EnableDebug:           enableDebug,
-		FastlyServiceID:       fastlyServiceID,
-		FastlyWatchStatus:     fastlyWatchStatus,
-		BuildPodRunAsUser:     int64(buildPodRunAsUser),
-		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
-		BuildPodFSGroup:       int64(buildPodFSGroup),
+		Client:                        mgr.GetClient(),
+		Log:                           ctrl.Log.WithName("controllers").WithName("LagoonBuild"),
+		Scheme:                        mgr.GetScheme(),
+		EnableMQ:                      enableMQ,
+		BuildImage:                    overrideBuildDeployImage,
+		Messaging:                     messaging,
+		IsOpenshift:                   isOpenshift,
+		NamespacePrefix:               namespacePrefix,
+		RandomNamespacePrefix:         randomPrefix,
+		ControllerNamespace:           controllerNamespace,
+		EnableDebug:                   enableDebug,
+		FastlyServiceID:               fastlyServiceID,
+		FastlyWatchStatus:             fastlyWatchStatus,
+		BuildPodRunAsUser:             int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
+		BuildPodFSGroup:               int64(buildPodFSGroup),
+		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
+		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
+		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
 		// Lagoon feature flags
 		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
 		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
 		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
+		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

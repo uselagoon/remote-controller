@@ -67,16 +67,18 @@ func (h *Cleanup) BuildPodCleanup() {
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(buildPods.Items, func(i, j int) bool {
-			return buildPods.Items[i].ObjectMeta.CreationTimestamp.Before(&buildPods.Items[j].ObjectMeta.CreationTimestamp)
+			return buildPods.Items[i].ObjectMeta.CreationTimestamp.After(buildPods.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
 		if len(buildPods.Items) > h.NumBuildPodsToKeep {
 			for idx, pod := range buildPods.Items {
-				if idx >= h.NumBuildPodsToKeep &&
-					pod.Status.Phase == corev1.PodFailed ||
-					pod.Status.Phase == corev1.PodSucceeded {
-					if err := h.Client.Delete(context.Background(), &pod); err != nil {
-						opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
-						break
+				if idx >= h.NumBuildPodsToKeep {
+					if pod.Status.Phase == corev1.PodFailed ||
+						pod.Status.Phase == corev1.PodSucceeded {
+						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
+						if err := h.Client.Delete(context.Background(), &pod); err != nil {
+							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							break
+						}
 					}
 				}
 			}
@@ -115,16 +117,18 @@ func (h *Cleanup) TaskPodCleanup() {
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(taskPods.Items, func(i, j int) bool {
-			return taskPods.Items[i].ObjectMeta.CreationTimestamp.Before(&taskPods.Items[j].ObjectMeta.CreationTimestamp)
+			return taskPods.Items[i].ObjectMeta.CreationTimestamp.After(taskPods.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
 		if len(taskPods.Items) > h.NumTaskPodsToKeep {
 			for idx, pod := range taskPods.Items {
-				if idx >= h.NumTaskPodsToKeep &&
-					pod.Status.Phase == corev1.PodFailed ||
-					pod.Status.Phase == corev1.PodSucceeded {
-					if err := h.Client.Delete(context.Background(), &pod); err != nil {
-						opLog.Error(err, fmt.Sprintf("Unable to delete pod"))
-						break
+				if idx >= h.NumTaskPodsToKeep {
+					if pod.Status.Phase == corev1.PodFailed ||
+						pod.Status.Phase == corev1.PodSucceeded {
+						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
+						if err := h.Client.Delete(context.Background(), &pod); err != nil {
+							opLog.Error(err, fmt.Sprintf("Unable to delete pod"))
+							break
+						}
 					}
 				}
 			}

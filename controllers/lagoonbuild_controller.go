@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,10 @@ type LagoonBuildReconciler struct {
 	LFFDefaultRootlessWorkload       string
 	LFFForceIsolationNetworkPolicy   string
 	LFFDefaultIsolationNetworkPolicy string
+	BackupDefaultMonthlyRetention    int
+	BackupDefaultWeeklyRetention     int
+	BackupDefaultDailyRetention      int
+	LFFBackupWeeklyRandom            bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -266,6 +271,22 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					{
 						Name:  "MONITORING_ALERTCONTACT",
 						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
+					},
+					{
+						Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultMonthlyRetention),
+					},
+					{
+						Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultWeeklyRetention),
+					},
+					{
+						Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+					},
+					{
+						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
+						Value: strconv.FormatBool(r.LFFBackupWeeklyRandom),
 					},
 				}
 				if r.IsOpenshift {

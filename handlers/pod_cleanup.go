@@ -20,18 +20,18 @@ type cleanup interface {
 // Cleanup is used for cleaning up old pods or resources.
 type Cleanup struct {
 	Client              client.Client
-	NumTaskPodsToKeep   int
-	NumBuildPodsToKeep  int
+	TaskPodsToKeep      int
+	BuildPodsToKeep     int
 	ControllerNamespace string
 	EnableDebug         bool
 }
 
 // NewCleanup returns a cleanup with controller-runtime client.
-func NewCleanup(client client.Client, numTaskPodsToKeep int, numBuildPodsToKeep int, controllerNamespace string, enableDebug bool) *Cleanup {
+func NewCleanup(client client.Client, taskPodsToKeep int, buildPodsToKeep int, controllerNamespace string, enableDebug bool) *Cleanup {
 	return &Cleanup{
 		Client:              client,
-		NumTaskPodsToKeep:   numTaskPodsToKeep,
-		NumBuildPodsToKeep:  numBuildPodsToKeep,
+		TaskPodsToKeep:      taskPodsToKeep,
+		BuildPodsToKeep:     buildPodsToKeep,
 		ControllerNamespace: controllerNamespace,
 		EnableDebug:         enableDebug,
 	}
@@ -69,9 +69,9 @@ func (h *Cleanup) BuildPodCleanup() {
 		sort.Slice(buildPods.Items, func(i, j int) bool {
 			return buildPods.Items[i].ObjectMeta.CreationTimestamp.After(buildPods.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
-		if len(buildPods.Items) > h.NumBuildPodsToKeep {
+		if len(buildPods.Items) > h.BuildPodsToKeep {
 			for idx, pod := range buildPods.Items {
-				if idx >= h.NumBuildPodsToKeep {
+				if idx >= h.BuildPodsToKeep {
 					if pod.Status.Phase == corev1.PodFailed ||
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
@@ -119,9 +119,9 @@ func (h *Cleanup) TaskPodCleanup() {
 		sort.Slice(taskPods.Items, func(i, j int) bool {
 			return taskPods.Items[i].ObjectMeta.CreationTimestamp.After(taskPods.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
-		if len(taskPods.Items) > h.NumTaskPodsToKeep {
+		if len(taskPods.Items) > h.TaskPodsToKeep {
 			for idx, pod := range taskPods.Items {
-				if idx >= h.NumTaskPodsToKeep {
+				if idx >= h.TaskPodsToKeep {
 					if pod.Status.Phase == corev1.PodFailed ||
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))

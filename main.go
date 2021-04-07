@@ -91,6 +91,12 @@ func main() {
 	var lffDefaultRootlessWorkload string
 	var lffForceIsolationNetworkPolicy string
 	var lffDefaultIsolationNetworkPolicy string
+	var buildPodCleanUpEnable bool
+	var taskPodCleanUpEnable bool
+	var buildPodCleanUpCron string
+	var taskPodCleanUpCron string
+	var buildPodsToKeep int
+	var taskPodsToKeep int
 	var lffBackupWeeklyRandom bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
@@ -162,6 +168,14 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultIsolationNetworkPolicy, "lagoon-feature-flag-default-isolation-network-policy", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY build environment variable to control default cluster policy")
+	flag.BoolVar(&buildPodCleanUpEnable, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
+		"The cron definition for how often to run the build pod cleanup.")
+	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
+	flag.BoolVar(&taskPodCleanUpEnable, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
+	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the task pod cleanup.")
+	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 	flag.Parse()
@@ -348,6 +362,7 @@ func main() {
 		controllerNamespace,
 		enableDebug,
 	)
+	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
@@ -356,12 +371,36 @@ func main() {
 		// use cron to run a pending message task
 		// this will check any `LagoonBuild` resources for the pendingMessages label
 		// and attempt to re-publish them
-		c := cron.New()
 		c.AddFunc(pendingMessageCron, func() {
 			messaging.GetPendingMessages()
 		})
-		c.Start()
 	}
+
+	podCleanup := handlers.NewCleanup(mgr.GetClient(),
+		buildPodsToKeep,
+		taskPodsToKeep,
+		controllerNamespace,
+		enableDebug,
+	)
+	// if the build pod cleanup is enabled, add the cronjob for it
+	if buildPodCleanUpEnable {
+		setupLog.Info("starting build pod cleanup handler")
+		// use cron to run a build pod cleanup task
+		// this will check any Lagoon build pods and attempt to delete them
+		c.AddFunc(buildPodCleanUpCron, func() {
+			podCleanup.BuildPodCleanup()
+		})
+	}
+	// if the task pod cleanup is enabled, add the cronjob for it
+	if taskPodCleanUpEnable {
+		setupLog.Info("starting task pod cleanup handler")
+		// use cron to run a task pod cleanup task
+		// this will check any Lagoon task pods and attempt to delete them
+		c.AddFunc(taskPodCleanUpCron, func() {
+			podCleanup.TaskPodCleanup()
+		})
+	}
+	c.Start()
 
 	setupLog.Info("starting controllers")
 	if err = (&controllers.LagoonBuildReconciler{

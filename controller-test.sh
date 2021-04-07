@@ -29,6 +29,7 @@ check_controller_log () {
     then
         # build failed, exit 1
         tear_down
+        echo "============== FAILED ==============="
         exit 1
     fi
 }
@@ -39,6 +40,7 @@ check_controller_log_build () {
     then
         # build failed, exit 1
         tear_down
+        echo "============== FAILED ==============="
         exit 1
     fi
 }
@@ -67,6 +69,7 @@ mariadb_start_check () {
         sleep 5
     else
         echo "Timeout of $CHECK_TIMEOUT for database provider startup reached"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
@@ -95,6 +98,8 @@ EOF
     echo "==> Switch kube context to kind" 
     kubectl config use-context kind-${KIND_NAME}
 
+    echo "==> Install local path provisioner" 
+    kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
     ## add the bulk storageclass for builds to use
     cat <<EOF | kubectl apply -f -
 apiVersion: storage.k8s.io/v1
@@ -105,6 +110,7 @@ provisioner: rancher.io/local-path
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 EOF
+    echo "==> local path provisioner installed"
 }
 
 build_deploy_controller () {
@@ -127,6 +133,7 @@ build_deploy_controller () {
         check_controller_log
         tear_down
         echo "================ END ================"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
@@ -151,6 +158,7 @@ check_lagoon_build () {
         check_controller_log ${1}
         tear_down
         echo "================ END ================"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
@@ -186,8 +194,9 @@ kubectl -n lagoon rollout status deployment docker-host -w
 
 echo "====> Install dbaas-operator"
 kubectl create namespace dbaas-operator
+helm repo add amazeeio https://amazeeio.github.io/charts/
+helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
 helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
-helm upgrade --install -n dbaas-operator dbaas-operator dbaas-operator/dbaas-operator
 helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
 
 sleep 20
@@ -251,6 +260,37 @@ curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:applicatio
 echo ""
 sleep 10
 check_lagoon_build ${LBUILD2}
+
+
+echo "==> Check pod cleanup worked"
+CHECK_COUNTER=1
+until ! $(kubectl -n drupal-example-install get pods lagoon-build-7m5zypx &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Build pod not deleted yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for build pod clean up check"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+echo "==> Pod cleanup output (should only be lagoon-build-8m5zypx)"
+POD_CLEANUP_OUTPUT=$(kubectl -n drupal-example-install get pods | grep "lagoon-build")
+echo "${POD_CLEANUP_OUTPUT}"
+POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")
+if [ $POD_CLEANUP_COUNT -gt 1 ]; then
+    echo "There is more than 1 build pod left, there should only be 1"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
 
 check_controller_log
 tear_down

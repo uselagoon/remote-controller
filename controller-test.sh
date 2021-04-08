@@ -47,6 +47,7 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
+    kubectl get pvc --all-namespaces
     kubectl get pods --all-namespaces
     kind delete cluster --name ${KIND_NAME}
     docker-compose down
@@ -176,10 +177,11 @@ helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=172.17.0.1:5000 \
+    --set dockerHost.storage.size=20Gi \
     --set dioscuri.enabled=false
 CHECK_COUNTER=1
 echo "===> Ensure docker-host is running"
-until $(kubectl -n lagoon get pods --no-headers | grep "lagoon-remote-docker-host" | grep -q "Running")
+until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') --no-headers | grep -q "Running")
 do
 if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -188,6 +190,7 @@ if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
     kubectl -n lagoon get pods
+    kubectl -n lagoon get pvc
     kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
     kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
     check_controller_log

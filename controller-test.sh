@@ -16,7 +16,7 @@ CONTROLLER_NAMESPACE=lagoon-builddeploy
 if [ ! -z "$BUILD_CONTROLLER" ]; then
     CONTROLLER_NAMESPACE=lagoon-kbd-system
 fi
-CHECK_TIMEOUT=10
+CHECK_TIMEOUT=20
 
 NS=drupal-example-install
 LBUILD=lagoon-build-7m5zypx
@@ -47,6 +47,7 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
+    kubectl get pods --all-namespaces
     kind delete cluster --name ${KIND_NAME}
     docker-compose down
 }
@@ -150,7 +151,7 @@ check_lagoon_build () {
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
         echo "Build not running yet"
-        sleep 30
+        sleep 5
     else
         echo "Timeout of $CHECK_TIMEOUT waiting for build to start reached"
         echo "=========== BUILD LOG ============"
@@ -169,6 +170,42 @@ check_lagoon_build () {
 start_up
 start_kind
 
+echo "==> Install lagoon-remote docker-host"
+kubectl create namespace lagoon
+helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
+## configure the docker-host to talk to our insecure registry
+helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
+    --set dockerHost.registry=172.17.0.1:5000 \
+    --set dioscuri.enabled=false
+CHECK_COUNTER=1
+echo "===> Ensure docker-host is running"
+until $(kubectl -n lagoon get pods --no-headers | grep "lagoon-remote-docker-host" | grep -q "Running")
+do
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Controller not running yet"
+    sleep 5
+else
+    echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
+    kubectl -n lagoon get pods
+    kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
+    kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+echo "===> Docker-host is running"
+
+echo "====> Install dbaas-operator"
+kubectl create namespace dbaas-operator
+helm repo add amazeeio https://amazeeio.github.io/charts/
+helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
+helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
+helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
+
 echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 if [ ! -z "$BUILD_CONTROLLER" ]; then
@@ -182,24 +219,6 @@ else
         --set vars.rabbitUsername=guest \
         --set vars.rabbitHostname=172.17.0.1:5672
 fi
-
-echo "====> Install lagoon-remote docker-host"
-kubectl create namespace lagoon
-helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
-## configure the docker-host to talk to our insecure registry
-helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
-    --set dockerHost.registry=172.17.0.1:5000 \
-    --set dioscuri.enabled=false
-kubectl -n lagoon rollout status deployment docker-host -w
-
-echo "====> Install dbaas-operator"
-kubectl create namespace dbaas-operator
-helm repo add amazeeio https://amazeeio.github.io/charts/
-helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
-helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
-helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
-
-sleep 20
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml

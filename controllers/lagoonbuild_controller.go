@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,6 +59,21 @@ type LagoonBuildReconciler struct {
 	EnableDebug           bool
 	FastlyServiceID       string
 	FastlyWatchStatus     bool
+	// BuildPodRunAsUser sets the build pod securityContext.runAsUser value.
+	BuildPodRunAsUser int64
+	// BuildPodRunAsGroup sets the build pod securityContext.runAsGroup value.
+	BuildPodRunAsGroup int64
+	// BuildPodFSGroup sets the build pod securityContext.fsGroup value.
+	BuildPodFSGroup int64
+	// Lagoon feature flags
+	LFFForceRootlessWorkload         string
+	LFFDefaultRootlessWorkload       string
+	LFFForceIsolationNetworkPolicy   string
+	LFFDefaultIsolationNetworkPolicy string
+	BackupDefaultMonthlyRetention    int
+	BackupDefaultWeeklyRetention     int
+	BackupDefaultDailyRetention      int
+	LFFBackupWeeklyRandom            bool
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -256,6 +272,22 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:  "MONITORING_ALERTCONTACT",
 						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
 					},
+					{
+						Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultMonthlyRetention),
+					},
+					{
+						Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultWeeklyRetention),
+					},
+					{
+						Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+					},
+					{
+						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
+						Value: strconv.FormatBool(r.LFFBackupWeeklyRandom),
+					},
 				}
 				if r.IsOpenshift {
 					// openshift builds have different names for some things, and also additional values to add
@@ -423,6 +455,31 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Value: r.FastlyServiceID,
 					})
 				}
+				// Set any defined Lagoon feature flags in the build environment.
+				if r.LFFForceRootlessWorkload != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD",
+						Value: r.LFFForceRootlessWorkload,
+					})
+				}
+				if r.LFFDefaultRootlessWorkload != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_DEFAULT_ROOTLESS_WORKLOAD",
+						Value: r.LFFDefaultRootlessWorkload,
+					})
+				}
+				if r.LFFForceIsolationNetworkPolicy != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_FORCE_ISOLATION_NETWORK_POLICY",
+						Value: r.LFFForceIsolationNetworkPolicy,
+					})
+				}
+				if r.LFFDefaultIsolationNetworkPolicy != "" {
+					podEnvs = append(podEnvs, corev1.EnvVar{
+						Name:  "LAGOON_FEATURE_FLAG_DEFAULT_ISOLATION_NETWORK_POLICY",
+						Value: r.LFFDefaultIsolationNetworkPolicy,
+					})
+				}
 				// Use the build image in the controller definition
 				buildImage := r.BuildImage
 				if lagoonBuild.Spec.Build.Image != "" {
@@ -434,9 +491,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 						Name:      lagoonBuild.ObjectMeta.Name,
 						Namespace: lagoonBuild.ObjectMeta.Namespace,
 						Labels: map[string]string{
-							"lagoon.sh/jobType":    "build",
-							"lagoon.sh/buildName":  lagoonBuild.ObjectMeta.Name,
-							"lagoon.sh/controller": r.ControllerNamespace,
+							"lagoon.sh/jobType":       "build",
+							"lagoon.sh/buildName":     lagoonBuild.ObjectMeta.Name,
+							"lagoon.sh/controller":    r.ControllerNamespace,
+							"lagoon.sh/buildRemoteID": string(lagoonBuild.ObjectMeta.UID),
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -480,6 +538,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 								Effect:   "PreferNoSchedule",
 								Operator: "Exists",
 							},
+							{
+								Key:      "lagoon.sh/build",
+								Effect:   "NoSchedule",
+								Operator: "Exists",
+							},
+							{
+								Key:      "lagoon.sh/build",
+								Effect:   "PreferNoSchedule",
+								Operator: "Exists",
+							},
 						},
 						Containers: []corev1.Container{
 							{
@@ -502,6 +570,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							},
 						},
 					},
+				}
+
+				// set the pod security context, if defined to a non-default value
+				if r.BuildPodRunAsUser != 0 || r.BuildPodRunAsGroup != 0 ||
+					r.BuildPodFSGroup != 0 {
+					newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+						RunAsUser:  &r.BuildPodRunAsUser,
+						RunAsGroup: &r.BuildPodRunAsGroup,
+						FSGroup:    &r.BuildPodFSGroup,
+					}
 				}
 
 				// openshift uses a builder service account to be able to push images to the openshift registry
@@ -535,7 +613,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					// if it doesn't exist, then create the build pod
 					opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 					if err := r.Create(ctx, newPod); err != nil {
-						return ctrl.Result{}, err
+						opLog.Error(err, fmt.Sprintf("Unable to create build pod"))
+						// log the error and just exit, don't continue to try and do anything
+						// @TODO: should update the build to failed
+						return ctrl.Result{}, nil
 					}
 					// then break out of the build
 					break
@@ -568,6 +649,8 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				if err := r.Update(ctx, pendingBuild); err != nil {
 					return ctrl.Result{}, err
 				}
+			} else {
+				opLog.Info(fmt.Sprintf("No pending builds"))
 			}
 		}
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -589,9 +672,16 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		// The object is being deleted
 		if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&lagoonBuild, req.NamespacedName.Namespace); err != nil {
+			// first deleteExternalResources will try and check for any pending builds that it can
+			// can change to running to kick off the next pending build
+			if err := r.deleteExternalResources(ctx,
+				opLog,
+				&lagoonBuild,
+				req,
+			); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
+				opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
 				return ctrl.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
@@ -603,7 +693,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				},
 			})
 			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, ignoreNotFound(err)
 			}
 		}
 	}
@@ -622,16 +712,12 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonBuildReconciler) deleteExternalResources(lagoonBuild *lagoonv1alpha1.LagoonBuild, namespace string) error {
-	// delete any external resources if required
-	return nil
-}
-
-// updateStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
-func (r *LagoonBuildReconciler) updateStatusCondition(ctx context.Context,
+// updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
+func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	condition lagoonv1alpha1.LagoonConditions,
-	log string) error {
+	log []byte,
+) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
 	if !jobContainsStatus(lagoonBuild.Status.Conditions, condition) {
@@ -700,6 +786,7 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 // getOrCreateNamespace will create the namespace if it doesn't exist.
 func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, spec lagoonv1alpha1.LagoonBuildSpec) error {
 	// parse the project/env through the project pattern, or use the default
+	var err error
 	nsPattern := spec.Project.NamespacePattern
 	if spec.Project.NamespacePattern == "" {
 		nsPattern = DefaultNamespacePattern
@@ -737,6 +824,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		"lagoon.sh/environment":     spec.Project.Environment,
 		"lagoon.sh/environmentType": spec.Project.EnvironmentType,
 	}
+	if spec.Project.ID != nil {
+		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *spec.Project.ID)
+	}
+	if spec.Project.EnvironmentID != nil {
+		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *spec.Project.EnvironmentID)
+	}
 	// if it isn't an openshift build, then just create a normal namespace
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{
@@ -749,10 +842,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		projectRequest := &projectv1.ProjectRequest{}
 		projectRequest.ObjectMeta.Name = ns
 		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, spec.Project.Name, spec.Project.Environment)
-		err := r.Get(ctx, types.NamespacedName{
-			Name: ns,
-		}, namespace)
-		if err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 			if err := r.Create(ctx, projectRequest); err != nil {
 				return err
 			}
@@ -762,10 +852,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		// this namespace check will also run to patch existing namespaces with labels when they are re-deployed
 		err = try.Do(func(attempt int) (bool, error) {
 			var err error
-			err = r.Get(ctx, types.NamespacedName{
-				Name: ns,
-			}, namespace)
-			if err != nil {
+			if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 				time.Sleep(10 * time.Second) // wait 10 seconds
 			}
 			return attempt < 6, err
@@ -773,24 +860,27 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		if err != nil {
 			return err
 		}
-		// once the namespace exists, then we can patch it with our labels
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": nsLabels,
-			},
-		})
-		if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-			return err
+	} else {
+		// if kubernetes, just create it if it doesn't exist
+		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+			if err := r.Create(ctx, namespace); err != nil {
+				return err
+			}
 		}
-		return nil
 	}
-	err := r.Get(ctx, types.NamespacedName{
-		Name: ns,
-	}, namespace)
-	if err != nil {
-		if err := r.Create(ctx, namespace); err != nil {
-			return err
-		}
+	// once the namespace exists, then we can patch it with our labels
+	// this means the labels will always get added or updated if we need to change them or add new labels
+	// after the namespace has been created
+	mergePatch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": nsLabels,
+		},
+	})
+	if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		return err
+	}
+	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		return err
 	}
 	return nil
 }

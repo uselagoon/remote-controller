@@ -1,5 +1,7 @@
 package controllers
 
+// this file is used by the `lagoonmonitor` controller
+
 import (
 	"context"
 	"encoding/json"
@@ -93,8 +95,8 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			for _, container := range jobPod.Spec.Containers {
 				cLogs, err := getContainerLogs(container.Name, req)
 				if err != nil {
-					opLog.Info(fmt.Sprintf("LogsErr: %v", err))
-					return nil
+					opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from task pod"))
+					// log the error, but just continue
 				}
 				allContainerLogs = append(allContainerLogs, cLogs...)
 			}
@@ -196,13 +198,15 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 			Type:      "task",
 			Namespace: lagoonTask.ObjectMeta.Namespace,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
-				Task:        &lagoonTask.Spec.Task,
-				Environment: lagoonTask.Spec.Environment.Name,
-				Project:     lagoonTask.Spec.Project.Name,
-				JobName:     lagoonTask.ObjectMeta.Name,
-				JobStatus:   condition,
-				RemoteID:    string(jobPod.ObjectMeta.UID),
-				Key:         lagoonTask.Spec.Key,
+				Task:          &lagoonTask.Spec.Task,
+				Environment:   lagoonTask.Spec.Environment.Name,
+				Project:       lagoonTask.Spec.Project.Name,
+				EnvironmentID: stringToUintPtr(lagoonTask.Spec.Environment.ID),
+				ProjectID:     stringToUintPtr(lagoonTask.Spec.Project.ID),
+				JobName:       lagoonTask.ObjectMeta.Name,
+				JobStatus:     condition,
+				RemoteID:      string(jobPod.ObjectMeta.UID),
+				Key:           lagoonTask.Spec.Key,
 			},
 		}
 		if _, ok := jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]; ok {
@@ -258,13 +262,15 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 			Project:  lagoonTask.Spec.Project.Name,
 			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
-				Task:        &lagoonTask.Spec.Task,
-				ProjectName: lagoonTask.Spec.Project.Name,
-				Environment: lagoonTask.Spec.Environment.Name,
-				JobName:     lagoonTask.ObjectMeta.Name,
-				JobStatus:   condition,
-				RemoteID:    string(jobPod.ObjectMeta.UID),
-				Key:         lagoonTask.Spec.Key,
+				Task:          &lagoonTask.Spec.Task,
+				ProjectName:   lagoonTask.Spec.Project.Name,
+				Environment:   lagoonTask.Spec.Environment.Name,
+				EnvironmentID: stringToUintPtr(lagoonTask.Spec.Environment.ID),
+				ProjectID:     stringToUintPtr(lagoonTask.Spec.Project.ID),
+				JobName:       lagoonTask.ObjectMeta.Name,
+				JobStatus:     condition,
+				RemoteID:      string(jobPod.ObjectMeta.UID),
+				Key:           lagoonTask.Spec.Key,
 			},
 			Message: fmt.Sprintf("*[%s]* Task `%s` *%s* %s",
 				lagoonTask.Spec.Project.Name,

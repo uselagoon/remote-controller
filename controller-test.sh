@@ -7,16 +7,12 @@
 KIND_VER=v1.17.5
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
-KIND_NAME=kbd-controller-test
+KIND_NAME=chart-testing
 CONTROLLER_IMAGE=amazeeio/lagoon-builddeploy:test-tag
 
 
-BUILD_CONTROLLER=true
-CONTROLLER_NAMESPACE=lagoon-builddeploy
-if [ ! -z "$BUILD_CONTROLLER" ]; then
-    CONTROLLER_NAMESPACE=lagoon-kbd-system
-fi
-CHECK_TIMEOUT=10
+CONTROLLER_NAMESPACE=lagoon-kbd-system
+CHECK_TIMEOUT=20
 
 NS=drupal-example-install
 LBUILD=lagoon-build-7m5zypx
@@ -29,6 +25,7 @@ check_controller_log () {
     then
         # build failed, exit 1
         tear_down
+        echo "============== FAILED ==============="
         exit 1
     fi
 }
@@ -39,17 +36,24 @@ check_controller_log_build () {
     then
         # build failed, exit 1
         tear_down
+        echo "============== FAILED ==============="
         exit 1
     fi
 }
 
 tear_down () {
     echo "============= TEAR DOWN ============="
+    echo "==> Get pvc"
+    kubectl get pvc --all-namespaces
+    echo "==> Get pods"
+    kubectl get pods --all-namespaces
+    echo "==> Remove cluster"
     kind delete cluster --name ${KIND_NAME}
+    echo "==> Remove services"
     docker-compose down
 }
 
-start_up () {
+start_docker_compose_services () {
     echo "================ BEGIN ================"
     echo "==> Bring up local provider"
     docker-compose up -d
@@ -67,44 +71,20 @@ mariadb_start_check () {
         sleep 5
     else
         echo "Timeout of $CHECK_TIMEOUT for database provider startup reached"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
     echo "==> Database provider is running"
 }
 
-start_kind () {
-    echo "==> Start kind ${KIND_VER}" 
-
-    TEMP_DIR=$(mktemp -d /tmp/cluster-api.XXXX)
-    ## configure KinD to talk to our insecure registry
-    cat << EOF > ${TEMP_DIR}/kind-config.json
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-containerdConfigPatches:
-# configure a local insecure registry
-- |-
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."172.17.0.1:5000"]
-    endpoint = ["http://172.17.0.1:5000"]
-EOF
-    ## create the cluster now
-    kind create cluster --image kindest/node:${KIND_VER} --name ${KIND_NAME} --config ${TEMP_DIR}/kind-config.json
-
-    kubectl cluster-info --context kind-${KIND_NAME}
-
-    echo "==> Switch kube context to kind" 
-    kubectl config use-context kind-${KIND_NAME}
-
+install_path_provisioner () {
+    echo "==> Install local path provisioner" 
+    kubectl apply -f test-resources/local-path-storage.yaml
+    echo "==> local path provisioner installed"
     ## add the bulk storageclass for builds to use
-    cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: bulk
-provisioner: rancher.io/local-path
-reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer
-EOF
+    kubectl apply -f test-resources/bulk-storage.yaml
+    echo "==> Bulk storage configured"
 }
 
 build_deploy_controller () {
@@ -127,6 +107,7 @@ build_deploy_controller () {
         check_controller_log
         tear_down
         echo "================ END ================"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
@@ -135,15 +116,14 @@ build_deploy_controller () {
 
 
 check_lagoon_build () {
-
     CHECK_COUNTER=1
     echo "==> Check build progress"
-    until $(kubectl -n ${NS} get pods  --no-headers | grep -iq "Running")
+    until $(kubectl -n ${NS} get pods ${1} --no-headers | grep -iq "Running")
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
         echo "Build not running yet"
-        sleep 30
+        sleep 5
     else
         echo "Timeout of $CHECK_TIMEOUT waiting for build to start reached"
         echo "=========== BUILD LOG ============"
@@ -151,6 +131,7 @@ check_lagoon_build () {
         check_controller_log ${1}
         tear_down
         echo "================ END ================"
+        echo "============== FAILED ==============="
         exit 1
     fi
     done
@@ -158,39 +139,48 @@ check_lagoon_build () {
     kubectl -n ${NS} logs ${1} -f
 }
 
-start_up
-start_kind
+start_docker_compose_services
+install_path_provisioner
 
-echo "==> Configure example environment"
-echo "====> Install build deploy controllers"
-if [ ! -z "$BUILD_CONTROLLER" ]; then
-    build_deploy_controller
-else
-    kubectl create namespace lagoon-builddeploy
-    helm repo add lagoon-builddeploy https://raw.githubusercontent.com/amazeeio/lagoon-kbd/main/charts
-    helm upgrade --install -n lagoon-builddeploy lagoon-builddeploy lagoon-builddeploy/lagoon-builddeploy \
-        --set vars.lagoonTargetName=ci-local-controller-kubernetes \
-        --set vars.rabbitPassword=guest \
-        --set vars.rabbitUsername=guest \
-        --set vars.rabbitHostname=172.17.0.1:5672
-fi
-
-echo "====> Install lagoon-remote docker-host"
-kubectl create namespace lagoon
+echo "==> Install lagoon-remote docker-host"
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
+kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=172.17.0.1:5000 \
     --set dioscuri.enabled=false
-kubectl -n lagoon rollout status deployment docker-host -w
+CHECK_COUNTER=1
+echo "===> Ensure docker-host is running"
+until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') --no-headers | grep -q "Running")
+do
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Controller not running yet"
+    sleep 5
+else
+    echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
+    # kubectl -n lagoon get pods
+    # kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
+    # kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+echo "===> Docker-host is running"
 
 echo "====> Install dbaas-operator"
+helm repo add amazeeio https://amazeeio.github.io/charts/
 kubectl create namespace dbaas-operator
+helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
 helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
-helm upgrade --install -n dbaas-operator dbaas-operator dbaas-operator/dbaas-operator
 helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
 
-sleep 20
+echo "==> Configure example environment"
+echo "====> Install build deploy controllers"
+build_deploy_controller
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml
@@ -251,6 +241,37 @@ curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:applicatio
 echo ""
 sleep 10
 check_lagoon_build ${LBUILD2}
+
+
+echo "==> Check pod cleanup worked"
+CHECK_COUNTER=1
+until ! $(kubectl -n drupal-example-install get pods lagoon-build-7m5zypx &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Build pod not deleted yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for build pod clean up check"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+echo "==> Pod cleanup output (should only be lagoon-build-8m5zypx)"
+POD_CLEANUP_OUTPUT=$(kubectl -n drupal-example-install get pods | grep "lagoon-build")
+echo "${POD_CLEANUP_OUTPUT}"
+POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")
+if [ $POD_CLEANUP_COUNT -gt 1 ]; then
+    echo "There is more than 1 build pod left, there should only be 1"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
 
 check_controller_log
 tear_down

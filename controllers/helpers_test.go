@@ -1,6 +1,8 @@
 package controllers
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestShortName(t *testing.T) {
 	var testCases = map[string]struct {
@@ -17,6 +19,33 @@ func TestShortName(t *testing.T) {
 		t.Run(name, func(tt *testing.T) {
 			if output := shortName(tc.input); output != tc.expect {
 				tt.Fatalf("expected: %v, got: %v", tc.expect, output)
+			}
+		})
+	}
+}
+
+func TestStringToUint(t *testing.T) {
+	var testCases = map[string]struct {
+		input  string
+		expect *uint
+	}{
+		"uint 0":     {input: "1", expect: uintPtr(1)},
+		"uint 1":     {input: "1234", expect: uintPtr(1234)},
+		"uint 2":     {input: "6789", expect: uintPtr(6789)},
+		"nil uint 0": {input: "", expect: nil},
+		"nil uint 1": {input: "a2", expect: nil},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(tt *testing.T) {
+			output := stringToUintPtr(tc.input)
+			if tc.expect == nil {
+				if output != tc.expect {
+					tt.Fatalf("expected: %d, got: %d", tc.expect, output)
+				}
+			} else {
+				if *output != *tc.expect {
+					tt.Fatalf("expected: %d, got: %d", *tc.expect, *output)
+				}
 			}
 		})
 	}

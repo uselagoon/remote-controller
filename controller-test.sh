@@ -7,15 +7,11 @@
 KIND_VER=v1.17.5
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
-KIND_NAME=kbd-controller-test
+KIND_NAME=chart-testing
 CONTROLLER_IMAGE=amazeeio/lagoon-builddeploy:test-tag
 
 
-BUILD_CONTROLLER=true
-CONTROLLER_NAMESPACE=lagoon-builddeploy
-if [ ! -z "$BUILD_CONTROLLER" ]; then
-    CONTROLLER_NAMESPACE=lagoon-kbd-system
-fi
+CONTROLLER_NAMESPACE=lagoon-kbd-system
 CHECK_TIMEOUT=20
 
 NS=drupal-example-install
@@ -47,13 +43,17 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
+    echo "==> Get pvc"
     kubectl get pvc --all-namespaces
+    echo "==> Get pods"
     kubectl get pods --all-namespaces
+    echo "==> Remove cluster"
     kind delete cluster --name ${KIND_NAME}
+    echo "==> Remove services"
     docker-compose down
 }
 
-start_up () {
+start_docker_compose_services () {
     echo "================ BEGIN ================"
     echo "==> Bring up local provider"
     docker-compose up -d
@@ -78,41 +78,13 @@ mariadb_start_check () {
     echo "==> Database provider is running"
 }
 
-start_kind () {
-    echo "==> Start kind ${KIND_VER}" 
-
-    TEMP_DIR=$(mktemp -d /tmp/cluster-api.XXXX)
-    ## configure KinD to talk to our insecure registry
-    cat << EOF > ${TEMP_DIR}/kind-config.json
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-containerdConfigPatches:
-# configure a local insecure registry
-- |-
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."172.17.0.1:5000"]
-    endpoint = ["http://172.17.0.1:5000"]
-EOF
-    ## create the cluster now
-    kind create cluster --image kindest/node:${KIND_VER} --name ${KIND_NAME} --config ${TEMP_DIR}/kind-config.json
-
-    kubectl cluster-info --context kind-${KIND_NAME}
-
-    echo "==> Switch kube context to kind" 
-    kubectl config use-context kind-${KIND_NAME}
-
+install_path_provisioner () {
     echo "==> Install local path provisioner" 
-    kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
-    ## add the bulk storageclass for builds to use
-    cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: bulk
-provisioner: rancher.io/local-path
-reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer
-EOF
+    kubectl apply -f test-resources/local-path-storage.yaml
     echo "==> local path provisioner installed"
+    ## add the bulk storageclass for builds to use
+    kubectl apply -f test-resources/bulk-storage.yaml
+    echo "==> Bulk storage configured"
 }
 
 build_deploy_controller () {
@@ -144,10 +116,9 @@ build_deploy_controller () {
 
 
 check_lagoon_build () {
-
     CHECK_COUNTER=1
     echo "==> Check build progress"
-    until $(kubectl -n ${NS} get pods  --no-headers | grep -iq "Running")
+    until $(kubectl -n ${NS} get pods ${1} --no-headers | grep -iq "Running")
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
@@ -168,16 +139,15 @@ check_lagoon_build () {
     kubectl -n ${NS} logs ${1} -f
 }
 
-start_up
-start_kind
+start_docker_compose_services
+install_path_provisioner
 
 echo "==> Install lagoon-remote docker-host"
-kubectl create namespace lagoon
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
+kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=172.17.0.1:5000 \
-    --set dockerHost.storage.size=20Gi \
     --set dioscuri.enabled=false
 CHECK_COUNTER=1
 echo "===> Ensure docker-host is running"
@@ -189,10 +159,9 @@ if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     sleep 5
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
-    kubectl -n lagoon get pods
-    kubectl -n lagoon get pvc
-    kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
-    kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
+    # kubectl -n lagoon get pods
+    # kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
+    # kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
     check_controller_log
     tear_down
     echo "================ END ================"
@@ -203,25 +172,15 @@ done
 echo "===> Docker-host is running"
 
 echo "====> Install dbaas-operator"
-kubectl create namespace dbaas-operator
 helm repo add amazeeio https://amazeeio.github.io/charts/
+kubectl create namespace dbaas-operator
 helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
 helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
 helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
 
 echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
-if [ ! -z "$BUILD_CONTROLLER" ]; then
-    build_deploy_controller
-else
-    kubectl create namespace lagoon-builddeploy
-    helm repo add lagoon-builddeploy https://raw.githubusercontent.com/amazeeio/lagoon-kbd/main/charts
-    helm upgrade --install -n lagoon-builddeploy lagoon-builddeploy lagoon-builddeploy/lagoon-builddeploy \
-        --set vars.lagoonTargetName=ci-local-controller-kubernetes \
-        --set vars.rabbitPassword=guest \
-        --set vars.rabbitUsername=guest \
-        --set vars.rabbitHostname=172.17.0.1:5672
-fi
+build_deploy_controller
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml

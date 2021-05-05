@@ -252,8 +252,8 @@ func main() {
 	harborWebhookAdditionEnabled = getEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
 	harborExpiryInterval = getEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
 	harborRotateInterval = getEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
-	harborExpiryIntervalDuration := 30 * 24 * time.Hour
-	harborRotateIntervalDuration := 24 * time.Hour
+	harborExpiryIntervalDuration := 2 * 24 * time.Hour
+	harborRotateIntervalDuration := 30 * 24 * time.Hour
 	if lffHarborEnabled {
 		var err error
 		harborExpiryIntervalDuration, err = str2duration.ParseDuration(harborExpiryInterval)

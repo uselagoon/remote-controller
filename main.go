@@ -26,6 +26,7 @@ import (
 	"github.com/amazeeio/lagoon-kbd/controllers"
 	"github.com/amazeeio/lagoon-kbd/handlers"
 	"github.com/cheshir/go-mq"
+	str2duration "github.com/xhit/go-str2duration/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -98,6 +99,16 @@ func main() {
 	var buildPodsToKeep int
 	var taskPodsToKeep int
 	var lffBackupWeeklyRandom bool
+	var lffHarborEnabled bool
+	var harborURL string
+	var harborAPI string
+	var harborUsername string
+	var harborPassword string
+	var harborRobotPrefix string
+	var harborRobotDeleteDisabled bool
+	var harborWebhookAdditionEnabled bool
+	var harborExpiryInterval string
+	var harborRotateInterval string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -178,6 +189,28 @@ func main() {
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
+
+	// harbor configurations
+	flag.BoolVar(&lffHarborEnabled, "enable-harbor", true, "Flag to enable this controller to talk to a specific harbor.")
+	flag.StringVar(&harborURL, "harbor-url", "http://harbor.172.17.0.1.nip.io:32080",
+		"The URL for harbor, this is where images will be pushed.")
+	flag.StringVar(&harborAPI, "harbor-api", "http://harbor.172.17.0.1.nip.io:32080/api/",
+		"The URL for harbor API.")
+	flag.StringVar(&harborUsername, "harbor-username", "admin",
+		"The username for accessing harbor.")
+	flag.StringVar(&harborPassword, "harbor-password", "Harbor12345",
+		"The password for accessing harbor.")
+	flag.StringVar(&harborRobotPrefix, "harbor-robot-prefix", "robot$",
+		"The default prefix for robot accounts, will usually be \"robot$\".")
+	flag.BoolVar(&harborRobotDeleteDisabled, "harbor-robot-delete-disabled", true,
+		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
+	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-webhook-addition-enabled", false,
+		"Tells the controller to add Lagoon webhook policies to harbor projects.")
+	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
+		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
+	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
+		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -208,6 +241,32 @@ func main() {
 	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
 	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
 	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
+
+	// harbor envvars
+	harborURL = getEnv("HARBOR_URL", harborURL)
+	harborAPI = getEnv("HARBOR_API", harborAPI)
+	harborUsername = getEnv("HARBOR_USERNAME", harborUsername)
+	harborPassword = getEnv("HARBOR_PASSWORD", harborPassword)
+	harborRobotPrefix = getEnv("HARBOR_ROBOT_PREFIX", harborRobotPrefix)
+	harborRobotDeleteDisabled = getEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
+	harborWebhookAdditionEnabled = getEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
+	harborExpiryInterval = getEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
+	harborRotateInterval = getEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
+	harborExpiryIntervalDuration := 30 * 24 * time.Hour
+	harborRotateIntervalDuration := 24 * time.Hour
+	if lffHarborEnabled {
+		var err error
+		harborExpiryIntervalDuration, err = str2duration.ParseDuration(harborExpiryInterval)
+		if err != nil {
+			setupLog.Error(fmt.Errorf("harbor-expiry-interval unable to convert to duration"), "unable to start manager")
+			os.Exit(1)
+		}
+		harborRotateIntervalDuration, err = str2duration.ParseDuration(harborRotateInterval)
+		if err != nil {
+			setupLog.Error(fmt.Errorf("harbor-expiry-interval unable to convert to duration"), "unable to start manager")
+			os.Exit(1)
+		}
+	}
 
 	// Fastly configuration options
 	// the service id should be that for the cluster which will be used as the default no-cache passthrough
@@ -429,6 +488,18 @@ func main() {
 		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
+		LFFHarborEnabled:                 lffHarborEnabled,
+		Harbor: controllers.Harbor{
+			URL:             harborURL,
+			API:             harborAPI,
+			Username:        harborUsername,
+			Password:        harborPassword,
+			RobotPrefix:     harborRobotPrefix,
+			ExpiryInterval:  harborExpiryIntervalDuration,
+			RotateInterval:  harborRotateIntervalDuration,
+			DeleteDisabled:  harborRobotDeleteDisabled,
+			WebhookAddition: harborWebhookAdditionEnabled,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

@@ -74,6 +74,8 @@ type LagoonBuildReconciler struct {
 	BackupDefaultWeeklyRetention     int
 	BackupDefaultDailyRetention      int
 	LFFBackupWeeklyRandom            bool
+	LFFHarborEnabled                 bool
+	Harbor                           Harbor
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
@@ -419,6 +421,49 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							Name:  "PROMOTION_SOURCE_OPENSHIFT_PROJECT",
 							Value: lagoonBuild.Spec.Promote.SourceProject,
 						})
+					}
+				}
+				// if local/regional harbor is enabled, and this is not an openshift 3 cluster
+				if r.LFFHarborEnabled && !r.IsOpenshift {
+					// unmarshal the project variables
+					lagoonProjectVariables := &[]LagoonEnvironmentVariable{}
+					lagoonEnvironmentVariables := &[]LagoonEnvironmentVariable{}
+					json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
+					json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
+					// check if INTERNAL_REGISTRY_SOURCE_LAGOON is defined, and if it isn't true
+					// if this value is true, then we want to use what is provided by Lagoon
+					// if it is false, or not set, then we use what is provided by this controller
+					// this allows us to make it so a specific environment or the project entirely
+					// can still use whats provided by lagoon
+					if !variableExists(lagoonProjectVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
+						!variableExists(lagoonEnvironmentVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") {
+						// source the robot credential, and inject it into the lagoon project variables
+						// this will overwrite what is provided by lagoon (if lagoon has provided them)
+						// or it will add them.
+						robotCredential := &corev1.Secret{}
+						if err = r.Get(ctx, types.NamespacedName{
+							Namespace: lagoonBuild.ObjectMeta.Namespace,
+							Name:      "lagoon-internal-registry-secret",
+						}, robotCredential); err != nil {
+							return ctrl.Result{}, fmt.Errorf("Could not find Harbor RobotAccount credential")
+						}
+						auths := Auths{}
+						if secretData, ok := robotCredential.Data[".dockerconfigjson"]; ok {
+							if err := json.Unmarshal(secretData, &auths); err != nil {
+								return ctrl.Result{}, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
+							}
+							if len(auths.Registries) == 1 {
+								for registry, creds := range auths.Registries {
+									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", registry, "internal_container_registry")
+									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
+									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
+								}
+							}
+						}
+						// marshal any changes into the project spec on the fly, don't save the spec though
+						// these values are being overwritten and injected directly into the build pod to be consumed
+						// by the build pod image
+						lagoonBuild.Spec.Project.Variables.Project, _ = json.Marshal(lagoonProjectVariables)
 					}
 				}
 				if lagoonBuild.Spec.Project.Variables.Project != nil {
@@ -881,6 +926,36 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 		return err
+	}
+
+	// if local/regional harbor is enabled, and this is not an openshift 3 cluster
+	if r.LFFHarborEnabled && !r.IsOpenshift {
+		// create the harbor client
+		lagoonHarbor, err := NewHarbor(r.Harbor)
+		if err != nil {
+			return err
+		}
+		// create the project in harbor
+		hProject, err := lagoonHarbor.CreateProject(ctx, spec.Project.Name)
+		if err != nil {
+			return err
+		}
+		// create or refresh the robot credentials
+		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
+			hProject,
+			spec.Project.Environment,
+			ns,
+			"lagoon-internal-registry-secret",
+			time.Now().Add(30*24*time.Hour).Unix())
+		if err != nil {
+			return err
+		}
+		if robotCreds != nil {
+			// if we have robotcredentials to create, do that here
+			if err := upsertHarborSecret(ctx, r.Client, robotCreds); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

@@ -47,10 +47,10 @@ tear_down () {
     kubectl get pvc --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
-    # echo "==> Remove cluster"
-    # kind delete cluster --name ${KIND_NAME}
-    # echo "==> Remove services"
-    # docker-compose down
+    echo "==> Remove cluster"
+    kind delete cluster --name ${KIND_NAME}
+    echo "==> Remove services"
+    docker-compose down
 }
 
 start_docker_compose_services () {

@@ -8,7 +8,7 @@ require (
 	github.com/fsouza/go-dockerclient v1.6.5 // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/matryer/try v0.0.0-20161228173917-9ac251b645a2 // indirect
-	github.com/mittwald/goharbor-client/v3 v3.2.2
+	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/openshift/api v3.9.0+incompatible
@@ -26,6 +26,3 @@ require (
 replace github.com/cheshir/go-mq v1.0.2 => github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead
 
 replace github.com/NeowayLabs/wabbit v0.0.0-20200409220312-12e68ab5b0c6 => github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204
-
-// includes webhook policy changes
-replace github.com/mittwald/goharbor-client/v3 v3.2.2 => github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210502233721-b3f019103756

@@ -301,6 +301,8 @@ github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrk
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/mapstructure v1.3.2 h1:mRS76wmkOn3KkKAyXDu42V+6ebnXWIztFSYGN7GeoRg=
 github.com/mitchellh/mapstructure v1.3.2/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/mittwald/goharbor-client/v3 v3.3.0 h1:BBsWdXN2nhRL+XmFcLClSpf8AeU2Oodi40UZkUjTg6Q=
+github.com/mittwald/goharbor-client/v3 v3.3.0/go.mod h1:B6DcW8mCOdRr3gYxZ5OIaM5S3P89VBNadTtrgunAj5Q=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
@@ -373,8 +375,6 @@ github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead h1:brBqfI3SWHkBhydQ4zdYbeQj/4Rq68GHO+Me8W7Fji8=
 github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead/go.mod h1:lAwW/xhfO27t6WSVHFtLdgYioymwJvQxMSH19z00/BY=
-github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210502233721-b3f019103756 h1:m+C5XbXW2Dei52CUh/mayWM0oGY52pq4ALP4JBWgnRw=
-github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210502233721-b3f019103756/go.mod h1:B6DcW8mCOdRr3gYxZ5OIaM5S3P89VBNadTtrgunAj5Q=
 github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204 h1:jXml7E4X/d9v6LATMXFPCF1yW6TKrs+o5wMtYTaBdTw=
 github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204/go.mod h1:l7t6U3j3uZUYroWctp1FvWEktRMuGqx2zCcb5cd8cS8=
 github.com/sirupsen/logrus v1.0.4-0.20170822132746-89742aefa4b2/go.mod h1:pMByvHTf9Beacp5x1UXfOR9xyW/9antXMhjMPG0dEzc=

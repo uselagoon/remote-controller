@@ -448,6 +448,20 @@ func main() {
 		})
 	}
 
+	harborConfig := controllers.Harbor{
+		URL:                 harborURL,
+		API:                 harborAPI,
+		Username:            harborUsername,
+		Password:            harborPassword,
+		RobotPrefix:         harborRobotPrefix,
+		ExpiryInterval:      harborExpiryIntervalDuration,
+		RotateInterval:      harborRotateIntervalDuration,
+		DeleteDisabled:      harborRobotDeleteDisabled,
+		RobotAccountExpiry:  harborRobotAccountExpiryDuration,
+		WebhookAddition:     harborWebhookAdditionEnabled,
+		ControllerNamespace: controllerNamespace,
+	}
+
 	podCleanup := handlers.NewCleanup(mgr.GetClient(),
 		buildPodsToKeep,
 		taskPodsToKeep,
@@ -472,24 +486,13 @@ func main() {
 			podCleanup.TaskPodCleanup()
 		})
 	}
-	// if the task pod cleanup is enabled, add the cronjob for it
+	// if harbor is enabled, add the cronjob for credential rotation
 	if lffHarborEnabled {
 		setupLog.Info("starting harbor robot credential rotation task")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := controllers.NewHarbor(controllers.Harbor{
-				URL:                harborURL,
-				API:                harborAPI,
-				Username:           harborUsername,
-				Password:           harborPassword,
-				RobotPrefix:        harborRobotPrefix,
-				ExpiryInterval:     harborExpiryIntervalDuration,
-				RotateInterval:     harborRotateIntervalDuration,
-				RobotAccountExpiry: harborRobotAccountExpiryDuration,
-				DeleteDisabled:     harborRobotDeleteDisabled,
-				WebhookAddition:    harborWebhookAdditionEnabled,
-			})
+			lagoonHarbor, _ := controllers.NewHarbor(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
@@ -523,17 +526,7 @@ func main() {
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 		LFFHarborEnabled:                 lffHarborEnabled,
-		Harbor: controllers.Harbor{
-			URL:             harborURL,
-			API:             harborAPI,
-			Username:        harborUsername,
-			Password:        harborPassword,
-			RobotPrefix:     harborRobotPrefix,
-			ExpiryInterval:  harborExpiryIntervalDuration,
-			RotateInterval:  harborRotateIntervalDuration,
-			DeleteDisabled:  harborRobotDeleteDisabled,
-			WebhookAddition: harborWebhookAdditionEnabled,
-		},
+		Harbor:                           harborConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

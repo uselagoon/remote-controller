@@ -26,5 +26,5 @@ spec:
         - "--build-pod-cleanup-cron=*/1 * * * *"
         - "--task-pod-cleanup-cron=*/1 * * * *"
         - "--harbor-credential-cron=*/1 * * * *"
-        - "--harbor-robot-account-expiry=1d"
+        - "--harbor-robot-account-expiry=2d"
         - "--enable-harbor"

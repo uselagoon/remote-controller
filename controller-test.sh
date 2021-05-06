@@ -165,7 +165,7 @@ until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-r
 do
 if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
-    echo "Controller not running yet"
+    echo "Docker host not running yet"
     sleep 5
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
@@ -188,7 +188,6 @@ helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-ngin
 NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
 if [ $NUM_PODS -ne 1 ]; then
     echo "Install ingress-nginx"
-    kubectl create namespace ingress-nginx
     helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
     kubectl get pods --all-namespaces
     echo "Wait for ingress-nginx to become ready"

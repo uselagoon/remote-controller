@@ -23,18 +23,19 @@ import (
 
 // Harbor defines a harbor struct
 type Harbor struct {
-	URL                string
-	API                string
-	Username           string
-	Password           string
-	Log                logr.Logger
-	Client             *harborv2.RESTClient
-	DeleteDisabled     bool
-	WebhookAddition    bool
-	RobotPrefix        string
-	ExpiryInterval     time.Duration
-	RotateInterval     time.Duration
-	RobotAccountExpiry time.Duration
+	URL                 string
+	API                 string
+	Username            string
+	Password            string
+	Log                 logr.Logger
+	Client              *harborv2.RESTClient
+	DeleteDisabled      bool
+	WebhookAddition     bool
+	RobotPrefix         string
+	ExpiryInterval      time.Duration
+	RotateInterval      time.Duration
+	RobotAccountExpiry  time.Duration
+	ControllerNamespace string
 }
 
 type robotAccountCredential struct {
@@ -245,7 +246,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 
 // RotateRobotCredentials will attempt to recreate any robot account credentials that need to be rotated.
 func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
-	opLog := ctrl.Log.WithName("handlers").WithName("BuildPodCleanup")
+	opLog := ctrl.Log.WithName("handlers").WithName("RotateRobotCredentials")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -260,27 +261,49 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	// go over every namespace that has a lagoon.sh label
 	// and attempt to create and update the robot account credentials as requred.
 	for _, ns := range namespaces.Items {
-		opLog.Info("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name)
-		hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
-		if err != nil {
-			opLog.Error(err, "error getting or creating project")
-			break
+		// check for running builds!
+		buildPods := &corev1.PodList{}
+		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+			client.InNamespace(ns.ObjectMeta.Name),
+			client.MatchingLabels(map[string]string{
+				"lagoon.sh/jobType":    "build",
+				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
+			}),
+		})
+		if err := cl.List(context.Background(), buildPods, listOption); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
+			return
 		}
-		robotCreds, err := h.CreateOrRefreshRobot(ctx,
-			hProject,
-			ns.Labels["lagoon.sh/environment"],
-			ns.ObjectMeta.Name,
-			"lagoon-internal-registry-secret",
-			time.Now().Add(h.RobotAccountExpiry).Unix())
-		if err != nil {
-			opLog.Error(err, "error getting or creating robot account")
-			break
+		runningPods := false
+		for _, pod := range buildPods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
+				runningPods = true
+			}
 		}
-		if robotCreds != nil {
-			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx, cl, robotCreds); err != nil {
-				opLog.Error(err, "error creating or updating robot account credentials")
+		if !runningPods {
+			// only continue if there isn't any running builds
+			opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
+			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
+			if err != nil {
+				opLog.Error(err, "error getting or creating project")
 				break
+			}
+			robotCreds, err := h.CreateOrRefreshRobot(ctx,
+				hProject,
+				ns.Labels["lagoon.sh/environment"],
+				ns.ObjectMeta.Name,
+				"lagoon-internal-registry-secret",
+				time.Now().Add(h.RobotAccountExpiry).Unix())
+			if err != nil {
+				opLog.Error(err, "error getting or creating robot account")
+				break
+			}
+			if robotCreds != nil {
+				// if we have robotcredentials to create, do that here
+				if err := upsertHarborSecret(ctx, cl, robotCreds); err != nil {
+					opLog.Error(err, "error creating or updating robot account credentials")
+					break
+				}
 			}
 		}
 	}

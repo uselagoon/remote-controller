@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -109,6 +110,8 @@ func main() {
 	var harborWebhookAdditionEnabled bool
 	var harborExpiryInterval string
 	var harborRotateInterval string
+	var harborRobotAccountExpiry string
+	var harborCredentialCron string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -191,7 +194,7 @@ func main() {
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 
 	// harbor configurations
-	flag.BoolVar(&lffHarborEnabled, "enable-harbor", true, "Flag to enable this controller to talk to a specific harbor.")
+	flag.BoolVar(&lffHarborEnabled, "enable-harbor", false, "Flag to enable this controller to talk to a specific harbor.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.172.17.0.1.nip.io:32080",
 		"The URL for harbor, this is where images will be pushed.")
 	flag.StringVar(&harborAPI, "harbor-api", "http://harbor.172.17.0.1.nip.io:32080/api/",
@@ -210,7 +213,10 @@ func main() {
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
 	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
-
+	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
+		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
+	flag.StringVar(&harborCredentialCron, "harbor-credential-cron", "0 1 * * *",
+		"Cron definition for how often to run harbor credential rotations")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -252,8 +258,10 @@ func main() {
 	harborWebhookAdditionEnabled = getEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
 	harborExpiryInterval = getEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
 	harborRotateInterval = getEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
+	harborRobotAccountExpiry = getEnv("", harborRobotAccountExpiry)
 	harborExpiryIntervalDuration := 2 * 24 * time.Hour
 	harborRotateIntervalDuration := 30 * 24 * time.Hour
+	harborRobotAccountExpiryDuration := 30 * 24 * time.Hour
 	if lffHarborEnabled {
 		var err error
 		harborExpiryIntervalDuration, err = str2duration.ParseDuration(harborExpiryInterval)
@@ -263,7 +271,12 @@ func main() {
 		}
 		harborRotateIntervalDuration, err = str2duration.ParseDuration(harborRotateInterval)
 		if err != nil {
-			setupLog.Error(fmt.Errorf("harbor-expiry-interval unable to convert to duration"), "unable to start manager")
+			setupLog.Error(fmt.Errorf("harbor-rotate-interval unable to convert to duration"), "unable to start manager")
+			os.Exit(1)
+		}
+		harborRobotAccountExpiryDuration, err = str2duration.ParseDuration(harborRobotAccountExpiry)
+		if err != nil {
+			setupLog.Error(fmt.Errorf("harbor-robot-account-expiry unable to convert to duration"), "unable to start manager")
 			os.Exit(1)
 		}
 	}
@@ -457,6 +470,27 @@ func main() {
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
 			podCleanup.TaskPodCleanup()
+		})
+	}
+	// if the task pod cleanup is enabled, add the cronjob for it
+	if lffHarborEnabled {
+		setupLog.Info("starting harbor robot credential rotation task")
+		// use cron to run a task pod cleanup task
+		// this will check any Lagoon task pods and attempt to delete them
+		c.AddFunc(harborCredentialCron, func() {
+			lagoonHarbor, _ := controllers.NewHarbor(controllers.Harbor{
+				URL:                harborURL,
+				API:                harborAPI,
+				Username:           harborUsername,
+				Password:           harborPassword,
+				RobotPrefix:        harborRobotPrefix,
+				ExpiryInterval:     harborExpiryIntervalDuration,
+				RotateInterval:     harborRotateIntervalDuration,
+				RobotAccountExpiry: harborRobotAccountExpiryDuration,
+				DeleteDisabled:     harborRobotDeleteDisabled,
+				WebhookAddition:    harborWebhookAdditionEnabled,
+			})
+			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
 	c.Start()

@@ -946,7 +946,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			spec.Project.Environment,
 			ns,
 			"lagoon-internal-registry-secret",
-			time.Now().Add(30*24*time.Hour).Unix())
+			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
 		if err != nil {
 			return err
 		}

@@ -15,23 +15,26 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Harbor defines a harbor struct
 type Harbor struct {
-	URL             string
-	API             string
-	Username        string
-	Password        string
-	Log             logr.Logger
-	Client          *harborv2.RESTClient
-	DeleteDisabled  bool
-	WebhookAddition bool
-	RobotPrefix     string
-	ExpiryInterval  time.Duration
-	RotateInterval  time.Duration
+	URL                string
+	API                string
+	Username           string
+	Password           string
+	Log                logr.Logger
+	Client             *harborv2.RESTClient
+	DeleteDisabled     bool
+	WebhookAddition    bool
+	RobotPrefix        string
+	ExpiryInterval     time.Duration
+	RotateInterval     time.Duration
+	RobotAccountExpiry time.Duration
 }
 
 type robotAccountCredential struct {
@@ -238,6 +241,49 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		return &harborSecret, nil
 	}
 	return nil, err
+}
+
+// RotateRobotCredentials will attempt to recreate any robot account credentials that need to be rotated.
+func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
+	opLog := ctrl.Log.WithName("handlers").WithName("BuildPodCleanup")
+	namespaces := &corev1.NamespaceList{}
+	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabelsSelector{
+			Selector: labels.NewSelector().Add(*labelRequirements),
+		},
+	})
+	if err := cl.List(ctx, namespaces, listOption); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		return
+	}
+	// go over every namespace that has a lagoon.sh label
+	// and attempt to create and update the robot account credentials as requred.
+	for _, ns := range namespaces.Items {
+		opLog.Info("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name)
+		hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
+		if err != nil {
+			opLog.Error(err, "error getting or creating project")
+			break
+		}
+		robotCreds, err := h.CreateOrRefreshRobot(ctx,
+			hProject,
+			ns.Labels["lagoon.sh/environment"],
+			ns.ObjectMeta.Name,
+			"lagoon-internal-registry-secret",
+			time.Now().Add(h.RobotAccountExpiry).Unix())
+		if err != nil {
+			opLog.Error(err, "error getting or creating robot account")
+			break
+		}
+		if robotCreds != nil {
+			// if we have robotcredentials to create, do that here
+			if err := upsertHarborSecret(ctx, cl, robotCreds); err != nil {
+				opLog.Error(err, "error creating or updating robot account credentials")
+				break
+			}
+		}
+	}
 }
 
 // addPrefix adds the robot account prefix to robot accounts

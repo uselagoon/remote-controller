@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -112,6 +113,8 @@ func main() {
 	var harborRotateInterval string
 	var harborRobotAccountExpiry string
 	var harborCredentialCron string
+	var harborLagoonWebhook string
+	var harborWebhookEventTypes string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -207,8 +210,6 @@ func main() {
 		"The default prefix for robot accounts, will usually be \"robot$\".")
 	flag.BoolVar(&harborRobotDeleteDisabled, "harbor-robot-delete-disabled", true,
 		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
-	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-webhook-addition-enabled", false,
-		"Tells the controller to add Lagoon webhook policies to harbor projects.")
 	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
 	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
@@ -217,6 +218,12 @@ func main() {
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborCredentialCron, "harbor-credential-cron", "0 1 * * *",
 		"Cron definition for how often to run harbor credential rotations")
+	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-webhook-addition-enabled", false,
+		"Tells the controller to add Lagoon webhook policies to harbor projects.")
+	flag.StringVar(&harborLagoonWebhook, "harbor-lagoon-webhook", "http://webhook.172.17.0.1.nip.io:32080",
+		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
+	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
+		"The event types to use for the Lagoon webhook")
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -254,11 +261,13 @@ func main() {
 	harborUsername = getEnv("HARBOR_USERNAME", harborUsername)
 	harborPassword = getEnv("HARBOR_PASSWORD", harborPassword)
 	harborRobotPrefix = getEnv("HARBOR_ROBOT_PREFIX", harborRobotPrefix)
-	harborRobotDeleteDisabled = getEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
 	harborWebhookAdditionEnabled = getEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
+	harborLagoonWebhook = getEnv("HARBOR_LAGOON_WEBHOOK", harborLagoonWebhook)
+	harborWebhookEventTypes = getEnv("HARBOR_WEBHOOK_EVENTTYPES", harborWebhookEventTypes)
+	harborRobotDeleteDisabled = getEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
 	harborExpiryInterval = getEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
 	harborRotateInterval = getEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
-	harborRobotAccountExpiry = getEnv("", harborRobotAccountExpiry)
+	harborRobotAccountExpiry = getEnv("HARBOR_ROTATE_ACCOUNT_EXPIRY", harborRobotAccountExpiry)
 	harborExpiryIntervalDuration := 2 * 24 * time.Hour
 	harborRotateIntervalDuration := 30 * 24 * time.Hour
 	harborRobotAccountExpiryDuration := 30 * 24 * time.Hour
@@ -460,6 +469,8 @@ func main() {
 		RobotAccountExpiry:  harborRobotAccountExpiryDuration,
 		WebhookAddition:     harborWebhookAdditionEnabled,
 		ControllerNamespace: controllerNamespace,
+		WebhookURL:          harborLagoonWebhook,
+		WebhookEventTypes:   strings.Split(harborWebhookEventTypes, ","),
 	}
 
 	podCleanup := handlers.NewCleanup(mgr.GetClient(),

@@ -304,6 +304,26 @@ if [ $POD_CLEANUP_COUNT -gt 1 ]; then
     exit 1
 fi
 
+
+echo "==> Check robot credential rotation worked"
+CHECK_COUNTER=1
+until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Robot credentials rotated for")
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Credentials not rotated yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for robot credential rotation check"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "handlers.RotateRobotCredentials"
+
 check_controller_log
 tear_down
 echo "================ END ================"

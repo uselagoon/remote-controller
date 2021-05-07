@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"fmt"
+	"sort"
 
 	"context"
 	"encoding/base64"
 	"time"
 
+	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
 	harborv2 "github.com/mittwald/goharbor-client/v3/apiv2"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
@@ -36,6 +38,8 @@ type Harbor struct {
 	RotateInterval      time.Duration
 	RobotAccountExpiry  time.Duration
 	ControllerNamespace string
+	WebhookURL          string
+	WebhookEventTypes   []string
 }
 
 type robotAccountCredential struct {
@@ -104,6 +108,8 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 		}
 		exists := false
 		for _, wp := range wps {
+			// if the webhook policy already exists with the name we want
+			// then update it with any changes that may be required
 			if wp.Name == "Lagoon Default Webhook" {
 				exists = true
 				newPolicy := &legacy.WebhookPolicy{
@@ -114,13 +120,10 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 						{
 							Type:           "http",
 							SkipCertVerify: true,
-							Address:        "http://webhook.example.com",
+							Address:        h.WebhookURL,
 						},
 					},
-					EventTypes: []string{
-						"SCANNING_FAILED", //CAPITALS_UNDERSCORES hb2
-						"SCANNING_COMPLETED",
-					},
+					EventTypes: h.WebhookEventTypes,
 				}
 				err = h.Client.UpdateProjectWebhookPolicy(ctx, project, int(wp.ID), newPolicy)
 				if err != nil {
@@ -129,6 +132,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 			}
 		}
 		if !exists {
+			// otherwise create the webhook if it doesn't exist
 			newPolicy := &legacy.WebhookPolicy{
 				Name:      "Lagoon Default Webhook",
 				ProjectID: int64(project.ProjectID),
@@ -137,13 +141,10 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 					{
 						Type:           "http",
 						SkipCertVerify: true,
-						Address:        "http://webhook.example.com",
+						Address:        h.WebhookURL,
 					},
 				},
-				EventTypes: []string{
-					"SCANNING_FAILED", //CAPITALS_UNDERSCORES hb2
-					"SCANNING_COMPLETED",
-				},
+				EventTypes: h.WebhookEventTypes,
 			}
 			err = h.Client.AddProjectWebhookPolicy(ctx, project, newPolicy)
 			if err != nil {
@@ -173,6 +174,8 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		if h.matchRobotAccount(robot, project, robotName) {
 			exists = true
 			if robot.Disabled && h.DeleteDisabled {
+				// if accounts are disabled, and deletion of disabled accounts is enabled
+				// then this will delete the account to get re-created
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s disabled, deleting it", robot.Name))
 				err := h.Client.DeleteProjectRobot(
 					ctx,
@@ -186,6 +189,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 				continue
 			}
 			if h.shouldRotate(robot, h.RotateInterval) {
+				// this forces a rotation after a certain period, whether its expiring or already expired.
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  should rotate, deleting it", robot.Name))
 				err := h.Client.DeleteProjectRobot(
 					ctx,
@@ -199,6 +203,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 				continue
 			}
 			if h.expiresSoon(robot, h.ExpiryInterval) {
+				// if the account is about to expire, then refresh the credentials
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  expires soon, deleting it", robot.Name))
 				err := h.Client.DeleteProjectRobot(
 					ctx,
@@ -214,6 +219,8 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		}
 	}
 	if !exists || deleted {
+		// if it doesn't exist, or was deleted
+		// create a new robot account
 		token, err := h.Client.AddProjectRobot(
 			ctx,
 			project,
@@ -229,6 +236,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+		// then craft and return the harbor credential secret
 		harborSecret := makeHarborSecret(
 			namespace,
 			secretName,
@@ -262,7 +270,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	// and attempt to create and update the robot account credentials as requred.
 	for _, ns := range namespaces.Items {
 		// check for running builds!
-		buildPods := &corev1.PodList{}
+		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
@@ -270,17 +278,22 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
 			}),
 		})
-		if err := cl.List(context.Background(), buildPods, listOption); err != nil {
+		if err := cl.List(context.Background(), lagoonBuilds, listOption); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
 			return
 		}
-		runningPods := false
-		for _, pod := range buildPods.Items {
-			if pod.Status.Phase == corev1.PodRunning {
-				runningPods = true
+		runningBuilds := false
+		sort.Slice(lagoonBuilds.Items, func(i, j int) bool {
+			return lagoonBuilds.Items[i].ObjectMeta.CreationTimestamp.After(lagoonBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+		})
+		// if there are any builds pending or running, don't try and refresh the credentials as this
+		// could break the build
+		if len(lagoonBuilds.Items) > 0 {
+			if lagoonBuilds.Items[0].Annotations["lagoon.sh/buildStatus"] == "Running" || lagoonBuilds.Items[0].Annotations["lagoon.sh/buildStatus"] == "Pending" {
+				runningBuilds = true
 			}
 		}
-		if !runningPods {
+		if !runningBuilds {
 			// only continue if there isn't any running builds
 			opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
@@ -304,12 +317,14 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 					opLog.Error(err, "error creating or updating robot account credentials")
 					break
 				}
+				opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))
 			}
 		}
 	}
 }
 
 // addPrefix adds the robot account prefix to robot accounts
+// @TODO: Harbor 2.2.0 changes this behavior, see note below in `matchRobotAccount`
 func (h *Harbor) addPrefix(str string) string {
 	return h.RobotPrefix + str
 }

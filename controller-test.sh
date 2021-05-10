@@ -43,8 +43,8 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
-    echo "==> Get pvc"
-    kubectl get pvc --all-namespaces
+    # echo "==> Get pvc"
+    # kubectl get pvc --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
     echo "==> Remove cluster"
@@ -309,12 +309,12 @@ echo "==> Check robot credential rotation worked"
 CHECK_COUNTER=1
 until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Robot credentials rotated for")
 do
-if [ $CHECK_COUNTER -lt 14 ]; then
+if [ $CHECK_COUNTER -lt 20 ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
     echo "Credentials not rotated yet"
     sleep 5
 else
-    echo "Timeout of 70seconds for robot credential rotation check"
+    echo "Timeout of 100seconds for robot credential rotation check"
     check_controller_log
     tear_down
     echo "================ END ================"
@@ -322,7 +322,7 @@ else
     exit 1
 fi
 done
-kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "handlers.RotateRobotCredentials"
+kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep "handlers.RotateRobotCredentials"
 
 check_controller_log
 tear_down

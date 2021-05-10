@@ -215,7 +215,7 @@ func main() {
 	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
-		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
+		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
 	flag.StringVar(&harborCredentialCron, "harbor-credential-cron", "0 1 * * *",
 		"Cron definition for how often to run harbor credential rotations")
 	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-webhook-addition-enabled", false,

@@ -269,12 +269,13 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	// go over every namespace that has a lagoon.sh label
 	// and attempt to create and update the robot account credentials as requred.
 	for _, ns := range namespaces.Items {
+		opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 		// check for running builds!
 		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/jobType":    "build",
+				// "lagoon.sh/jobType":    "build",
 				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
 			}),
 		})
@@ -289,13 +290,12 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		// if there are any builds pending or running, don't try and refresh the credentials as this
 		// could break the build
 		if len(lagoonBuilds.Items) > 0 {
-			if lagoonBuilds.Items[0].Annotations["lagoon.sh/buildStatus"] == "Running" || lagoonBuilds.Items[0].Annotations["lagoon.sh/buildStatus"] == "Pending" {
+			if lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Running" || lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Pending" {
 				runningBuilds = true
 			}
 		}
 		if !runningBuilds {
 			// only continue if there isn't any running builds
-			opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
 			if err != nil {
 				opLog.Error(err, "error getting or creating project")
@@ -319,6 +319,8 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				}
 				opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))
 			}
+		} else {
+			opLog.Info(fmt.Sprintf("There are running or pending builds in %s, skipping", ns.ObjectMeta.Name))
 		}
 	}
 }

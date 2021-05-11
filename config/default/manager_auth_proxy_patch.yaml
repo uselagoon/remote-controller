@@ -28,3 +28,4 @@ spec:
         - "--harbor-credential-cron=*/1 * * * *"
         - "--harbor-robot-account-expiry=1d"
         - "--enable-harbor"
+        - "--harbor-enable-project-webhook"

@@ -218,8 +218,8 @@ func main() {
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
 	flag.StringVar(&harborCredentialCron, "harbor-credential-cron", "0 1 * * *",
 		"Cron definition for how often to run harbor credential rotations")
-	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-webhook-addition-enabled", false,
-		"Tells the controller to add Lagoon webhook policies to harbor projects.")
+	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-enable-project-webhook", false,
+		"Tells the controller to add Lagoon webhook policies to harbor projects when creating or updating.")
 	flag.StringVar(&harborLagoonWebhook, "harbor-lagoon-webhook", "http://webhook.172.17.0.1.nip.io:32080",
 		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",

@@ -67,6 +67,13 @@ func intPtr(i int32) *int32 {
 	return iPtr
 }
 
+func int64Ptr(i int64) *int64 {
+	var iPtr *int64
+	iPtr = new(int64)
+	*iPtr = i
+	return iPtr
+}
+
 func uintPtr(i uint) *uint {
 	var iPtr *uint
 	iPtr = new(uint)
@@ -133,4 +140,35 @@ func stringToUintPtr(s string) *uint {
 		return nil
 	}
 	return uintPtr(uint(u64))
+}
+
+// replaceOrAddVariable will replace or add an environment variable to a slice of environment variables
+func replaceOrAddVariable(vars *[]LagoonEnvironmentVariable, name, value, scope string) {
+	exists := false
+	existsIdx := 0
+	for idx, v := range *vars {
+		if v.Name == name {
+			exists = true
+			existsIdx = idx
+		}
+	}
+	if exists {
+		(*vars)[existsIdx].Value = value
+	} else {
+		(*vars) = append((*vars), LagoonEnvironmentVariable{
+			Name:  name,
+			Value: value,
+			Scope: scope})
+	}
+}
+
+// variableExists checks if a variable exists in a slice of environment variables
+func variableExists(vars *[]LagoonEnvironmentVariable, name, value string) bool {
+	exists := false
+	for _, v := range *vars {
+		if v.Name == name && v.Value == value {
+			exists = true
+		}
+	}
+	return exists
 }

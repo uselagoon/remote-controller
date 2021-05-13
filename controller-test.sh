@@ -43,8 +43,8 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
-    echo "==> Get pvc"
-    kubectl get pvc --all-namespaces
+    # echo "==> Get pvc"
+    # kubectl get pvc --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
     echo "==> Remove cluster"
@@ -122,6 +122,16 @@ check_lagoon_build () {
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
+        if $(kubectl -n ${NS} get pods ${1} --no-headers | grep -iq "Error"); then
+            echo "Build failed"
+            echo "=========== BUILD LOG ============"
+            kubectl -n ${NS} logs ${1} -f
+            check_controller_log ${1}
+            tear_down
+            echo "================ END ================"
+            echo "============== FAILED ==============="
+            exit 1
+        fi
         echo "Build not running yet"
         sleep 5
     else
@@ -147,7 +157,7 @@ helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
-    --set dockerHost.registry=172.17.0.1:5000 \
+    --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
     --set dioscuri.enabled=false
 CHECK_COUNTER=1
 echo "===> Ensure docker-host is running"
@@ -155,7 +165,7 @@ until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-r
 do
 if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
-    echo "Controller not running yet"
+    echo "Docker host not running yet"
     sleep 5
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
@@ -170,6 +180,27 @@ else
 fi
 done
 echo "===> Docker-host is running"
+
+echo "===> Install Ingress-Nginx"
+kubectl create namespace ingress-nginx
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
+if [ $NUM_PODS -ne 1 ]; then
+    echo "Install ingress-nginx"
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+    kubectl get pods --all-namespaces
+    echo "Wait for ingress-nginx to become ready"
+    sleep 120
+else
+    echo "===> Ingress-Nginx is running"
+fi
+
+
+echo "===> Install Harbor"
+kubectl create namespace harbor
+helm repo add harbor https://helm.goharbor.io
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.5.2
 
 echo "====> Install dbaas-operator"
 helm repo add amazeeio https://amazeeio.github.io/charts/
@@ -272,6 +303,26 @@ if [ $POD_CLEANUP_COUNT -gt 1 ]; then
     echo "============== FAILED ==============="
     exit 1
 fi
+
+
+echo "==> Check robot credential rotation worked"
+CHECK_COUNTER=1
+until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Robot credentials rotated for")
+do
+if [ $CHECK_COUNTER -lt 20 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Credentials not rotated yet"
+    sleep 5
+else
+    echo "Timeout of 100seconds for robot credential rotation check"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep "handlers.RotateRobotCredentials"
 
 check_controller_log
 tear_down

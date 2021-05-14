@@ -324,6 +324,38 @@ fi
 done
 kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep "handlers.RotateRobotCredentials"
 
+echo "==> Delete the environment"
+echo '
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:remove",
+    "payload":"{
+        \"projectName\": \"drupal-example\",
+        \"type\":\"branch\",
+        \"forceDeleteProductionEnvironment\":true,
+        \"branch\":\"install\",
+        \"openshiftProjectName\":\"drupal-example-install\"
+    }",
+"payload_encoding":"string"
+}' >payload.json
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+echo ""
+CHECK_COUNTER=1
+until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Deleted namespace drupal-example-install for project drupal-example, branch install")
+do
+if [ $CHECK_COUNTER -lt 20 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Environment not deleted yet"
+    sleep 5
+else
+    echo "Timeout of 100seconds for environment to be deleted"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep "handlers.LagoonTasks.Deletion"
+
 check_controller_log
 tear_down
 echo "================ END ================"

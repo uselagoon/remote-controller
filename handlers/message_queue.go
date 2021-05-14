@@ -59,6 +59,7 @@ func NewMessaging(config mq.Config, client client.Client, startupAttempts int, s
 // Consumer handles consuming messages sent to the queue that these controllers are connected to and processes them accordingly
 func (h *Messaging) Consumer(targetName string) { //error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
+	ctx := context.Background()
 	var messageQueue mq.MQ
 	// if no mq is found when the goroutine starts, retry a few times before exiting
 	// default is 10 retry with 30 second delay = 5 minutes
@@ -115,7 +116,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				),
 			)
 			// create it now
-			if err := h.Client.Create(context.Background(), newBuild); err != nil {
+			if err := h.Client.Create(ctx, newBuild); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(
 						"Failed to create builddeploy task for project %s, environment %s",
@@ -147,45 +148,48 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			if removeTask.Type == "pullrequest" {
 				removeTask.Branch = removeTask.BranchName
 			}
-			opLog.Info(
+			ns := removeTask.OpenshiftProjectName
+			branch := removeTask.Branch
+			project := removeTask.ProjectName
+			opLog.WithName("Deletion").Info(
 				fmt.Sprintf(
 					"Received remove task for project %s, branch %s - %s",
-					removeTask.ProjectName,
-					removeTask.Branch,
-					removeTask.OpenshiftProjectName,
+					project,
+					branch,
+					ns,
 				),
 			)
 			namespace := &corev1.Namespace{}
-			err := h.Client.Get(context.Background(), types.NamespacedName{
-				Name: removeTask.OpenshiftProjectName,
+			err := h.Client.Get(ctx, types.NamespacedName{
+				Name: ns,
 			}, namespace)
 			if err != nil {
 				if strings.Contains(err.Error(), "not found") {
-					opLog.Info(
+					opLog.WithName("Deletion").Info(
 						fmt.Sprintf(
 							"Namespace %s for project %s, branch %s does not exist, marking deleted",
-							removeTask.OpenshiftProjectName,
-							removeTask.ProjectName,
-							removeTask.Branch,
+							ns,
+							project,
+							branch,
 						),
 					)
 					msg := lagoonv1alpha1.LagoonMessage{
 						Type:      "remove",
-						Namespace: removeTask.OpenshiftProjectName,
+						Namespace: ns,
 						Meta: &lagoonv1alpha1.LagoonLogMeta{
-							Project:     removeTask.ProjectName,
-							Environment: removeTask.Branch,
+							Project:     project,
+							Environment: branch,
 						},
 					}
 					msgBytes, _ := json.Marshal(msg)
 					h.Publish("lagoon-tasks:controller", msgBytes)
 				} else {
-					opLog.Info(
+					opLog.WithName("Deletion").Info(
 						fmt.Sprintf(
 							"Unable to get namespace %s for project %s, branch %s: %v",
-							removeTask.OpenshiftProjectName,
-							removeTask.ProjectName,
-							removeTask.Branch,
+							ns,
+							project,
+							branch,
 							err,
 						),
 					)
@@ -196,33 +200,48 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				return
 
 			}
-			if err := h.Client.Delete(context.Background(), namespace); err != nil {
-				opLog.Error(err,
-					fmt.Sprintf(
-						"Unable to delete namespace %s for project %s, branch %s",
-						removeTask.OpenshiftProjectName,
-						removeTask.ProjectName,
-						removeTask.Branch,
-					),
-				)
-				//@TODO: send msg back to lagoon and update task to failed?
+			// @TODO
+			/*
+				get any deployments/statefulsets/daemonsets
+				then delete them
+			*/
+			if del := h.DeleteDeployments(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			opLog.Info(
+			if del := h.DeleteStatefulSets(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			if del := h.DeleteDaemonSets(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			if del := h.DeletePVCs(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			/*
+				then delete the namespace
+			*/
+			if del := h.DeleteNamespace(ctx, opLog.WithName("Deletion"), namespace, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			opLog.WithName("Deletion").Info(
 				fmt.Sprintf(
-					"Deleted project %s, branch %s - %s",
-					removeTask.ProjectName,
-					removeTask.Branch,
-					removeTask.OpenshiftProjectName,
+					"Deleted namespace %s for project %s, branch %s",
+					ns,
+					project,
+					branch,
 				),
 			)
 			msg := lagoonv1alpha1.LagoonMessage{
 				Type:      "remove",
-				Namespace: removeTask.OpenshiftProjectName,
+				Namespace: ns,
 				Meta: &lagoonv1alpha1.LagoonLogMeta{
-					Project:     removeTask.ProjectName,
-					Environment: removeTask.Branch,
+					Project:     project,
+					Environment: branch,
 				},
 			}
 			msgBytes, _ := json.Marshal(msg)
@@ -260,10 +279,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
-			// job.ObjectMeta.Name = fmt.Sprintf("%s-%s", job.Spec.Environment.OpenshiftProjectName, job.Spec.Task.ID)
-			// use lagoon-task-<ID>-<RANDOM> as the job/pod name instead
 			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
-			if err := h.Client.Create(context.Background(), job); err != nil {
+			if err := h.Client.Create(ctx, job); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(
 						"Unable to create job task for project %s, environment %s",
@@ -401,6 +418,7 @@ func (h *Messaging) Publish(queue string, message []byte) error {
 // GetPendingMessages will get any pending messages from the queue and attempt to publish them if possible
 func (h *Messaging) GetPendingMessages() {
 	opLog := ctrl.Log.WithName("handlers").WithName("PendingMessages")
+	ctx := context.Background()
 	opLog.Info(fmt.Sprintf("Checking pending messages across all namespaces"))
 	pendingMsgs := &lagoonv1alpha1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -409,13 +427,13 @@ func (h *Messaging) GetPendingMessages() {
 			"lagoon.sh/controller":      h.ControllerNamespace,
 		}),
 	})
-	if err := h.Client.List(context.Background(), pendingMsgs, listOption); err != nil {
+	if err := h.Client.List(ctx, pendingMsgs, listOption); err != nil {
 		opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuilds, there may be none or something went wrong"))
 		return
 	}
 	for _, build := range pendingMsgs.Items {
 		// get the latest resource in case it has been updated since the loop started
-		if err := h.Client.Get(context.Background(), types.NamespacedName{
+		if err := h.Client.Get(ctx, types.NamespacedName{
 			Name:      build.ObjectMeta.Name,
 			Namespace: build.ObjectMeta.Namespace,
 		}, &build); err != nil {
@@ -457,7 +475,7 @@ func (h *Messaging) GetPendingMessages() {
 			},
 			"statusMessages": nil,
 		})
-		if err := h.Client.Patch(context.Background(), &build, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := h.Client.Patch(ctx, &build, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
 			break
 		}

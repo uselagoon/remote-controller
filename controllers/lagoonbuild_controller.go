@@ -93,39 +93,37 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			return r.qosBuildProcessor(ctx, opLog, lagoonBuild, req)
-		} else {
-			return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
 		}
-	} else {
-		// The object is being deleted
-		if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			// first deleteExternalResources will try and check for any pending builds that it can
-			// can change to running to kick off the next pending build
-			if err := r.deleteExternalResources(ctx,
-				opLog,
-				&lagoonBuild,
-				req,
-			); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
-				return ctrl.Result{}, err
-			}
-			// remove our finalizer from the list and update it.
-			lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
-			// use patches to avoid update errors
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"finalizers": lagoonBuild.ObjectMeta.Finalizers,
-				},
-			})
-			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
-				return ctrl.Result{}, ignoreNotFound(err)
-			}
+		// if qos is not enabled, just process it as a standard build
+		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
+	}
+	// The object is being deleted
+	if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
+		// our finalizer is present, so lets handle any external dependency
+		// first deleteExternalResources will try and check for any pending builds that it can
+		// can change to running to kick off the next pending build
+		if err := r.deleteExternalResources(ctx,
+			opLog,
+			&lagoonBuild,
+			req,
+		); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried
+			opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
+			return ctrl.Result{}, err
+		}
+		// remove our finalizer from the list and update it.
+		lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
+		// use patches to avoid update errors
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"finalizers": lagoonBuild.ObjectMeta.Finalizers,
+			},
+		})
+		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
 		}
 	}
-
 	return ctrl.Result{}, nil
 }
 

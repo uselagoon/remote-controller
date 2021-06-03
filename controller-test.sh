@@ -291,7 +291,7 @@ else
     exit 1
 fi
 done
-echo "==> Pod cleanup output (should only be lagoon-build-8m5zypx)"
+echo "==> Pod cleanup output (should only be 1 lagoon-build pod)"
 POD_CLEANUP_OUTPUT=$(kubectl -n drupal-example-install get pods | grep "lagoon-build")
 echo "${POD_CLEANUP_OUTPUT}"
 POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")

@@ -116,6 +116,10 @@ func main() {
 	var harborLagoonWebhook string
 	var harborWebhookEventTypes string
 
+	var lffQoSEnabled bool
+	var qosMaxBuilds int
+	var qosDefaultValue int
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -224,6 +228,12 @@ func main() {
 		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
 		"The event types to use for the Lagoon webhook")
+
+	// QoS configuration
+	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
+	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The number of builds that can run at any one time.")
+	flag.IntVar(&qosDefaultValue, "qos-default", 5, "The default qos value to apply if one is not provided.")
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -473,6 +483,11 @@ func main() {
 		WebhookEventTypes:   strings.Split(harborWebhookEventTypes, ","),
 	}
 
+	buildQoSConfig := controllers.BuildQoS{
+		MaxBuilds:    qosMaxBuilds,
+		DefaultValue: qosDefaultValue,
+	}
+
 	podCleanup := handlers.NewCleanup(mgr.GetClient(),
 		buildPodsToKeep,
 		taskPodsToKeep,
@@ -538,6 +553,8 @@ func main() {
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 		LFFHarborEnabled:                 lffHarborEnabled,
 		Harbor:                           harborConfig,
+		LFFQoSEnabled:                    lffQoSEnabled,
+		BuildQoS:                         buildQoSConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

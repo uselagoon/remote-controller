@@ -452,12 +452,12 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							if err := json.Unmarshal(secretData, &auths); err != nil {
 								return ctrl.Result{}, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
 							}
-							if len(auths.Registries) == 1 {
-								for registry, creds := range auths.Registries {
-									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", registry, "internal_container_registry")
-									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
-									replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
-								}
+							// if the defined regional harbor key exists
+							if _, ok := auths.Registries[r.Harbor.URL]; ok {
+								// use the regional harbor in the build
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.URL, "internal_container_registry")
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", auths.Registries[r.Harbor.URL].Username, "internal_container_registry")
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", auths.Registries[r.Harbor.URL].Password, "internal_container_registry")
 							}
 						}
 						// marshal any changes into the project spec on the fly, don't save the spec though
@@ -943,8 +943,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 		// create or refresh the robot credentials
 		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
+			r.Client,
 			hProject,
 			spec.Project.Environment,
+			ns,
 			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
 		if err != nil {
 			return err

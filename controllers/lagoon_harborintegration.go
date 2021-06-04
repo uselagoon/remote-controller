@@ -49,18 +49,6 @@ type robotAccountCredential struct {
 	Token     string `json:"token"`
 }
 
-// DockerConfigJSON is used by image pull secrets.
-type DockerConfigJSON struct {
-	Auths map[string]DockerConfig `json:"auths"`
-}
-
-// DockerConfig is used by DockerConfigJSON.
-type DockerConfig struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Auth     string `json:"auth"`
-}
-
 // NewHarbor create a new harbor connection.
 func NewHarbor(harbor Harbor) (*Harbor, error) {
 	c, err := harborv2.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password)
@@ -179,10 +167,11 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 
 // CreateOrRefreshRobot will create or refresh a robot account and return the credentials if needed.
 func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
+	cl client.Client,
 	project *model.Project,
-	robotName string,
+	robotName, namespace string,
 	expiry int64,
-) (*DockerConfig, error) {
+) (*RegistryCredentials, error) {
 	robots, err := h.Client.ListProjectRobots(
 		ctx,
 		project,
@@ -193,9 +182,36 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	}
 	exists := false
 	deleted := false
+	forceRecreate := false
+	secret := &corev1.Secret{}
+	err = cl.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      "lagoon-internal-registry-secret",
+	}, secret)
+	if err != nil {
+		// the registry secret doesn't exist, force re-create the robot account
+		forceRecreate = true
+	}
 	for _, robot := range robots {
 		if h.matchRobotAccount(robot, project, robotName) {
 			exists = true
+			if forceRecreate {
+				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
+				// account is required, as there isn't a way to get the credentials after
+				// creating robot accounts
+				h.Log.Info(fmt.Sprintf("Kubernetes secret doesn't exist, robot account %s needs to be re-created", robot.Name))
+				err := h.Client.DeleteProjectRobot(
+					ctx,
+					project,
+					int(robot.ID),
+				)
+				if err != nil {
+					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
+					return nil, err
+				}
+				deleted = true
+				continue
+			}
 			if robot.Disabled && h.DeleteDisabled {
 				// if accounts are disabled, and deletion of disabled accounts is enabled
 				// then this will delete the account to get re-created
@@ -264,14 +280,14 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			return nil, err
 		}
 		// then craft and return the harbor credential secret
-		harborDockerConfig := makeHarborSecret(
+		harborRegistryCredentials := makeHarborSecret(
 			robotAccountCredential{
 				Token: token,
 				Name:  h.addPrefix(robotName),
 			},
 		)
 		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
-		return &harborDockerConfig, nil
+		return &harborRegistryCredentials, nil
 	}
 	return nil, err
 }
@@ -331,8 +347,10 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			}
 			time.Sleep(2 * time.Second) // wait 2 seconds
 			robotCreds, err := h.CreateOrRefreshRobot(ctx,
+				cl,
 				hProject,
 				ns.Labels["lagoon.sh/environment"],
+				ns.ObjectMeta.Name,
 				time.Now().Add(h.RobotAccountExpiry).Unix())
 			if err != nil {
 				opLog.Error(err, "error getting or creating robot account")
@@ -401,8 +419,8 @@ func (h *Harbor) expiresSoon(robot *legacy.RobotAccount, duration time.Duration)
 }
 
 // makeHarborSecret creates the secret definition.
-func makeHarborSecret(credentials robotAccountCredential) DockerConfig {
-	return DockerConfig{
+func makeHarborSecret(credentials robotAccountCredential) RegistryCredentials {
+	return RegistryCredentials{
 		Username: credentials.Name,
 		Password: credentials.Token,
 		Auth: base64.StdEncoding.EncodeToString(
@@ -413,7 +431,7 @@ func makeHarborSecret(credentials robotAccountCredential) DockerConfig {
 }
 
 // upsertHarborSecret will create or update the secret in kubernetes.
-func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, dockerConfig *DockerConfig) error {
+func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, dockerConfig *RegistryCredentials) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
@@ -421,17 +439,17 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
+	dcj := &Auths{
+		Registries: make(map[string]RegistryCredentials),
+	}
 	err := cl.Get(ctx, types.NamespacedName{
 		Namespace: ns,
 		Name:      name,
 	}, secret)
-	dcj := &DockerConfigJSON{
-		Auths: make(map[string]DockerConfig),
-	}
 	if err != nil {
 		// if the secret doesn't exist
 		// create it
-		dcj.Auths[baseURL] = *dockerConfig
+		dcj.Registries[baseURL] = *dockerConfig
 		dcjBytes, _ := json.Marshal(dcj)
 		secret.Data = map[string][]byte{
 			corev1.DockerConfigJsonKey: []byte(dcjBytes),
@@ -446,7 +464,7 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 	// update the secret with the new credentials
 	json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
 	// add or update the credential
-	dcj.Auths[baseURL] = *dockerConfig
+	dcj.Registries[baseURL] = *dockerConfig
 	dcjBytes, _ := json.Marshal(dcj)
 	secret.Data = map[string][]byte{
 		corev1.DockerConfigJsonKey: []byte(dcjBytes),

@@ -404,7 +404,9 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 		Namespace: ns,
 		Name:      name,
 	}, secret)
-	dcj := &DockerConfigJSON{}
+	dcj := &DockerConfigJSON{
+		Auths: make(map[string]DockerConfig),
+	}
 	if err != nil {
 		// if the secret doesn't exist
 		// create it

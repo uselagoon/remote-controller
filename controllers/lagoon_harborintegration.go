@@ -76,11 +76,13 @@ func NewHarbor(harbor Harbor) (*Harbor, error) {
 func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.Project, error) {
 	project, err := h.Client.GetProjectByName(ctx, projectName)
 	if err != nil {
-		if err.Error() == "project not found on server side" {
+		if err.Error() == "project not found on server side" || err.Error() == "resource unknown" {
 			project, err = h.Client.NewProject(ctx, projectName, int64Ptr(-1))
 			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error creating project %s", project.Name))
 				return nil, err
 			}
+			time.Sleep(2 * time.Second) // wait 2 seconds
 			tStr := "true"
 			err = h.Client.UpdateProject(ctx, &model.Project{
 				Name:      projectName,
@@ -92,14 +94,18 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 				},
 			}, int64Ptr(-1))
 			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error updating project %s", project.Name))
 				return nil, err
 			}
+			time.Sleep(2 * time.Second) // wait 2 seconds
 			project, err = h.Client.GetProjectByName(ctx, projectName)
 			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error getting project after updating %s", project.Name))
 				return nil, err
 			}
 			h.Log.Info(fmt.Sprintf("Created harbor project %s", project.Name))
 		} else {
+			h.Log.Info(fmt.Sprintf("Error finding project %s", project.Name))
 			return nil, err
 		}
 	}
@@ -117,6 +123,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 	if h.WebhookAddition {
 		wps, err := h.Client.ListProjectWebhookPolicies(ctx, project)
 		if err != nil {
+			h.Log.Info(fmt.Sprintf("Error listing project %s webhooks", project.Name))
 			return nil, err
 		}
 		exists := false
@@ -140,6 +147,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 				}
 				err = h.Client.UpdateProjectWebhookPolicy(ctx, project, int(wp.ID), newPolicy)
 				if err != nil {
+					h.Log.Info(fmt.Sprintf("Error updating project %s webhook", project.Name))
 					return nil, err
 				}
 			}
@@ -161,6 +169,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 			}
 			err = h.Client.AddProjectWebhookPolicy(ctx, project, newPolicy)
 			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error adding project %s webhook", project.Name))
 				return nil, err
 			}
 		}
@@ -179,6 +188,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		project,
 	)
 	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", project.Name))
 		return nil, err
 	}
 	exists := false
@@ -196,6 +206,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 					int(robot.ID),
 				)
 				if err != nil {
+					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
 					return nil, err
 				}
 				deleted = true
@@ -210,6 +221,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 					int(robot.ID),
 				)
 				if err != nil {
+					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
 					return nil, err
 				}
 				deleted = true
@@ -224,6 +236,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 					int(robot.ID),
 				)
 				if err != nil {
+					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
 					return nil, err
 				}
 				deleted = true
@@ -247,6 +260,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			},
 		)
 		if err != nil {
+			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, robotName))
 			return nil, err
 		}
 		// then craft and return the harbor credential secret
@@ -267,9 +281,13 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	opLog := ctrl.Log.WithName("handlers").WithName("RotateRobotCredentials")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
+	// @TODO: do this later so we can only run robot credentials for specific controllers
+	// labelRequirements2, _ := labels.NewRequirement("lagoon.sh/controller", selection.Equals, []string{h.ControllerNamespace})
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabelsSelector{
 			Selector: labels.NewSelector().Add(*labelRequirements),
+			// @TODO: do this later so we can only run robot credentials for specific controllers
+			// Selector: labels.NewSelector().Add(*labelRequirements).Add(*labelRequirements2),
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
@@ -307,9 +325,11 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			// only continue if there isn't any running builds
 			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
 			if err != nil {
+				// @TODO: resource unknown
 				opLog.Error(err, "error getting or creating project")
 				break
 			}
+			time.Sleep(2 * time.Second) // wait 2 seconds
 			robotCreds, err := h.CreateOrRefreshRobot(ctx,
 				hProject,
 				ns.Labels["lagoon.sh/environment"],
@@ -318,6 +338,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				opLog.Error(err, "error getting or creating robot account")
 				break
 			}
+			time.Sleep(2 * time.Second) // wait 2 seconds
 			if robotCreds != nil {
 				// if we have robotcredentials to create, do that here
 				if err := upsertHarborSecret(ctx,

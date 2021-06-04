@@ -944,15 +944,17 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
 			hProject,
 			spec.Project.Environment,
-			ns,
-			"lagoon-internal-registry-secret",
 			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
 		if err != nil {
 			return err
 		}
 		if robotCreds != nil {
 			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx, r.Client, robotCreds); err != nil {
+			if err := upsertHarborSecret(ctx, r.Client,
+				ns,
+				"lagoon-internal-registry-secret", //secret name in kubernetes
+				lagoonHarbor.URL,
+				robotCreds); err != nil {
 				return err
 			}
 		}

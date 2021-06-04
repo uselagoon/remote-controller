@@ -6,6 +6,7 @@ import (
 
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"time"
 
 	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
@@ -15,10 +16,10 @@ import (
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -46,6 +47,18 @@ type robotAccountCredential struct {
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at"`
 	Token     string `json:"token"`
+}
+
+// DockerConfigJSON is used by image pull secrets.
+type DockerConfigJSON struct {
+	Auths map[string]DockerConfig `json:"auths"`
+}
+
+// DockerConfig is used by DockerConfigJSON.
+type DockerConfig struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Auth     string `json:"auth"`
 }
 
 // NewHarbor create a new harbor connection.
@@ -158,9 +171,9 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 // CreateOrRefreshRobot will create or refresh a robot account and return the credentials if needed.
 func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	project *model.Project,
-	robotName, namespace, secretName string,
+	robotName string,
 	expiry int64,
-) (*corev1.Secret, error) {
+) (*DockerConfig, error) {
 	robots, err := h.Client.ListProjectRobots(
 		ctx,
 		project,
@@ -237,17 +250,14 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			return nil, err
 		}
 		// then craft and return the harbor credential secret
-		harborSecret := makeHarborSecret(
-			namespace,
-			secretName,
-			h.URL,
+		harborDockerConfig := makeHarborSecret(
 			robotAccountCredential{
 				Token: token,
 				Name:  h.addPrefix(robotName),
 			},
 		)
 		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
-		return &harborSecret, nil
+		return &harborDockerConfig, nil
 	}
 	return nil, err
 }
@@ -275,7 +285,6 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
-				// "lagoon.sh/jobType":    "build",
 				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
 			}),
 		})
@@ -304,8 +313,6 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			robotCreds, err := h.CreateOrRefreshRobot(ctx,
 				hProject,
 				ns.Labels["lagoon.sh/environment"],
-				ns.ObjectMeta.Name,
-				"lagoon-internal-registry-secret",
 				time.Now().Add(h.RobotAccountExpiry).Unix())
 			if err != nil {
 				opLog.Error(err, "error getting or creating robot account")
@@ -313,7 +320,12 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			}
 			if robotCreds != nil {
 				// if we have robotcredentials to create, do that here
-				if err := upsertHarborSecret(ctx, cl, robotCreds); err != nil {
+				if err := upsertHarborSecret(ctx,
+					cl,
+					ns.ObjectMeta.Name,
+					"lagoon-internal-registry-secret", //secret name in kubernetes
+					h.URL,
+					robotCreds); err != nil {
 					opLog.Error(err, "error creating or updating robot account credentials")
 					break
 				}
@@ -368,33 +380,57 @@ func (h *Harbor) expiresSoon(robot *legacy.RobotAccount, duration time.Duration)
 }
 
 // makeHarborSecret creates the secret definition.
-func makeHarborSecret(namespace, name string, baseURL string, credentials robotAccountCredential) corev1.Secret {
-	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", credentials.Name, credentials.Token)))
-	configJSON := fmt.Sprintf(`{"auths":{"%s":{"username":"%s","password":"%s","auth":"%s"}}}`, baseURL, credentials.Name, credentials.Token, auth)
-	return corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-		Type: corev1.SecretTypeDockerConfigJson,
-		Data: map[string][]byte{
-			corev1.DockerConfigJsonKey: []byte(configJSON),
-		},
-	}
+func makeHarborSecret(credentials robotAccountCredential) DockerConfig {
+	return DockerConfig{
+		Username: credentials.Name,
+		Password: credentials.Token,
+		Auth: base64.StdEncoding.EncodeToString(
+			[]byte(
+				fmt.Sprintf("%s:%s", credentials.Name, credentials.Token),
+			),
+		)}
 }
 
 // upsertHarborSecret will create or update the secret in kubernetes.
-func upsertHarborSecret(ctx context.Context, cl client.Client, secret *corev1.Secret) error {
-	err := cl.Create(ctx, secret)
-	if apierrs.IsAlreadyExists(err) {
-		err = cl.Update(ctx, secret)
+func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, dockerConfig *DockerConfig) error {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: ns,
+			Name:      name,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+	err := cl.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      name,
+	}, secret)
+	dcj := &DockerConfigJSON{}
+	if err != nil {
+		// if the secret doesn't exist
+		// create it
+		dcj.Auths[baseURL] = *dockerConfig
+		dcjBytes, _ := json.Marshal(dcj)
+		secret.Data = map[string][]byte{
+			corev1.DockerConfigJsonKey: []byte(dcjBytes),
+		}
+		err := cl.Create(ctx, secret)
 		if err != nil {
-			return fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+			return fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
 		}
 		return nil
 	}
+	// if the secret exists
+	// update the secret with the new credentials
+	json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
+	// add or update the credential
+	dcj.Auths[baseURL] = *dockerConfig
+	dcjBytes, _ := json.Marshal(dcj)
+	secret.Data = map[string][]byte{
+		corev1.DockerConfigJsonKey: []byte(dcjBytes),
+	}
+	err = cl.Update(ctx, secret)
 	if err != nil {
-		return fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
+		return fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
 	}
 	return nil
 }

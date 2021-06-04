@@ -47,7 +47,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 		} // end check if running build is current LagoonBuild
 	} // end loop for running builds
 
-	// if there are no running builds, check if there are any pending builds
+	// if there are no running builds, check if there are any pending builds that can be started
 	if len(runningBuilds.Items) == 0 {
 		pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")

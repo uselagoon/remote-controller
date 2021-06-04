@@ -213,6 +213,9 @@ echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 build_deploy_controller
 
+echo "SLEEP"
+sleep 1200
+
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml
 # patch the resource with the controller namespace

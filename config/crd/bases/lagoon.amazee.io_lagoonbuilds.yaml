@@ -53,6 +53,8 @@ spec:
               required:
               - type
               type: object
+            buildPriority:
+              type: integer
             gitReference:
               type: string
             project:

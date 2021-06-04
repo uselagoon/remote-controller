@@ -43,12 +43,13 @@ type LagoonBuildSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Build        Build       `json:"build"`
-	Project      Project     `json:"project"`
-	Branch       Branch      `json:"branch,omitempty"`
-	Pullrequest  Pullrequest `json:"pullrequest,omitempty"`
-	Promote      Promote     `json:"promote,omitempty"`
-	GitReference string      `json:"gitReference"`
+	Build         Build       `json:"build"`
+	Project       Project     `json:"project"`
+	Branch        Branch      `json:"branch,omitempty"`
+	Pullrequest   Pullrequest `json:"pullrequest,omitempty"`
+	Promote       Promote     `json:"promote,omitempty"`
+	GitReference  string      `json:"gitReference"`
+	BuildPriority *int        `json:"buildPriority,omitempty"`
 	// @TODO: Openshift should be deprecated as the controller will define if it is openshift or not
 	// Openshift    bool        `json:"openshift"`
 }

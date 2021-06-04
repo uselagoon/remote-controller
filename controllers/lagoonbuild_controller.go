@@ -868,6 +868,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		"lagoon.sh/project":         spec.Project.Name,
 		"lagoon.sh/environment":     spec.Project.Environment,
 		"lagoon.sh/environmentType": spec.Project.EnvironmentType,
+		"lagoon.sh/controller":      r.ControllerNamespace,
 	}
 	if spec.Project.ID != nil {
 		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *spec.Project.ID)

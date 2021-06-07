@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -457,8 +458,10 @@ func main() {
 		})
 	}
 
+	harborURLParsed, _ := url.Parse(harborURL)
 	harborConfig := controllers.Harbor{
 		URL:                 harborURL,
+		Hostname:            harborURLParsed.Host,
 		API:                 harborAPI,
 		Username:            harborUsername,
 		Password:            harborPassword,

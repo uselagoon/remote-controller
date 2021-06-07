@@ -452,8 +452,14 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 							if err := json.Unmarshal(secretData, &auths); err != nil {
 								return ctrl.Result{}, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
 							}
-							// if the defined regional harbor key exists
-							if _, ok := auths.Registries[r.Harbor.URL]; ok {
+							// if the defined regional harbor key exists using the hostname
+							if _, ok := auths.Registries[r.Harbor.Hostname]; ok {
+								// use the regional harbor in the build
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.Hostname, "internal_container_registry")
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", auths.Registries[r.Harbor.Hostname].Username, "internal_container_registry")
+								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", auths.Registries[r.Harbor.Hostname].Password, "internal_container_registry")
+								// otherwise if the harbor url is the full defined url with schema, try use it
+							} else if _, ok := auths.Registries[r.Harbor.URL]; ok {
 								// use the regional harbor in the build
 								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.URL, "internal_container_registry")
 								replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", auths.Registries[r.Harbor.URL].Username, "internal_container_registry")
@@ -953,7 +959,8 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 		if robotCreds != nil {
 			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx, r.Client,
+			if err := upsertHarborSecret(ctx, 
+				r.Client,
 				ns,
 				"lagoon-internal-registry-secret", //secret name in kubernetes
 				lagoonHarbor.URL,

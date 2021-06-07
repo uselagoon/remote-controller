@@ -27,6 +27,7 @@ import (
 // Harbor defines a harbor struct
 type Harbor struct {
 	URL                 string
+	Hostname            string
 	API                 string
 	Username            string
 	Password            string
@@ -189,7 +190,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		Name:      "lagoon-internal-registry-secret",
 	}, secret)
 	if err != nil {
-		// the registry secret doesn't exist, force re-create the robot account
+		// the lagoon registry secret doesn't exist, force re-create the robot account
 		forceRecreate = true
 	}
 	for _, robot := range robots {
@@ -198,7 +199,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			if forceRecreate {
 				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
 				// account is required, as there isn't a way to get the credentials after
-				// creating robot accounts
+				// robot accounts are created
 				h.Log.Info(fmt.Sprintf("Kubernetes secret doesn't exist, robot account %s needs to be re-created", robot.Name))
 				err := h.Client.DeleteProjectRobot(
 					ctx,
@@ -431,7 +432,7 @@ func makeHarborSecret(credentials robotAccountCredential) RegistryCredentials {
 }
 
 // upsertHarborSecret will create or update the secret in kubernetes.
-func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, dockerConfig *RegistryCredentials) error {
+func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, registryCreds *RegistryCredentials) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
@@ -449,7 +450,7 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 	if err != nil {
 		// if the secret doesn't exist
 		// create it
-		dcj.Registries[baseURL] = *dockerConfig
+		dcj.Registries[baseURL] = *registryCreds
 		dcjBytes, _ := json.Marshal(dcj)
 		secret.Data = map[string][]byte{
 			corev1.DockerConfigJsonKey: []byte(dcjBytes),
@@ -464,7 +465,7 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 	// update the secret with the new credentials
 	json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
 	// add or update the credential
-	dcj.Registries[baseURL] = *dockerConfig
+	dcj.Registries[baseURL] = *registryCreds
 	dcjBytes, _ := json.Marshal(dcj)
 	secret.Data = map[string][]byte{
 		corev1.DockerConfigJsonKey: []byte(dcjBytes),

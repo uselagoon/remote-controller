@@ -199,7 +199,7 @@ func main() {
 
 	// harbor configurations
 	flag.BoolVar(&lffHarborEnabled, "enable-harbor", false, "Flag to enable this controller to talk to a specific harbor.")
-	flag.StringVar(&harborURL, "harbor-url", "http://harbor.172.17.0.1.nip.io:32080",
+	flag.StringVar(&harborURL, "harbor-url", "harbor.172.17.0.1.nip.io:32080",
 		"The URL for harbor, this is where images will be pushed.")
 	flag.StringVar(&harborAPI, "harbor-api", "http://harbor.172.17.0.1.nip.io:32080/api/",
 		"The URL for harbor API.")
@@ -459,9 +459,13 @@ func main() {
 	}
 
 	harborURLParsed, _ := url.Parse(harborURL)
+	harborHostname := harborURLParsed.Host
+	if harborURLParsed.Host == "" {
+		harborHostname = harborURL
+	}
 	harborConfig := controllers.Harbor{
 		URL:                 harborURL,
-		Hostname:            harborURLParsed.Host,
+		Hostname:            harborHostname,
 		API:                 harborAPI,
 		Username:            harborUsername,
 		Password:            harborPassword,

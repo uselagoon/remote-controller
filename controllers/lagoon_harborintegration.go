@@ -364,7 +364,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 					cl,
 					ns.ObjectMeta.Name,
 					"lagoon-internal-registry-secret", //secret name in kubernetes
-					h.URL,
+					h.Hostname,
 					robotCreds); err != nil {
 					opLog.Error(err, "error creating or updating robot account credentials")
 					break

@@ -68,7 +68,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 		if err.Error() == "project not found on server side" || err.Error() == "resource unknown" {
 			project, err = h.Client.NewProject(ctx, projectName, int64Ptr(-1))
 			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error creating project %s", project.Name))
+				h.Log.Info(fmt.Sprintf("Error creating project %s", projectName))
 				return nil, err
 			}
 			time.Sleep(2 * time.Second) // wait 2 seconds

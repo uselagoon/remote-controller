@@ -193,6 +193,22 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		// the lagoon registry secret doesn't exist, force re-create the robot account
 		forceRecreate = true
 	}
+	// check if the secret contains the .dockerconfigjson data
+	if secretData, ok := secret.Data[".dockerconfigjson"]; ok {
+		auths := Auths{}
+		// unmarshal it
+		if err := json.Unmarshal(secretData, &auths); err != nil {
+			return nil, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
+		}
+		// set the force recreate robot account flag here
+		forceRecreate = true
+		// if the defined regional harbor key exists using the hostname then set the flag to false
+		// if the account is set to expire, the loop below will catch it for us
+		// just the hostname, as this is what all new robot accounts are created with
+		if _, ok := auths.Registries[h.Hostname]; ok {
+			forceRecreate = false
+		}
+	}
 	for _, robot := range robots {
 		if h.matchRobotAccount(robot, project, robotName) {
 			exists = true

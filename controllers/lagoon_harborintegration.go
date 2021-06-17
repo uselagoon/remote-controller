@@ -358,6 +358,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			// only continue if there isn't any running builds
 			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
 			if err != nil {
+				// @TODO: resource unknown
 				opLog.Error(err, "error getting or creating project")
 				break
 			}
@@ -378,7 +379,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				if err := upsertHarborSecret(ctx,
 					cl,
 					ns.ObjectMeta.Name,
-					"lagoon-internal-registry-secret",
+					"lagoon-internal-registry-secret", //secret name in kubernetes
 					h.Hostname,
 					robotCreds); err != nil {
 					opLog.Error(err, "error creating or updating robot account credentials")
@@ -455,13 +456,13 @@ func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
+	dcj := &Auths{
+		Registries: make(map[string]RegistryCredentials),
+	}
 	err := cl.Get(ctx, types.NamespacedName{
 		Namespace: ns,
 		Name:      name,
 	}, secret)
-	dcj := &Auths{
-		Registries: make(map[string]RegistryCredentials),
-	}
 	if err != nil {
 		// if the secret doesn't exist
 		// create it

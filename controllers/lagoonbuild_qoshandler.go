@@ -87,7 +87,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		})
 		if len(pendingBuilds.Items) > 0 {
 			for idx, pBuild := range pendingBuilds.Items {
-				if idx >= buildsToStart {
+				if idx <= buildsToStart {
 					// if we do have a `lagoon.sh/buildStatus` set, then process as normal
 					runningNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -98,21 +98,11 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 						}),
 					})
 					// list any builds that are running
-					if err := r.List(ctx, runningBuilds, listOption); err != nil {
+					if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
 						return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 					}
-					for _, runningBuild := range runningNSBuilds.Items {
-						// if the running build is the one from this request then process it
-						if pBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
-							// actually process the build here
-							if err := r.processBuild(ctx, opLog, pBuild); err != nil {
-								return err
-							}
-						} // end check if running build is current LagoonBuild
-					} // end loop for running builds
-
 					// if there are no running builds, check if there are any pending builds that can be started
-					if len(runningBuilds.Items) == 0 {
+					if len(runningNSBuilds.Items) == 0 {
 						pendingNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
 						return cancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running")
 					}

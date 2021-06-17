@@ -92,6 +92,29 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
+			// if we do have a `lagoon.sh/buildStatus` set as running, then process it
+			runningNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
+			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.InNamespace(req.Namespace),
+				client.MatchingLabels(map[string]string{
+					"lagoon.sh/buildStatus": "Running",
+					"lagoon.sh/controller":  r.ControllerNamespace,
+				}),
+			})
+			// list any builds that are running
+			if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
+				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+			}
+			for _, runningBuild := range runningNSBuilds.Items {
+				// if the running build is the one from this request then process it
+				if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+					// actually process the build here
+					if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+						return ctrl.Result{}, err
+					}
+				} // end check if running build is current LagoonBuild
+			} // end loop for running builds
+			// once running builds are processed, run the qos handler
 			return r.qosBuildProcessor(ctx, opLog, lagoonBuild, req)
 		}
 		// if qos is not enabled, just process it as a standard build

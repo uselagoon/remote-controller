@@ -30,4 +30,4 @@ spec:
         - "--enable-harbor"
         - "--harbor-enable-project-webhook"
         - "--enable-qos"
-        - "--qos-max-builds=1"
+        - "--qos-max-builds=3"

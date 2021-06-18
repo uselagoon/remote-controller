@@ -26,3 +26,6 @@ require (
 replace github.com/cheshir/go-mq v1.0.2 => github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead
 
 replace github.com/NeowayLabs/wabbit v0.0.0-20200409220312-12e68ab5b0c6 => github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204
+
+// includes page_size 100 for listing projects
+replace github.com/mittwald/goharbor-client/v3 v3.3.0 => github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75

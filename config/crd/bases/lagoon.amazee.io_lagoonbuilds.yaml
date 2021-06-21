@@ -48,13 +48,13 @@ spec:
                   type: string
                 image:
                   type: string
+                priority:
+                  type: integer
                 type:
                   type: string
               required:
               - type
               type: object
-            buildPriority:
-              type: integer
             gitReference:
               type: string
             project:

@@ -71,11 +71,11 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 			// sort by priority, then creation timestamp
 			iPriority := r.BuildQoS.DefaultValue
 			jPriority := r.BuildQoS.DefaultValue
-			if ok := pendingBuilds.Items[i].Spec.BuildPriority; ok != nil {
-				iPriority = *pendingBuilds.Items[i].Spec.BuildPriority
+			if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
+				iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
 			}
-			if ok := pendingBuilds.Items[j].Spec.BuildPriority; ok != nil {
-				jPriority = *pendingBuilds.Items[j].Spec.BuildPriority
+			if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
+				jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
 			}
 			if iPriority < jPriority {
 				return false

@@ -123,14 +123,14 @@ func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1alpha
 }
 
 // get the task pod information for openshift
-func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, taskPod *corev1.Pod, lagoonTask *lagoonv1alpha1.LagoonTask) error {
+func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &oappsv1.DeploymentConfigList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Unable to get deployments for project %s, environment %s: %v",
 			lagoonTask.Spec.Project.Name,
 			lagoonTask.Spec.Environment.Name,
@@ -179,7 +179,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, t
 						lagoonTask.Spec.Task.Command,
 					}
 					dep.Spec.Template.Spec.RestartPolicy = "Never"
-					taskPod = &corev1.Pod{
+					taskPod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      lagoonTask.ObjectMeta.Name,
 							Namespace: lagoonTask.ObjectMeta.Namespace,
@@ -199,12 +199,12 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, t
 						},
 						Spec: dep.Spec.Template.Spec,
 					}
-					return nil
+					return taskPod, nil
 				}
 			}
 		}
 		if !hasService {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"No matching service %s for project %s, environment %s: %v",
 				lagoonTask.Spec.Task.Service,
 				lagoonTask.Spec.Project.Name,
@@ -214,7 +214,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, t
 		}
 	}
 	// no deployments found return error
-	return fmt.Errorf(
+	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
 		lagoonTask.Spec.Environment.OpenshiftProjectName,
 		lagoonTask.Spec.Project.Name,
@@ -224,14 +224,14 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, t
 }
 
 // get the task pod information for kubernetes
-func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, taskPod *corev1.Pod, lagoonTask *lagoonv1alpha1.LagoonTask) error {
+func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Unable to get deployments for project %s, environment %s: %v",
 			lagoonTask.Spec.Project.Name,
 			lagoonTask.Spec.Environment.Name,
@@ -280,7 +280,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, taskPod
 						lagoonTask.Spec.Task.Command,
 					}
 					dep.Spec.Template.Spec.RestartPolicy = "Never"
-					taskPod = &corev1.Pod{
+					taskPod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      lagoonTask.ObjectMeta.Name,
 							Namespace: lagoonTask.ObjectMeta.Namespace,
@@ -300,12 +300,12 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, taskPod
 						},
 						Spec: dep.Spec.Template.Spec,
 					}
-					return nil
+					return taskPod, nil
 				}
 			}
 		}
 		if !hasService {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"No matching service %s for project %s, environment %s: %v",
 				lagoonTask.Spec.Task.Service,
 				lagoonTask.Spec.Project.Name,
@@ -315,7 +315,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, taskPod
 		}
 	}
 	// no deployments found return error
-	return fmt.Errorf(
+	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
 		lagoonTask.Spec.Environment.OpenshiftProjectName,
 		lagoonTask.Spec.Project.Name,
@@ -326,16 +326,17 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, taskPod
 
 func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask, opLog logr.Logger) error {
 	newTaskPod := &corev1.Pod{}
+	var err error
 	// get the podspec from openshift or kubernetes, then get or create a new pod to run the task in
 	if r.IsOpenshift {
-		err := r.getTaskPodDeploymentConfig(ctx, newTaskPod, lagoonTask)
+		newTaskPod, err = r.getTaskPodDeploymentConfig(ctx, lagoonTask)
 		if err != nil {
 			opLog.Info(fmt.Sprintf("%v", err))
 			//@TODO: send msg back and update task to failed?
 			return nil
 		}
 	} else {
-		err := r.getTaskPodDeployment(ctx, newTaskPod, lagoonTask)
+		newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
 		if err != nil {
 			opLog.Info(fmt.Sprintf("%v", err))
 			//@TODO: send msg back and update task to failed?
@@ -344,7 +345,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	}
 	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
 	// once the pod spec has been defined, check if it isn't already created
-	err := r.Get(ctx, types.NamespacedName{
+	err = r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonTask.ObjectMeta.Namespace,
 		Name:      newTaskPod.ObjectMeta.Name,
 	}, newTaskPod)

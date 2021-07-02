@@ -90,6 +90,7 @@ func main() {
 	var backupDefaultDailyRetention int
 	var backupDefaultWeeklyRetention int
 	var backupDefaultMonthlyRetention int
+	var backupDefaultSchedule string
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
@@ -173,6 +174,8 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
+	flag.StringVar(&backupDefaultSchedule, "backupDefaultSchedule", "M H(22-2) * * *",
+		"The default backup schedule for all projects on this cluster.")
 	flag.IntVar(&backupDefaultMonthlyRetention, "backupDefaultMonthlyRetention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
 	flag.IntVar(&backupDefaultWeeklyRetention, "backupDefaultWeeklyRetention", 6,
@@ -536,6 +539,7 @@ func main() {
 		BuildPodRunAsUser:             int64(buildPodRunAsUser),
 		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
 		BuildPodFSGroup:               int64(buildPodFSGroup),
+		BackupDefaultSchedule:         backupDefaultSchedule,
 		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
 		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
 		BackupDefaultDailyRetention:   backupDefaultDailyRetention,

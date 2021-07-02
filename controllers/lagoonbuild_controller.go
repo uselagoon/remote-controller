@@ -70,6 +70,7 @@ type LagoonBuildReconciler struct {
 	LFFDefaultRootlessWorkload       string
 	LFFForceIsolationNetworkPolicy   string
 	LFFDefaultIsolationNetworkPolicy string
+	BackupDefaultSchedule            string
 	BackupDefaultMonthlyRetention    int
 	BackupDefaultWeeklyRetention     int
 	BackupDefaultDailyRetention      int
@@ -273,6 +274,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					{
 						Name:  "MONITORING_ALERTCONTACT",
 						Value: lagoonBuild.Spec.Project.Monitoring.Contact,
+					},
+					{
+						Name:  "DEFAULT_BACKUP_SCHEDULE",
+						Value: r.BackupDefaultSchedule,
 					},
 					{
 						Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",

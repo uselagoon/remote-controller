@@ -87,6 +87,7 @@ func main() {
 	var buildPodRunAsUser uint
 	var buildPodRunAsGroup uint
 	var buildPodFSGroup uint
+	var backupDefaultHourlyRetention int
 	var backupDefaultDailyRetention int
 	var backupDefaultWeeklyRetention int
 	var backupDefaultMonthlyRetention int
@@ -179,6 +180,8 @@ func main() {
 		"The number of weekly backups k8up should retain after a prune operation.")
 	flag.IntVar(&backupDefaultDailyRetention, "backupDefaultDailyRetention", 7,
 		"The number of daily backups k8up should retain after a prune operation.")
+	flag.IntVar(&backupDefaultHourlyRetention, "backupDefaultHourlyRetention", 0,
+		"The number of hourly backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
 		"sets the LAGOON_FEATURE_FLAG_FORCE_ROOTLESS_WORKLOAD build environment variable to enforce cluster policy")
@@ -539,6 +542,7 @@ func main() {
 		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
 		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
 		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
+		BackupDefaultHourlyRetention:  backupDefaultHourlyRetention,
 		// Lagoon feature flags
 		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
 		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,

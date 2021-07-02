@@ -73,6 +73,7 @@ type LagoonBuildReconciler struct {
 	BackupDefaultMonthlyRetention    int
 	BackupDefaultWeeklyRetention     int
 	BackupDefaultDailyRetention      int
+	BackupDefaultHourlyRetention     int
 	LFFBackupWeeklyRandom            bool
 	LFFHarborEnabled                 bool
 	Harbor                           Harbor
@@ -285,6 +286,10 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					{
 						Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
 						Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+					},
+					{
+						Name:  "HOURLY_BACKUP_DEFAULT_RETENTION",
+						Value: strconv.Itoa(r.BackupDefaultHourlyRetention),
 					},
 					{
 						Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",

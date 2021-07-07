@@ -136,17 +136,17 @@ func main() {
 	flag.StringVar(&mqHost, "rabbitmq-hostname", "localhost:5672",
 		"The hostname:port for the rabbitmq host.")
 	flag.IntVar(&mqWorkers, "rabbitmq-queue-workers", 1,
-		"The hostname:port for the rabbitmq host.")
+		"The number of workers to start with.")
 	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
-		"The hostname:port for the rabbitmq host.")
+		"The retry interval for rabbitmq.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
 	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
-		"The hostname:port for the rabbitmq host.")
+		"The cron definition for pending messages.")
 	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
-		"The hostname:port for the rabbitmq host.")
+		"The number of startup attempts before exiting.")
 	flag.IntVar(&startupConnectionInterval, "startup-connection-interval-seconds", 30,
-		"The hostname:port for the rabbitmq host.")
+		"The duration between startup attempts.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,

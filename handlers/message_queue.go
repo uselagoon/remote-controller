@@ -75,7 +75,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					h.ConnectionAttempts,
 				),
 			)
-			time.Sleep(60 * time.Second)
+			time.Sleep(time.Duration(h.ConnectionRetryInterval) * time.Second)
 		}
 		return attempt < h.ConnectionAttempts, err
 	})

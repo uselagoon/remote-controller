@@ -100,6 +100,7 @@ type Build struct {
 	Image    string `json:"image,omitempty"`
 	Type     string `json:"type"`
 	Priority *int   `json:"priority,omitempty"`
+	BulkID   string `json:"bulkId,omitempty"`
 }
 
 // Project contains the project information from lagoon.

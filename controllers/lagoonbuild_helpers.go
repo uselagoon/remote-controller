@@ -466,6 +466,10 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: lagoonBuild.Spec.Project.Monitoring.Contact,
 		},
 		{
+			Name:  "DEFAULT_BACKUP_SCHEDULE",
+			Value: r.BackupDefaultSchedule,
+		},
+		{
 			Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
 			Value: strconv.Itoa(r.BackupDefaultMonthlyRetention),
 		},
@@ -476,6 +480,10 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		{
 			Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
 			Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+		},
+		{
+			Name:  "HOURLY_BACKUP_DEFAULT_RETENTION",
+			Value: strconv.Itoa(r.BackupDefaultHourlyRetention),
 		},
 		{
 			Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",

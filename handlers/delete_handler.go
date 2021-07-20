@@ -150,7 +150,7 @@ func (h *Messaging) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 
 // DeletePVCs will delete any PVCs from the namespace.
 func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
-	pvcs := &corev1.PersistentVolumeList{}
+	pvcs := &corev1.PersistentVolumeClaimList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
 	})

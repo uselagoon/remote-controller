@@ -216,7 +216,7 @@ func (h *Messaging) DeleteNamespace(ctx context.Context, opLog logr.Logger, name
 }
 
 // CheckPVCExists .
-func (h *Messaging) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *corev1.PersistentVolume) error {
+func (h *Messaging) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *corev1.PersistentVolumeClaim) error {
 	try.MaxRetries = 60
 	err := try.Do(func(attempt int) (bool, error) {
 		var ingressErr error

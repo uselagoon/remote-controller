@@ -41,6 +41,13 @@ jobs:
         curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.11.1/kind-linux-amd64
         chmod +x /tmp/kind
         sudo mv /tmp/kind /usr/local/bin/
+    - name: Install go, kustomize, kubebuilder, helm, docker-compose, kind
+      run: |
+        go version
+        kustomize version
+        helm version
+        kubebuilder version
+        kind version
     - name: Create kind cluster
       uses: helm/kind-action@v1.2.0
       with:

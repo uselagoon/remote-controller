@@ -386,7 +386,7 @@ func (r *LagoonMonitorReconciler) updateBuildStatusCondition(ctx context.Context
 				"log":        log,
 			},
 		})
-		if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return fmt.Errorf("Unable to update status condition: %v", err)
 		}
 	}
@@ -409,7 +409,7 @@ func (r *LagoonMonitorReconciler) updateBuildStatusMessage(ctx context.Context,
 			"statusMessage": statusMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -431,7 +431,7 @@ func (r *LagoonMonitorReconciler) updateEnvironmentMessage(ctx context.Context,
 			"environmentMessage": envMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -453,7 +453,7 @@ func (r *LagoonMonitorReconciler) updateBuildLogMessage(ctx context.Context,
 			"buildLogMessage": buildMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -475,7 +475,7 @@ func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Co
 				},
 				"statusMessages": nil,
 			})
-			if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return fmt.Errorf("Unable to update status condition: %v", err)
 			}
 		}
@@ -524,7 +524,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 		// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
 		// if we do move to multi container builds, then worry about it
 		for _, container := range jobPod.Spec.Containers {
-			cLogs, err := getContainerLogs(container.Name, req)
+			cLogs, err := getContainerLogs(ctx, container.Name, req)
 			if err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from build pod"))
 				// log the error, but just continue
@@ -544,7 +544,7 @@ Build cancelled
 				},
 			},
 		})
-		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update resource"))
 		}
 		r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonConditions{

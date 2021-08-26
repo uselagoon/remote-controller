@@ -87,8 +87,8 @@ type LagoonBuildReconciler struct {
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"
 
 // Reconcile runs when a request comes through
-func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 
 	// your logic here
@@ -725,7 +725,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					"finalizers": lagoonBuild.ObjectMeta.Finalizers,
 				},
 			})
-			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -753,7 +753,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					"finalizers": lagoonBuild.ObjectMeta.Finalizers,
 				},
 			})
-			if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return ctrl.Result{}, ignoreNotFound(err)
 			}
 		}
@@ -789,7 +789,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 				"log":        log,
 			},
 		})
-		if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return fmt.Errorf("Unable to update status condition: %v", err)
 		}
 	}
@@ -938,7 +938,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			"labels": nsLabels,
 		},
 	})
-	if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return err
 	}
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {

@@ -24,12 +24,14 @@ jobs:
         sudo rm -rf /usr/local/go
         curl -sLo /tmp/go1.16.7.linux-amd64.tar.gz https://dl.google.com/go/go1.16.7.linux-amd64.tar.gz
         sudo tar -C /usr/local -xzf /tmp/go1.16.7.linux-amd64.tar.gz
+        export PATH=$PATH:/usr/local/go/bin
         #kustomize
         curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
         sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
         curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+        export PATH=$PATH:/usr/local/kubebuilder/bin
         #helm
         curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
@@ -41,7 +43,7 @@ jobs:
         curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.11.1/kind-linux-amd64
         chmod +x /tmp/kind
         sudo mv /tmp/kind /usr/local/bin/
-    - name: Install go, kustomize, kubebuilder, helm, docker-compose, kind
+    - name: Check go, kustomize, kubebuilder, helm, docker-compose, kind versions
       run: |
         go version
         kustomize version

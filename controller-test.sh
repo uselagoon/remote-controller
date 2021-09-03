@@ -184,11 +184,11 @@ echo "===> Docker-host is running"
 echo "===> Install Ingress-Nginx"
 kubectl create namespace ingress-nginx
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
 NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
 if [ $NUM_PODS -ne 1 ]; then
     echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
     kubectl get pods --all-namespaces
     echo "Wait for ingress-nginx to become ready"
     sleep 120

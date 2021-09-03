@@ -44,6 +44,8 @@ spec:
               description: Build contains the type of build, and the image to use
                 for the builder.
               properties:
+                bulkId:
+                  type: string
                 ci:
                   type: string
                 image:

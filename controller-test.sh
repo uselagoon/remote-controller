@@ -43,8 +43,8 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
-    # echo "==> Get pvc"
-    # kubectl get pvc --all-namespaces
+    echo "==> Get ingress"
+    kubectl get ingress --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
     echo "==> Remove cluster"

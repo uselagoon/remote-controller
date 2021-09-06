@@ -506,10 +506,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	// then update the build to reflect the current pod status
 	// we do this so we don't update the status of the build again
 	if containsString(
-		[]string{
-			string(lagoonv1alpha1.BuildStatusPending),
-			string(lagoonv1alpha1.BuildStatusRunning),
-		},
+		RunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
 		opLog.Info(

@@ -77,9 +77,10 @@ func (h *Cleanup) LagoonBuildCleanup() {
 		if len(lagoonBuilds.Items) > h.BuildsToKeep {
 			for idx, lagoonBuild := range lagoonBuilds.Items {
 				if idx >= h.BuildsToKeep {
-					if lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusFailed) ||
-						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusComplete) ||
-						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusCancelled) {
+					if containsString(
+						CompletedCancelledFailedStatus,
+						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"],
+					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
 						if err := h.Client.Delete(context.Background(), &lagoonBuild); err != nil {
 							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))

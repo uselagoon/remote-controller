@@ -29,7 +29,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(req.Namespace),
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": "Running",
+			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})

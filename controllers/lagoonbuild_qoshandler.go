@@ -37,7 +37,7 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": "Running",
+			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -56,7 +56,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		// if there are any free slots to start a build, do that here
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": "Pending",
+				"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -93,7 +93,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 						client.InNamespace(pBuild.ObjectMeta.Namespace),
 						client.MatchingLabels(map[string]string{
-							"lagoon.sh/buildStatus": "Running",
+							"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						}),
 					})

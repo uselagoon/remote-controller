@@ -33,11 +33,11 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			if container.State.Waiting != nil && containsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the build and get the logs from the container
 				opLog.Info(fmt.Sprintf("Task failed, container exit reason was: %v", container.State.Waiting.Reason))
-				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1alpha1.JobFailed)
+				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1alpha1.BuildStatusFailed)
 				if err := r.Update(ctx, &lagoonTask); err != nil {
 					return err
 				}
-				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, string(lagoonv1alpha1.JobFailed)))
+				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusFailed)))
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}
@@ -54,7 +54,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 				}
 				jobPod.Status.ContainerStatuses[0] = state
 				r.updateTaskStatusCondition(ctx, &lagoonTask, lagoonv1alpha1.LagoonConditions{
-					Type:   lagoonv1alpha1.JobFailed,
+					Type:   lagoonv1alpha1.BuildStatusFailed,
 					Status: corev1.ConditionTrue,
 				}, []byte(container.State.Waiting.Message))
 				// send any messages to lagoon message queues
@@ -76,12 +76,12 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 		if err != nil {
 			return err
 		}
-		var jobCondition lagoonv1alpha1.JobConditionType
+		var jobCondition lagoonv1alpha1.BuildStatusType
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
-			jobCondition = lagoonv1alpha1.JobFailed
+			jobCondition = lagoonv1alpha1.BuildStatusFailed
 		case corev1.PodSucceeded:
-			jobCondition = lagoonv1alpha1.JobComplete
+			jobCondition = lagoonv1alpha1.BuildStatusComplete
 		}
 		// if the build status doesn't equal the status of the pod
 		// then update the build to reflect the current pod status

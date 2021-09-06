@@ -20,17 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// JobConditionType const for the status type
-type JobConditionType string
+// BuildStatusType const for the status type
+type BuildStatusType string
 
 // These are valid conditions of a job.
 const (
-	// BuildComplete means the build has completed its execution.
-	JobComplete JobConditionType = "Complete"
-	// BuildFailed means the job has failed its execution.
-	JobFailed JobConditionType = "Failed"
-	// BuildFailed means the job has failed its execution.
-	JobCancelled JobConditionType = "Cancelled"
+	// BuildStatusRunning means the build is pending.
+	BuildStatusPending BuildStatusType = "Pending"
+	// BuildStatusRunning means the build is running.
+	BuildStatusRunning BuildStatusType = "Running"
+	// BuildStatusComplete means the build has completed its execution.
+	BuildStatusComplete BuildStatusType = "Complete"
+	// BuildStatusFailed means the job has failed its execution.
+	BuildStatusFailed BuildStatusType = "Failed"
+	// BuildStatusCancelled means the job been cancelled.
+	BuildStatusCancelled BuildStatusType = "Cancelled"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -65,7 +69,7 @@ type LagoonBuildStatus struct {
 type LagoonConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
-	Type               JobConditionType       `json:"type"`
+	Type               BuildStatusType        `json:"type"`
 	// Condition          string                 `json:"condition"`
 }
 

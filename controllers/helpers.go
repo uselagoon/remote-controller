@@ -180,7 +180,7 @@ func variableExists(vars *[]LagoonEnvironmentVariable, name, value string) bool 
 func cancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, pendingBuilds *lagoonv1alpha1.LagoonBuildList, ns string, status string) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": "Pending"}),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending)}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
@@ -198,7 +198,7 @@ func cancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
 			} else {
 				// cancel any other pending builds
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = "Cancelled"
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1alpha1.BuildStatusCancelled)
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return err

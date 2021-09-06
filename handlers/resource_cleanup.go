@@ -10,9 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 )
 
 type cleanup interface {
+	LagoonBuildCleanup()
 	BuildPodCleanup()
 	TaskPodCleanup()
 }
@@ -20,21 +23,74 @@ type cleanup interface {
 // Cleanup is used for cleaning up old pods or resources.
 type Cleanup struct {
 	Client              client.Client
-	TaskPodsToKeep      int
+	BuildsToKeep        int
 	BuildPodsToKeep     int
+	TaskPodsToKeep      int
 	ControllerNamespace string
 	EnableDebug         bool
 }
 
 // NewCleanup returns a cleanup with controller-runtime client.
-func NewCleanup(client client.Client, taskPodsToKeep int, buildPodsToKeep int, controllerNamespace string, enableDebug bool) *Cleanup {
+func NewCleanup(client client.Client, buildsToKeep int, buildPodsToKeep int, taskPodsToKeep int, controllerNamespace string, enableDebug bool) *Cleanup {
 	return &Cleanup{
 		Client:              client,
-		TaskPodsToKeep:      taskPodsToKeep,
+		BuildsToKeep:        buildsToKeep,
 		BuildPodsToKeep:     buildPodsToKeep,
+		TaskPodsToKeep:      taskPodsToKeep,
 		ControllerNamespace: controllerNamespace,
 		EnableDebug:         enableDebug,
 	}
+}
+
+// LagoonBuildCleanup will clean up any build crds that are hanging around.
+func (h *Cleanup) LagoonBuildCleanup() {
+	opLog := ctrl.Log.WithName("handlers").WithName("LagoonBuildCleanup")
+	namespaces := &corev1.NamespaceList{}
+	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabelsSelector{
+			Selector: labels.NewSelector().Add(*labelRequirements),
+		},
+	})
+	if err := h.Client.List(context.Background(), namespaces, listOption); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		return
+	}
+	for _, ns := range namespaces.Items {
+		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
+		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+			client.InNamespace(ns.ObjectMeta.Name),
+			client.MatchingLabels(map[string]string{
+				"lagoon.sh/jobType":    "build",
+				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
+			}),
+		})
+		if err := h.Client.List(context.Background(), lagoonBuilds, listOption); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuild resources, there may be none or something went wrong"))
+			return
+		}
+		// sort the build pods by creation timestamp
+		sort.Slice(lagoonBuilds.Items, func(i, j int) bool {
+			return lagoonBuilds.Items[i].ObjectMeta.CreationTimestamp.After(lagoonBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+		})
+		if len(lagoonBuilds.Items) > h.BuildsToKeep {
+			for idx, lagoonBuild := range lagoonBuilds.Items {
+				if idx >= h.BuildsToKeep {
+					if lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusFailed) ||
+						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusComplete) ||
+						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusCancelled) {
+						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
+						if err := h.Client.Delete(context.Background(), &lagoonBuild); err != nil {
+							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	return
 }
 
 // BuildPodCleanup will clean up any build pods that are hanging around.

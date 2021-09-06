@@ -117,7 +117,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(req.Namespace),
-			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": "Running"}),
+			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning)}),
 		})
 		// list all builds in the namespace that have the running buildstatus
 		if err := r.List(ctx, runningBuilds, listOption); err != nil {

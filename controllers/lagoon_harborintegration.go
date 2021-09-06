@@ -350,7 +350,8 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		// if there are any builds pending or running, don't try and refresh the credentials as this
 		// could break the build
 		if len(lagoonBuilds.Items) > 0 {
-			if lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Running" || lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Pending" {
+			if lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusRunning) ||
+				lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == string(lagoonv1alpha1.BuildStatusPending) {
 				runningBuilds = true
 			}
 		}

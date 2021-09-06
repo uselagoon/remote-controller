@@ -99,7 +99,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 				client.InNamespace(req.Namespace),
 				client.MatchingLabels(map[string]string{
-					"lagoon.sh/buildStatus": "Running",
+					"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 					"lagoon.sh/controller":  r.ControllerNamespace,
 				}),
 			})
@@ -207,7 +207,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// the `lagoon.sh/buildStatus = Pending` now
 	// so end this reconcile process
 	pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
-	return ctrl.Result{}, cancelExtraBuilds(ctx, r, opLog, pendingBuilds, namespace.ObjectMeta.Name, "Pending")
+	return ctrl.Result{}, cancelExtraBuilds(ctx, r, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusPending))
 	// return ctrl.Result{}, nil
 }
 
@@ -219,7 +219,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, bu
 	newBuild.SetResourceVersion("")
 	newBuild.SetLabels(
 		map[string]string{
-			"lagoon.sh/buildStatus": "Pending",
+			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		},
 	)

@@ -175,15 +175,15 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
-	flag.StringVar(&backupDefaultSchedule, "backupDefaultSchedule", "M H(22-2) * * *",
+	flag.StringVar(&backupDefaultSchedule, "backup-default-schedule", "M H(22-2) * * *",
 		"The default backup schedule for all projects on this cluster.")
-	flag.IntVar(&backupDefaultMonthlyRetention, "backupDefaultMonthlyRetention", 1,
+	flag.IntVar(&backupDefaultMonthlyRetention, "backup-default-monthly-retention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultWeeklyRetention, "backupDefaultWeeklyRetention", 6,
+	flag.IntVar(&backupDefaultWeeklyRetention, "backup-default-weekly-retention", 6,
 		"The number of weekly backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultDailyRetention, "backupDefaultDailyRetention", 7,
+	flag.IntVar(&backupDefaultDailyRetention, "backup-default-daily-retention", 7,
 		"The number of daily backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultHourlyRetention, "backupDefaultHourlyRetention", 0,
+	flag.IntVar(&backupDefaultHourlyRetention, "backup-default-hourly-retention", 0,
 		"The number of hourly backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",

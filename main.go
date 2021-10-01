@@ -126,6 +126,7 @@ func main() {
 	var harborCredentialCron string
 	var harborLagoonWebhook string
 	var harborWebhookEventTypes string
+	var nativeCronPodMinFrequency int
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -223,6 +224,8 @@ func main() {
 	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 
+	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
+
 	// harbor configurations
 	flag.BoolVar(&lffHarborEnabled, "enable-harbor", false, "Flag to enable this controller to talk to a specific harbor.")
 	flag.StringVar(&harborURL, "harbor-url", "harbor.172.17.0.1.nip.io:32080",
@@ -287,6 +290,8 @@ func main() {
 	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
 	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
 	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
+
+	nativeCronPodMinFrequency = getEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
 
 	// harbor envvars
 	harborURL = getEnv("HARBOR_URL", harborURL)
@@ -606,6 +611,7 @@ func main() {
 		Harbor:                           harborConfig,
 		LFFQoSEnabled:                    lffQoSEnabled,
 		BuildQoS:                         buildQoSConfig,
+		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -650,6 +656,16 @@ func main() {
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if value, ok := os.LookupEnv(key); ok {
+		valueInt, e := strconv.Atoi(value)
+		if e == nil {
+			return valueInt
+		}
 	}
 	return fallback
 }

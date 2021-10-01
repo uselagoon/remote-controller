@@ -489,6 +489,10 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
 			Value: strconv.FormatBool(r.LFFBackupWeeklyRandom),
 		},
+		{
+			Name:  "NATIVE_CRON_POD_MINIMUM_FREQUENCY",
+			Value: strconv.Itoa(r.NativeCronPodMinFrequency),
+		},
 	}
 	if r.IsOpenshift {
 		// openshift builds have different names for some things, and also additional values to add

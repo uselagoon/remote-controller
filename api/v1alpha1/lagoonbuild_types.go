@@ -61,12 +61,12 @@ type LagoonBuildSpec struct {
 type LagoonBuildStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonConditions `json:"conditions,omitempty"`
-	Log        []byte             `json:"log,omitempty"`
+	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
+	Log        []byte                  `json:"log,omitempty"`
 }
 
-// LagoonConditions defines the observed conditions of the pods.
-type LagoonConditions struct {
+// LagoonBuildConditions defines the observed conditions of build pods.
+type LagoonBuildConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               BuildStatusType        `json:"type"`

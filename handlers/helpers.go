@@ -23,16 +23,27 @@ const (
 )
 
 var (
-	// RunningPendingStatus .
-	RunningPendingStatus = []string{
+	// BuildRunningPendingStatus .
+	BuildRunningPendingStatus = []string{
 		string(lagoonv1alpha1.BuildStatusPending),
 		string(lagoonv1alpha1.BuildStatusRunning),
 	}
-	// CompletedCancelledFailedStatus .
-	CompletedCancelledFailedStatus = []string{
+	// BuildCompletedCancelledFailedStatus .
+	BuildCompletedCancelledFailedStatus = []string{
 		string(lagoonv1alpha1.BuildStatusFailed),
 		string(lagoonv1alpha1.BuildStatusComplete),
 		string(lagoonv1alpha1.BuildStatusCancelled),
+	}
+	// TaskRunningPendingStatus .
+	TaskRunningPendingStatus = []string{
+		string(lagoonv1alpha1.TaskStatusPending),
+		string(lagoonv1alpha1.TaskStatusRunning),
+	}
+	// TaskCompletedCancelledFailedStatus .
+	TaskCompletedCancelledFailedStatus = []string{
+		string(lagoonv1alpha1.TaskStatusFailed),
+		string(lagoonv1alpha1.TaskStatusComplete),
+		string(lagoonv1alpha1.TaskStatusCancelled),
 	}
 )
 
@@ -65,7 +76,16 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func jobContainsStatus(slice []lagoonv1alpha1.LagoonConditions, s lagoonv1alpha1.LagoonConditions) bool {
+func buildContainsStatus(slice []lagoonv1alpha1.LagoonBuildConditions, s lagoonv1alpha1.LagoonBuildConditions) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func taskContainsStatus(slice []lagoonv1alpha1.LagoonTaskConditions, s lagoonv1alpha1.LagoonTaskConditions) bool {
 	for _, item := range slice {
 		if item == s {
 			return true

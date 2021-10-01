@@ -273,8 +273,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   "standard",
-					"lagoon.sh/taskStatus": "Pending",
+					"lagoon.sh/taskType":   string(lagoonv1alpha1.TaskTypeStandard),
+					"lagoon.sh/taskStatus": string(lagoonv1alpha1.TaskStatusPending),
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)

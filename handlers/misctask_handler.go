@@ -141,8 +141,8 @@ func createAdvancedTask(jobSpec *lagoonv1alpha1.LagoonTaskSpec, h *Messaging) er
 			Name:      "lagoon-advanced-task-" + randString(6),
 			Namespace: jobSpec.Environment.OpenshiftProjectName,
 			Labels: map[string]string{
-				"lagoon.sh/taskType":   "advanced",
-				"lagoon.sh/taskStatus": "Pending",
+				"lagoon.sh/taskType":   string(lagoonv1alpha1.TaskTypeAdvanced),
+				"lagoon.sh/taskStatus": string(lagoonv1alpha1.TaskStatusPending),
 				"lagoon.sh/controller": h.ControllerNamespace,
 			},
 		},

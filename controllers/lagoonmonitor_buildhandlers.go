@@ -76,7 +76,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 						},
 					}
 					jobPod.Status.ContainerStatuses[0] = state
-					r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonConditions{
+					r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonBuildConditions{
 						Type:   lagoonv1alpha1.BuildStatusFailed,
 						Status: corev1.ConditionTrue,
 					}, []byte(container.State.Waiting.Message))
@@ -373,12 +373,12 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 // updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonMonitorReconciler) updateBuildStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	condition lagoonv1alpha1.LagoonConditions,
+	condition lagoonv1alpha1.LagoonBuildConditions,
 	log []byte,
 ) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !jobContainsStatus(lagoonBuild.Status.Conditions, condition) {
+	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
 		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{
@@ -544,7 +544,7 @@ Build cancelled
 		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update resource"))
 		}
-		r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonConditions{
+		r.updateBuildStatusCondition(ctx, &lagoonBuild, lagoonv1alpha1.LagoonBuildConditions{
 			Type:   jobCondition,
 			Status: corev1.ConditionTrue,
 		}, allContainerLogs)

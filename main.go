@@ -102,11 +102,14 @@ func main() {
 	var buildPodCleanUpEnable bool
 	var taskPodCleanUpEnable bool
 	var buildsCleanUpEnable bool
+	var taskCleanUpEnable bool
 	var buildPodCleanUpCron string
 	var taskPodCleanUpCron string
 	var buildsCleanUpCron string
+	var taskCleanUpCron string
 	var buildsToKeep int
 	var buildPodsToKeep int
+	var tasksToKeep int
 	var taskPodsToKeep int
 	var lffBackupWeeklyRandom bool
 	var lffHarborEnabled bool
@@ -212,6 +215,10 @@ func main() {
 	flag.BoolVar(&taskPodCleanUpEnable, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the task pod cleanup.")
+	flag.BoolVar(&taskCleanUpEnable, "enable-lagoontasks-cleanup", true, "Flag to enable lagoontask resources cleanup.")
+	flag.StringVar(&taskCleanUpCron, "lagoontasks-cleanup-cron", "0 * * * *",
+		"The cron definition for how often to run the lagoontask resources cleanup.")
+	flag.IntVar(&tasksToKeep, "num-tasks-to-keep", 5, "The number of lagoontask resources to keep per namespace.")
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
@@ -513,6 +520,7 @@ func main() {
 	resourceCleanup := handlers.NewCleanup(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
+		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
 		enableDebug,
@@ -533,6 +541,15 @@ func main() {
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
 			resourceCleanup.BuildPodCleanup()
+		})
+	}
+	// if the lagoontask cleanup is enabled, add the cronjob for it
+	if taskCleanUpEnable {
+		setupLog.Info("starting LagoonTask CRD cleanup handler")
+		// use cron to run a lagoontask cleanup task
+		// this will check any Lagoon tasks and attempt to delete them
+		c.AddFunc(taskCleanUpCron, func() {
+			resourceCleanup.LagoonTaskCleanup()
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it

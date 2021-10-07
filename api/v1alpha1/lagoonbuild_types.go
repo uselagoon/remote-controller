@@ -20,17 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// JobConditionType const for the status type
-type JobConditionType string
+// BuildStatusType const for the status type
+type BuildStatusType string
 
 // These are valid conditions of a job.
 const (
-	// BuildComplete means the build has completed its execution.
-	JobComplete JobConditionType = "Complete"
-	// BuildFailed means the job has failed its execution.
-	JobFailed JobConditionType = "Failed"
-	// BuildFailed means the job has failed its execution.
-	JobCancelled JobConditionType = "Cancelled"
+	// BuildStatusRunning means the build is pending.
+	BuildStatusPending BuildStatusType = "Pending"
+	// BuildStatusRunning means the build is running.
+	BuildStatusRunning BuildStatusType = "Running"
+	// BuildStatusComplete means the build has completed its execution.
+	BuildStatusComplete BuildStatusType = "Complete"
+	// BuildStatusFailed means the job has failed its execution.
+	BuildStatusFailed BuildStatusType = "Failed"
+	// BuildStatusCancelled means the job been cancelled.
+	BuildStatusCancelled BuildStatusType = "Cancelled"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -57,15 +61,15 @@ type LagoonBuildSpec struct {
 type LagoonBuildStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonConditions `json:"conditions,omitempty"`
-	Log        []byte             `json:"log,omitempty"`
+	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
+	Log        []byte                  `json:"log,omitempty"`
 }
 
-// LagoonConditions defines the observed conditions of the pods.
-type LagoonConditions struct {
+// LagoonBuildConditions defines the observed conditions of build pods.
+type LagoonBuildConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
-	Type               JobConditionType       `json:"type"`
+	Type               BuildStatusType        `json:"type"`
 	// Condition          string                 `json:"condition"`
 }
 
@@ -96,9 +100,11 @@ func init() {
 
 // Build contains the type of build, and the image to use for the builder.
 type Build struct {
-	CI    string `json:"ci,omitempty"`
-	Image string `json:"image,omitempty"`
-	Type  string `json:"type"`
+	CI       string `json:"ci,omitempty"`
+	Image    string `json:"image,omitempty"`
+	Type     string `json:"type"`
+	Priority *int   `json:"priority,omitempty"`
+	BulkID   string `json:"bulkId,omitempty"`
 }
 
 // Project contains the project information from lagoon.

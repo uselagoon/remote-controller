@@ -86,7 +86,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": "Running",
+			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -110,7 +110,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": "Pending",
+				"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -137,7 +137,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
-						"lagoon.sh/buildStatus": "Running",
+						"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 					},
 				},
 			})
@@ -165,8 +165,8 @@ func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
 	// so we don't have to do anything else.
 	if containsString(
 		[]string{
-			"Pending",
-			"Running",
+			string(lagoonv1alpha1.BuildStatusPending),
+			string(lagoonv1alpha1.BuildStatusRunning),
 		},
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
@@ -185,8 +185,8 @@ func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
 ========================================
 Build cancelled
 ========================================`))
-		var jobCondition lagoonv1alpha1.JobConditionType
-		jobCondition = lagoonv1alpha1.JobCancelled
+		var jobCondition lagoonv1alpha1.BuildStatusType
+		jobCondition = lagoonv1alpha1.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

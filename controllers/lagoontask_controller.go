@@ -75,10 +75,12 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
 		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == "Pending" && lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == "standard" {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeStandard) {
 			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == "Pending" && lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == "advanced" {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeAdvanced) {
 			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
 		}
 	} else {

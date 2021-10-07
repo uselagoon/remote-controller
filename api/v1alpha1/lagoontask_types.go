@@ -16,11 +16,40 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// TaskStatusType const for the status type
+type TaskStatusType string
+
+// These are valid conditions of a job.
+const (
+	// TaskStatusRunning means the build is pending.
+	TaskStatusPending TaskStatusType = "Pending"
+	// TaskStatusRunning means the build is running.
+	TaskStatusRunning TaskStatusType = "Running"
+	// TaskStatusComplete means the build has completed its execution.
+	TaskStatusComplete TaskStatusType = "Complete"
+	// TaskStatusFailed means the job has failed its execution.
+	TaskStatusFailed TaskStatusType = "Failed"
+	// TaskStatusCancelled means the job been cancelled.
+	TaskStatusCancelled TaskStatusType = "Cancelled"
+)
+
+// TaskType const for the status type
+type TaskType string
+
+// These are valid conditions of a job.
+const (
+	// TaskStatusRunning means the build is pending.
+	TaskTypeStandard TaskType = "standard"
+	// TaskStatusRunning means the build is running.
+	TaskTypeAdvanced TaskType = "advanced"
+)
 
 // LagoonTaskSpec defines the desired state of LagoonTask
 type LagoonTaskSpec struct {
@@ -85,8 +114,16 @@ type LagoonTaskEnvironment struct {
 type LagoonTaskStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonConditions `json:"conditions,omitempty"`
-	Log        []byte             `json:"log,omitempty"`
+	Conditions []LagoonTaskConditions `json:"conditions,omitempty"`
+	Log        []byte                 `json:"log,omitempty"`
+}
+
+// LagoonTaskConditions defines the observed conditions of task pods.
+type LagoonTaskConditions struct {
+	LastTransitionTime string                 `json:"lastTransitionTime"`
+	Status             corev1.ConditionStatus `json:"status"`
+	Type               TaskStatusType         `json:"type"`
+	// Condition          string                 `json:"condition"`
 }
 
 // +kubebuilder:object:root=true

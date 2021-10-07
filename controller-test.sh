@@ -43,8 +43,8 @@ check_controller_log_build () {
 
 tear_down () {
     echo "============= TEAR DOWN ============="
-    # echo "==> Get pvc"
-    # kubectl get pvc --all-namespaces
+    echo "==> Get ingress"
+    kubectl get ingress --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
     echo "==> Remove cluster"
@@ -184,11 +184,11 @@ echo "===> Docker-host is running"
 echo "===> Install Ingress-Nginx"
 kubectl create namespace ingress-nginx
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
 NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
 if [ $NUM_PODS -ne 1 ]; then
     echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
     kubectl get pods --all-namespaces
     echo "Wait for ingress-nginx to become ready"
     sleep 120
@@ -212,6 +212,9 @@ helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbp
 echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 build_deploy_controller
+
+# echo "SLEEP"
+# sleep 1200
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml
@@ -291,7 +294,7 @@ else
     exit 1
 fi
 done
-echo "==> Pod cleanup output (should only be lagoon-build-8m5zypx)"
+echo "==> Pod cleanup output (should only be 1 lagoon-build pod)"
 POD_CLEANUP_OUTPUT=$(kubectl -n drupal-example-install get pods | grep "lagoon-build")
 echo "${POD_CLEANUP_OUTPUT}"
 POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")

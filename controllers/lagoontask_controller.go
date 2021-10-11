@@ -483,6 +483,14 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 							Value: lagoonTask.ObjectMeta.Name,
 						},
 						{
+							Name:  "LAGOON_PROJECT",
+							Value: lagoonTask.Spec.Project.Name,
+						},
+						{
+							Name:  "LAGOON_GIT_BRANCH",
+							Value: lagoonTask.Spec.Environment.Name,
+						},
+						{
 							Name:  "TASK_API_HOST",
 							Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
 						},

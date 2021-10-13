@@ -133,7 +133,7 @@ func (h *Cleanup) LagoonTaskCleanup() {
 				if idx >= h.TasksToKeep {
 					if containsString(
 						TaskCompletedCancelledFailedStatus,
-						lagoonTask.ObjectMeta.Annotations["lagoon.sh/buildStatus"],
+						lagoonTask.ObjectMeta.Annotations["lagoon.sh/taskStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))
 						if err := h.Client.Delete(context.Background(), &lagoonTask); err != nil {

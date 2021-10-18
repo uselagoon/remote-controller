@@ -148,13 +148,14 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "build-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
+			Event:    "task-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
-				Task:      &lagoonTask.Spec.Task,
-				JobName:   lagoonTask.ObjectMeta.Name,
-				JobStatus: condition,
-				RemoteID:  string(jobPod.ObjectMeta.UID),
-				Key:       lagoonTask.Spec.Key,
+				Task:        &lagoonTask.Spec.Task,
+				Environment: lagoonTask.Spec.Environment.Name,
+				JobName:     lagoonTask.ObjectMeta.Name,
+				JobStatus:   condition,
+				RemoteID:    string(jobPod.ObjectMeta.UID),
+				Key:         lagoonTask.Spec.Key,
 			},
 			Message: fmt.Sprintf(`========================================
 Logs on pod %s

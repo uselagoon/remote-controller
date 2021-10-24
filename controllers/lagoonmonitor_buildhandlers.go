@@ -99,6 +99,22 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 			}
 		}
 		return nil
+	} else if jobPod.Status.Phase == corev1.PodRunning {
+		// if the pod is running and detects a change to the pod (eg, detecting an updated lagoon.sh/buildStep label)
+		// then ship or store the logs
+		opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
+		// get the build associated to this pod, the information in the resource is used for shipping the logs
+		var lagoonBuild lagoonv1alpha1.LagoonBuild
+		err := r.Get(ctx,
+			types.NamespacedName{
+				Namespace: jobPod.ObjectMeta.Namespace,
+				Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+			}, &lagoonBuild)
+		if err != nil {
+			return err
+		}
+		// actually run the log collection and shipping function
+		r.updateRunningDeploymentBuildLogs(ctx, req, lagoonBuild, jobPod)
 	}
 	// if the buildpod status is failed or succeeded
 	// mark the build accordingly and ship the information back to lagoon
@@ -483,6 +499,31 @@ func (r *LagoonMonitorReconciler) removeBuildPendingMessageStatus(ctx context.Co
 	return nil
 }
 
+// updateRunningDeploymentBuildLogs collects logs from running build containers and ships or stores them
+func (r *LagoonMonitorReconciler) updateRunningDeploymentBuildLogs(
+	ctx context.Context,
+	req ctrl.Request,
+	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	jobPod corev1.Pod,
+) {
+	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
+	var allContainerLogs []byte
+	// grab all the logs from the containers in the build pod and just merge them all together
+	// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
+	// if we do move to multi container builds, then worry about it
+	for _, container := range jobPod.Spec.Containers {
+		cLogs, err := getContainerLogs(container.Name, req)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from build pod"))
+			// log the error, but just continue
+		}
+		allContainerLogs = append(allContainerLogs, cLogs...)
+	}
+	// send any messages to lagoon message queues
+	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, allContainerLogs)
+}
+
+// updateDeploymentWithLogs collects logs from the build containers and ships or stores them
 func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,

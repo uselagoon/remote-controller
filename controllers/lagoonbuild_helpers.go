@@ -143,6 +143,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if spec.Project.EnvironmentID != nil {
 		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *spec.Project.EnvironmentID)
 	}
+	// set the auto idling values if they are defined
+	if spec.Project.EnvironmentIdling != nil {
+		nsLabels["lagoon.sh/environmentAutoIdle"] = fmt.Sprintf("%d", *spec.Project.EnvironmentIdling)
+	}
+	if spec.Project.ProjectIdling != nil {
+		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *spec.Project.ProjectIdling)
+	}
 	// if it isn't an openshift build, then just create a normal namespace
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{

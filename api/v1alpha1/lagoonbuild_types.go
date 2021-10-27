@@ -127,6 +127,8 @@ type Project struct {
 	Monitoring            Monitoring `json:"monitoring"`
 	Variables             Variables  `json:"variables"`
 	Registry              string     `json:"registry,omitempty"`
+	EnvironmentIdling     *int       `json:"environmentIdling,omitempty"`
+	ProjectIdling         *int       `json:"projectIdling,omitempty"`
 }
 
 // Variables contains the project and environment variables from lagoon.

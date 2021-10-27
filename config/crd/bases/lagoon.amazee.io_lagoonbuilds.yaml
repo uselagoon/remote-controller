@@ -68,6 +68,8 @@ spec:
                   type: string
                 environmentId:
                   type: integer
+                environmentIdling:
+                  type: integer
                 environmentType:
                   type: string
                 gitUrl:
@@ -92,6 +94,8 @@ spec:
                   type: string
                 productionEnvironment:
                   type: string
+                projectIdling:
+                  type: integer
                 projectSecret:
                   type: string
                 registry:

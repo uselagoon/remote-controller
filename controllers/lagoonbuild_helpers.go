@@ -96,11 +96,11 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 }
 
 // getOrCreateNamespace will create the namespace if it doesn't exist.
-func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, spec lagoonv1alpha1.LagoonBuildSpec) error {
+func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagoonv1alpha1.LagoonBuild, opLog logr.Logger) error {
 	// parse the project/env through the project pattern, or use the default
 	var err error
-	nsPattern := spec.Project.NamespacePattern
-	if spec.Project.NamespacePattern == "" {
+	nsPattern := lagoonBuild.Spec.Project.NamespacePattern
+	if lagoonBuild.Spec.Project.NamespacePattern == "" {
 		nsPattern = DefaultNamespacePattern
 	}
 	// lowercase and dnsify the namespace against the namespace pattern
@@ -109,11 +109,11 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			strings.Replace(
 				nsPattern,
 				"${environment}",
-				spec.Project.Environment,
+				lagoonBuild.Spec.Project.Environment,
 				-1,
 			),
 			"${project}",
-			spec.Project.Name,
+			lagoonBuild.Spec.Project.Name,
 			-1,
 		),
 	)
@@ -132,16 +132,16 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		ns = fmt.Sprintf("%s-%s", ns[0:58], hashString(ns)[0:4])
 	}
 	nsLabels := map[string]string{
-		"lagoon.sh/project":         spec.Project.Name,
-		"lagoon.sh/environment":     spec.Project.Environment,
-		"lagoon.sh/environmentType": spec.Project.EnvironmentType,
+		"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
+		"lagoon.sh/environment":     lagoonBuild.Spec.Project.Environment,
+		"lagoon.sh/environmentType": lagoonBuild.Spec.Project.EnvironmentType,
 		"lagoon.sh/controller":      r.ControllerNamespace,
 	}
-	if spec.Project.ID != nil {
-		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *spec.Project.ID)
+	if lagoonBuild.Spec.Project.ID != nil {
+		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ID)
 	}
-	if spec.Project.EnvironmentID != nil {
-		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *spec.Project.EnvironmentID)
+	if lagoonBuild.Spec.Project.EnvironmentID != nil {
+		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentID)
 	}
 	// set the auto idling values if they are defined
 	if spec.Project.EnvironmentIdling != nil {
@@ -156,12 +156,23 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		Name:   ns,
 		Labels: nsLabels,
 	}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		if ignoreNotFound(err) != nil {
+			return err
+		}
+	}
+	if namespace.Status.Phase == corev1.NamespaceTerminating {
+		r.cleanUpTerminatingNamespaceBuild(ctx, namespace, lagoonBuild, opLog)
+		return fmt.Errorf("%s is currently terminating, aborting build", ns)
+	}
+
 	// this is an openshift build, then we need to create a projectrequest
 	// we use projectrequest so that we ensure any openshift specific things can happen.
 	if r.IsOpenshift {
 		projectRequest := &projectv1.ProjectRequest{}
 		projectRequest.ObjectMeta.Name = ns
-		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, spec.Project.Name, spec.Project.Environment)
+		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, lagoonBuild.Spec.Project.Name, lagoonBuild.Spec.Project.Environment)
 		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 			if err := r.Create(ctx, projectRequest); err != nil {
 				return err
@@ -211,7 +222,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			return err
 		}
 		// create the project in harbor
-		hProject, err := lagoonHarbor.CreateProject(ctx, spec.Project.Name)
+		hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
 		if err != nil {
 			return err
 		}
@@ -219,7 +230,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
 			r.Client,
 			hProject,
-			spec.Project.Environment,
+			lagoonBuild.Spec.Project.Environment,
 			ns,
 			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
 		if err != nil {
@@ -882,5 +893,59 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// then break out of the build
 	}
 	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))
+	return nil
+}
+
+// cleanUpTerminatingNamespaceBuild will clean up a build if the namespace is being terminated.
+func (r *LagoonBuildReconciler) cleanUpTerminatingNamespaceBuild(
+	ctx context.Context,
+	namespace *corev1.Namespace,
+	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	opLog logr.Logger,
+) error {
+	var allContainerLogs []byte
+	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
+	// so just set the logs to be cancellation message
+	allContainerLogs = []byte(fmt.Sprintf(`
+========================================
+Build cancelled
+========================================
+Namespace is currently in terminating status - contact your Lagoon support team for help`))
+	var jobCondition lagoonv1alpha1.BuildStatusType
+	jobCondition = lagoonv1alpha1.BuildStatusCancelled
+	lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+	mergePatch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]interface{}{
+				"lagoon.sh/buildStatus": string(jobCondition),
+			},
+		},
+	})
+	if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to update build status"))
+	}
+	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
+	var lagoonEnv corev1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: lagoonBuild.ObjectMeta.Namespace,
+		Name:      "lagoon-env",
+	},
+		&lagoonEnv,
+	)
+	if err != nil {
+		// if there isn't a configmap, just info it and move on
+		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
+		opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+	}
+	// send any messages to lagoon message queues
+	// update the deployment with the status
+	r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
+	r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
+	r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+	// delete the build from the lagoon namespace in kubernetes entirely
+	err = r.Delete(ctx, &lagoonBuild)
+	if err != nil {
+		return err
+	}
 	return nil
 }

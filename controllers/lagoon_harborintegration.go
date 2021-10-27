@@ -330,6 +330,11 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	// go over every namespace that has a lagoon.sh label
 	// and attempt to create and update the robot account credentials as requred.
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting robot credentials check", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 		// check for running builds!
 		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}

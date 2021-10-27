@@ -38,7 +38,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		opLog.Info(fmt.Sprintf("Unable to find a build pod associated to this build, continuing to process build deletion"))
 		// handle updating lagoon for a deleted build with no running pod
 		// only do it if the build status is Pending or Running though
-		err = r.updateDeploymentWithLogs(ctx, req, *lagoonBuild)
+		err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
 		if err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update the lagoon with LagoonBuild result"))
 		}
@@ -152,7 +152,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	return nil
 }
 
-func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
+func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
 	lagoonBuild lagoonv1alpha1.LagoonBuild,
@@ -213,16 +213,16 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
+		r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
+		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
 	}
 	return nil
 }
 
-// buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
+// cancelledBuildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	logs []byte,
@@ -266,9 +266,9 @@ Logs on pod %s
 	}
 }
 
-// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
+// updateCancelledDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
@@ -349,8 +349,8 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 	}
 }
 
-// buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
+// cancelledBuildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
+func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap) {

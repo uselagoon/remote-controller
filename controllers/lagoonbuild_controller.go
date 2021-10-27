@@ -170,7 +170,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	namespace := &corev1.Namespace{}
 	opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
-	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild.Spec)
+	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild, opLog)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

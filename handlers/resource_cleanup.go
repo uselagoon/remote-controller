@@ -59,6 +59,11 @@ func (h *Cleanup) LagoonBuildCleanup() {
 		return
 	}
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
 		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -111,6 +116,11 @@ func (h *Cleanup) LagoonTaskCleanup() {
 		return
 	}
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking LagoonTasks in namespace %s", ns.ObjectMeta.Name))
 		lagoonTasks := &lagoonv1alpha1.LagoonTaskList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -163,6 +173,11 @@ func (h *Cleanup) BuildPodCleanup() {
 		return
 	}
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking Lagoon build pods in namespace %s", ns.ObjectMeta.Name))
 		buildPods := &corev1.PodList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -213,6 +228,11 @@ func (h *Cleanup) TaskPodCleanup() {
 		return
 	}
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking Lagoon task pods in namespace %s", ns.ObjectMeta.Name))
 		taskPods := &corev1.PodList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{

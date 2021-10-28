@@ -132,6 +132,8 @@ func main() {
 	var qosMaxBuilds int
 	var qosDefaultValue int
 
+	var lffRouterURL bool
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -225,6 +227,12 @@ func main() {
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
+
+	// this is enabled by default for now
+	// eventually will be disabled by default because support for the generation/modification of this will
+	// be handled by lagoon or the builds themselves
+	flag.BoolVar(&lffRouterURL, "lagoon-feature-flag-enable-router-url", true,
+		"Tells the controller to handle router-url generation or not")
 
 	// harbor configurations
 	flag.BoolVar(&lffHarborEnabled, "enable-harbor", false, "Flag to enable this controller to talk to a specific harbor.")
@@ -607,6 +615,7 @@ func main() {
 		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
+		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,
 		Harbor:                           harborConfig,
 		LFFQoSEnabled:                    lffQoSEnabled,

@@ -223,7 +223,7 @@ func main() {
 		"The cron definition for how often to run the lagoontask resources cleanup.")
 	flag.IntVar(&tasksToKeep, "num-tasks-to-keep", 5, "The number of lagoontask resources to keep per namespace.")
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
-	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
+	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")

@@ -65,6 +65,7 @@ type LagoonBuildReconciler struct {
 	BackupDefaultDailyRetention      int
 	BackupDefaultHourlyRetention     int
 	LFFBackupWeeklyRandom            bool
+	LFFRouterURL                     bool
 	LFFHarborEnabled                 bool
 	Harbor                           Harbor
 	LFFQoSEnabled                    bool

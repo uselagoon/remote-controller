@@ -530,22 +530,27 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "OPENSHIFT_NAME",
 			Value: lagoonBuild.Spec.Project.DeployTarget,
 		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name: "ROUTER_URL",
-			Value: strings.ToLower(
-				strings.Replace(
+		// this is enabled by default for now
+		// eventually will be disabled by default because support for the generation/modification of this will
+		// be handled by lagoon or the builds themselves
+		if r.LFFRouterURL {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name: "ROUTER_URL",
+				Value: strings.ToLower(
 					strings.Replace(
-						lagoonBuild.Spec.Project.RouterPattern,
-						"${branch}",
-						lagoonBuild.Spec.Project.Environment,
+						strings.Replace(
+							lagoonBuild.Spec.Project.RouterPattern,
+							"${branch}",
+							lagoonBuild.Spec.Project.Environment,
+							-1,
+						),
+						"${project}",
+						lagoonBuild.Spec.Project.Name,
 						-1,
 					),
-					"${project}",
-					lagoonBuild.Spec.Project.Name,
-					-1,
 				),
-			),
-		})
+			})
+		}
 	} else {
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name:  "BUILD_TYPE",
@@ -563,38 +568,43 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "REGISTRY",
 			Value: lagoonBuild.Spec.Project.Registry,
 		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name: "ROUTER_URL",
-			Value: strings.ToLower(
-				strings.Replace(
+		// this is enabled by default for now
+		// eventually will be disabled by default because support for the generation/modification of this will
+		// be handled by lagoon or the builds themselves
+		if r.LFFRouterURL {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name: "ROUTER_URL",
+				Value: strings.ToLower(
 					strings.Replace(
-						lagoonBuild.Spec.Project.RouterPattern,
-						"${environment}",
-						lagoonBuild.Spec.Project.Environment,
+						strings.Replace(
+							lagoonBuild.Spec.Project.RouterPattern,
+							"${environment}",
+							lagoonBuild.Spec.Project.Environment,
+							-1,
+						),
+						"${project}",
+						lagoonBuild.Spec.Project.Name,
 						-1,
 					),
-					"${project}",
-					lagoonBuild.Spec.Project.Name,
-					-1,
 				),
-			),
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name: "SHORT_ROUTER_URL",
-			Value: strings.ToLower(
-				strings.Replace(
+			})
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name: "SHORT_ROUTER_URL",
+				Value: strings.ToLower(
 					strings.Replace(
-						lagoonBuild.Spec.Project.RouterPattern,
-						"${environment}",
-						shortName(lagoonBuild.Spec.Project.Environment),
+						strings.Replace(
+							lagoonBuild.Spec.Project.RouterPattern,
+							"${environment}",
+							shortName(lagoonBuild.Spec.Project.Environment),
+							-1,
+						),
+						"${project}",
+						shortName(lagoonBuild.Spec.Project.Name),
 						-1,
 					),
-					"${project}",
-					shortName(lagoonBuild.Spec.Project.Name),
-					-1,
 				),
-			),
-		})
+			})
+		}
 	}
 	if lagoonBuild.Spec.Build.CI != "" {
 		podEnvs = append(podEnvs, corev1.EnvVar{

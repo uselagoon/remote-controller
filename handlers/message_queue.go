@@ -474,7 +474,7 @@ func (h *Messaging) GetPendingMessages() {
 			},
 			"statusMessages": nil,
 		})
-		if err := h.Client.Patch(ctx, &build, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := h.Client.Patch(ctx, &build, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
 			break
 		}

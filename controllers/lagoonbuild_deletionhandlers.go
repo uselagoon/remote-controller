@@ -141,7 +141,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 					},
 				},
 			})
-			if err := r.Patch(ctx, pendingBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, pendingBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to update pending build to running status"))
 				return nil
 			}
@@ -195,7 +195,7 @@ Build cancelled
 				},
 			},
 		})
-		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update build status"))
 		}
 		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
@@ -425,7 +425,7 @@ func (r *LagoonBuildReconciler) updateEnvironmentMessage(ctx context.Context,
 			"environmentMessage": envMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -447,7 +447,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusMessage(ctx context.Context,
 			"statusMessage": statusMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -469,7 +469,7 @@ func (r *LagoonBuildReconciler) removeBuildPendingMessageStatus(ctx context.Cont
 				},
 				"statusMessages": nil,
 			})
-			if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return fmt.Errorf("Unable to update status condition: %v", err)
 			}
 		}
@@ -493,7 +493,7 @@ func (r *LagoonBuildReconciler) updateBuildLogMessage(ctx context.Context,
 			"buildLogMessage": buildMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil

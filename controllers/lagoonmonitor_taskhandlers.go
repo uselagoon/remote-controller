@@ -93,7 +93,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
 			// if we do move to multi container builds, then worry about it
 			for _, container := range jobPod.Spec.Containers {
-				cLogs, err := getContainerLogs(container.Name, req)
+				cLogs, err := getContainerLogs(ctx, container.Name, req)
 				if err != nil {
 					opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from task pod"))
 					// log the error, but just continue
@@ -311,7 +311,7 @@ func (r *LagoonMonitorReconciler) updateTaskStatusCondition(ctx context.Context,
 				"log":        log,
 			},
 		})
-		if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return fmt.Errorf("Unable to update status condition: %v", err)
 		}
 	}
@@ -333,7 +333,7 @@ func (r *LagoonMonitorReconciler) updateTaskEnvironmentMessage(ctx context.Conte
 			"environmentMessage": envMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -354,7 +354,7 @@ func (r *LagoonMonitorReconciler) lagoonTask(ctx context.Context,
 			"buildLogMessage": taskMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -375,7 +375,7 @@ func (r *LagoonMonitorReconciler) updateTaskStatusMessage(ctx context.Context,
 			"statusMessage": statusMessage,
 		},
 	})
-	if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return fmt.Errorf("Unable to update status condition: %v", err)
 	}
 	return nil
@@ -395,7 +395,7 @@ func (r *LagoonMonitorReconciler) removeTaskPendingMessageStatus(ctx context.Con
 				},
 				"statusMessages": nil,
 			})
-			if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return fmt.Errorf("Unable to update status condition: %v", err)
 			}
 		}

@@ -63,7 +63,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 				"finalizers": lagoonBuild.ObjectMeta.Finalizers,
 			},
 		})
-		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

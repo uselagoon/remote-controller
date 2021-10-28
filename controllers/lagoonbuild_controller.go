@@ -80,8 +80,7 @@ type LagoonBuildReconciler struct {
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"
 
 // Reconcile runs when a request comes through
-func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 
 	// your logic here
@@ -147,7 +146,7 @@ func (r *LagoonBuildReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				"finalizers": lagoonBuild.ObjectMeta.Finalizers,
 			},
 		})
-		if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return ctrl.Result{}, ignoreNotFound(err)
 		}
 	}
@@ -209,7 +208,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// the `lagoon.sh/buildStatus = Pending` now
 	// so end this reconcile process
 	pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
-	return ctrl.Result{}, cancelExtraBuilds(ctx, r, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusPending))
+	return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusPending))
 	// return ctrl.Result{}, nil
 }
 

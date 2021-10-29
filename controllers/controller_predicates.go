@@ -18,13 +18,13 @@ type PodPredicates struct {
 
 // Create is used when a creation event is received by the controller.
 func (p PodPredicates) Create(e event.CreateEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/buildName"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match
 			}
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
 					return true
 				}
@@ -36,13 +36,13 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 
 // Delete is used when a deletion event is received by the controller.
 func (p PodPredicates) Delete(e event.DeleteEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/buildName"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match
 			}
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
 					return true
 				}
@@ -54,16 +54,16 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 
 // Update is used when an update event is received by the controller.
 func (p PodPredicates) Update(e event.UpdateEvent) bool {
-	if controller, ok := e.MetaOld.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if _, okOld := e.MetaOld.GetLabels()["lagoon.sh/buildName"]; okOld {
-				if value, ok := e.MetaNew.GetLabels()["lagoon.sh/buildName"]; ok {
+			if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/buildName"]; okOld {
+				if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildName"]; ok {
 					match, _ := regexp.MatchString("^lagoon-build", value)
 					return match
 				}
 			}
-			if _, ok := e.MetaOld.GetLabels()["lagoon.sh/jobType"]; ok {
-				if value, ok := e.MetaNew.GetLabels()["lagoon.sh/jobType"]; ok {
+			if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/jobType"]; ok {
+				if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/jobType"]; ok {
 					if value == "task" {
 						return true
 					}
@@ -76,13 +76,13 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 
 // Generic is used when any other event is received by the controller.
 func (p PodPredicates) Generic(e event.GenericEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/buildName"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match
 			}
-			if value, ok := e.Meta.GetLabels()["lagoon.sh/jobType"]; ok {
+			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
 					return true
 				}
@@ -101,7 +101,7 @@ type BuildPredicates struct {
 
 // Create is used when a creation event is received by the controller.
 func (b BuildPredicates) Create(e event.CreateEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
 			return true
 		}
@@ -111,7 +111,7 @@ func (b BuildPredicates) Create(e event.CreateEvent) bool {
 
 // Delete is used when a deletion event is received by the controller.
 func (b BuildPredicates) Delete(e event.DeleteEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
 			return true
 		}
@@ -121,7 +121,7 @@ func (b BuildPredicates) Delete(e event.DeleteEvent) bool {
 
 // Update is used when an update event is received by the controller.
 func (b BuildPredicates) Update(e event.UpdateEvent) bool {
-	if controller, ok := e.MetaOld.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
 			return true
 		}
@@ -131,7 +131,7 @@ func (b BuildPredicates) Update(e event.UpdateEvent) bool {
 
 // Generic is used when any other event is received by the controller.
 func (b BuildPredicates) Generic(e event.GenericEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
 			return true
 		}
@@ -148,7 +148,7 @@ type TaskPredicates struct {
 
 // Create is used when a creation event is received by the controller.
 func (t TaskPredicates) Create(e event.CreateEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
 			return true
 		}
@@ -158,7 +158,7 @@ func (t TaskPredicates) Create(e event.CreateEvent) bool {
 
 // Delete is used when a deletion event is received by the controller.
 func (t TaskPredicates) Delete(e event.DeleteEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
 			return true
 		}
@@ -168,7 +168,7 @@ func (t TaskPredicates) Delete(e event.DeleteEvent) bool {
 
 // Update is used when an update event is received by the controller.
 func (t TaskPredicates) Update(e event.UpdateEvent) bool {
-	if controller, ok := e.MetaOld.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
 			return true
 		}
@@ -178,7 +178,7 @@ func (t TaskPredicates) Update(e event.UpdateEvent) bool {
 
 // Generic is used when any other event is received by the controller.
 func (t TaskPredicates) Generic(e event.GenericEvent) bool {
-	if controller, ok := e.Meta.GetLabels()["lagoon.sh/controller"]; ok {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
 			return true
 		}

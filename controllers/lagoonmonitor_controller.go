@@ -55,8 +55,7 @@ var failureStates = []string{
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"
 
 // Reconcile runs when a request comes through
-func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
 
 	var jobPod corev1.Pod
@@ -125,7 +124,7 @@ func (r *LagoonMonitorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		// if we have no running builds, then check for any pending builds
 		if len(runningBuilds.Items) == 0 {
-			return ctrl.Result{}, cancelExtraBuilds(ctx, r, opLog, pendingBuilds, req.Namespace, "Running")
+			return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")
 		}
 	}
 	return ctrl.Result{}, nil
@@ -143,7 +142,7 @@ func (r *LagoonMonitorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // getContainerLogs grabs the logs from a given container
-func getContainerLogs(containerName string, request ctrl.Request) ([]byte, error) {
+func getContainerLogs(ctx context.Context, containerName string, request ctrl.Request) ([]byte, error) {
 	restCfg, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get config: %v", err)
@@ -153,7 +152,7 @@ func getContainerLogs(containerName string, request ctrl.Request) ([]byte, error
 		return nil, fmt.Errorf("unable to create client: %v", err)
 	}
 	req := clientset.CoreV1().Pods(request.Namespace).GetLogs(request.Name, &corev1.PodLogOptions{Container: containerName})
-	podLogs, err := req.Stream()
+	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error in opening stream: %v", err)
 	}

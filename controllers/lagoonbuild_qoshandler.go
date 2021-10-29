@@ -117,7 +117,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 								"finalizers": pBuild.ObjectMeta.Finalizers,
 							},
 						})
-						if err := r.Patch(ctx, &pBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+						if err := r.Patch(ctx, &pBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 							return err
 						}
 					}

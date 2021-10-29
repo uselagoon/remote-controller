@@ -62,8 +62,7 @@ var (
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoontasks/status,verbs=get;update;patch
 
 // Reconcile runs when a request comes through
-func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoontask", req.NamespacedName)
 
 	// your logic here
@@ -100,7 +99,7 @@ func (r *LagoonTaskReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 					"finalizers": lagoonTask.ObjectMeta.Finalizers,
 				},
 			})
-			if err := r.Patch(ctx, &lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -397,7 +396,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 				"finalizers": lagoonTask.ObjectMeta.Finalizers,
 			},
 		})
-		if err := r.Patch(ctx, lagoonTask, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return err
 		}
 	}

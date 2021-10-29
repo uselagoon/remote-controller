@@ -40,7 +40,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 				"log":        log,
 			},
 		})
-		if err := r.Patch(ctx, lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			return fmt.Errorf("Unable to update status condition: %v", err)
 		}
 	}
@@ -207,7 +207,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			"labels": nsLabels,
 		},
 	})
-	if err := r.Patch(ctx, namespace, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		return err
 	}
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
@@ -931,7 +931,7 @@ Namespace is currently in terminating status - contact your Lagoon support team 
 			},
 		},
 	})
-	if err := r.Patch(ctx, &lagoonBuild, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		opLog.Error(err, fmt.Sprintf("Unable to update build status"))
 	}
 	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon

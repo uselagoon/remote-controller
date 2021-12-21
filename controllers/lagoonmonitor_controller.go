@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"io"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
-	"github.com/amazeeio/lagoon-kbd/handlers"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	"github.com/uselagoon/remote-controller/handlers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"

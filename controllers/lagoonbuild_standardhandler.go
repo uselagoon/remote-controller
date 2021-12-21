@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"

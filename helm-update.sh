@@ -29,7 +29,7 @@ case $1 in
     helm delete -n lagoon-builddeploy lagoon-builddeploy
     ;;
   install)
-    helm repo add lagoon-builddeploy https://raw.githubusercontent.com/amazeeio/lagoon-kbd/main/charts
+    helm repo add lagoon-builddeploy https://raw.githubusercontent.com/uselagoon/remote-controller/main/charts
     helm upgrade --install -n lagoon-builddeploy lagoon-builddeploy lagoon-builddeploy/lagoon-builddeploy
     ;;
   install-tgz)

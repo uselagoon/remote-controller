@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"

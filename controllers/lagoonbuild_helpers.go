@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -163,7 +164,8 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
-		r.cleanUpTerminatingNamespaceBuild(ctx, namespace, lagoonBuild, opLog)
+		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.ObjectMeta.Name))
+		r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog)
 		return fmt.Errorf("%s is currently terminating, aborting build", ns)
 	}
 
@@ -906,11 +908,11 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	return nil
 }
 
-// cleanUpTerminatingNamespaceBuild will clean up a build if the namespace is being terminated.
-func (r *LagoonBuildReconciler) cleanUpTerminatingNamespaceBuild(
+// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod)
+func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 	ctx context.Context,
-	namespace *corev1.Namespace,
 	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	message string,
 	opLog logr.Logger,
 ) error {
 	var allContainerLogs []byte
@@ -920,7 +922,7 @@ func (r *LagoonBuildReconciler) cleanUpTerminatingNamespaceBuild(
 ========================================
 Build cancelled
 ========================================
-Namespace is currently in terminating status - contact your Lagoon support team for help`))
+%s`, message))
 	var jobCondition lagoonv1alpha1.BuildStatusType
 	jobCondition = lagoonv1alpha1.BuildStatusCancelled
 	lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
@@ -956,6 +958,47 @@ Namespace is currently in terminating status - contact your Lagoon support team 
 	err = r.Delete(ctx, &lagoonBuild)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagoonv1alpha1.LagoonBuildList, ns string, status string) error {
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending)}),
+	})
+	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
+		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+	}
+	opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+	// if we have any pending builds, then grab the latest one and make it running
+	// if there are any other pending builds, cancel them so only the latest one runs
+	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+		return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+	})
+	if len(pendingBuilds.Items) > 0 {
+		for idx, pBuild := range pendingBuilds.Items {
+			pendingBuild := pBuild.DeepCopy()
+			if idx == 0 {
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
+			} else {
+				// cancel any other pending builds
+				opLog.Info(fmt.Sprintf("Attempting to cancel build %s", pendingBuild.ObjectMeta.Name))
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1alpha1.BuildStatusCancelled)
+			}
+			if err := r.Update(ctx, pendingBuild); err != nil {
+				return err
+			}
+			var lagoonBuild lagoonv1alpha1.LagoonBuild
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: pendingBuild.ObjectMeta.Namespace,
+				Name:      pendingBuild.ObjectMeta.Name,
+			}, &lagoonBuild); err != nil {
+				return ignoreNotFound(err)
+			}
+			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
+		}
 	}
 	return nil
 }

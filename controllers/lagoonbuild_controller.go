@@ -93,6 +93,14 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
+		// if the build isn't being deleted, but the status is cancelled
+		// then clean up the undeployable build
+		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+			if value == string(lagoonv1alpha1.BuildStatusCancelled) {
+				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
+				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
+			}
+		}
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			// if we do have a `lagoon.sh/buildStatus` set as running, then process it
@@ -209,7 +217,6 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// so end this reconcile process
 	pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
 	return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusPending))
-	// return ctrl.Result{}, nil
 }
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace

@@ -997,7 +997,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 				return ignoreNotFound(err)
 			}
 			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled, as a new one was deployed before this one could start.", opLog)
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
 		}
 	}
 	return nil

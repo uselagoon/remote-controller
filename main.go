@@ -621,6 +621,7 @@ func main() {
 		LFFQoSEnabled:                    lffQoSEnabled,
 		BuildQoS:                         buildQoSConfig,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
+		LagoonTargetName:                 lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -633,6 +634,7 @@ func main() {
 		Messaging:           messaging,
 		ControllerNamespace: controllerNamespace,
 		EnableDebug:         enableDebug,
+		LagoonTargetName:    lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
@@ -648,7 +650,8 @@ func main() {
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,
 		},
-		EnableDebug: enableDebug,
+		EnableDebug:      enableDebug,
+		LagoonTargetName: lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

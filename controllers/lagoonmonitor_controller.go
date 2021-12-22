@@ -42,6 +42,7 @@ type LagoonMonitorReconciler struct {
 	Messaging           *handlers.Messaging
 	ControllerNamespace string
 	EnableDebug         bool
+	LagoonTargetName    string
 }
 
 // slice of the different failure states of pods that we care about

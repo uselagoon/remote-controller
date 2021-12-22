@@ -71,6 +71,7 @@ type LagoonBuildReconciler struct {
 	LFFQoSEnabled                    bool
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int
+	LagoonTargetName                 string
 }
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete

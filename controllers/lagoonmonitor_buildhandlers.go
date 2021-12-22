@@ -174,6 +174,7 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 				BuildPhase:    condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				LogLink:       lagoonBuild.Spec.Project.UILink,
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		// add the actual build log message
@@ -233,6 +234,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 				BuildName:     lagoonBuild.ObjectMeta.Name,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
@@ -340,6 +342,7 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 				BuildPhase:    condition,
 				BuildName:     lagoonBuild.ObjectMeta.Name,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc

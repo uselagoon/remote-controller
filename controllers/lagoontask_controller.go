@@ -45,6 +45,7 @@ type LagoonTaskReconciler struct {
 	ControllerNamespace string
 	TaskSettings        LagoonTaskSettings
 	EnableDebug         bool
+	LagoonTargetName    string
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports

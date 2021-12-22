@@ -239,6 +239,7 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 				BuildPhase: condition,
 				RemoteID:   string(lagoonBuild.ObjectMeta.UID),
 				LogLink:    lagoonBuild.Spec.Project.UILink,
+				Cluster:     r.LagoonTargetName,
 			},
 		}
 		// add the actual build log message
@@ -285,6 +286,7 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
+				Cluster:     r.LagoonTargetName,
 			},
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
@@ -366,6 +368,7 @@ func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context
 				BuildPhase:  condition,
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
+				Cluster:     r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
 				lagoonBuild.Spec.Project.Name,

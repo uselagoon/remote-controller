@@ -156,6 +156,7 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 				JobStatus:   condition,
 				RemoteID:    string(jobPod.ObjectMeta.UID),
 				Key:         lagoonTask.Spec.Key,
+				Cluster:     r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf(`========================================
 Logs on pod %s
@@ -208,6 +209,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		if _, ok := jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]; ok {
@@ -272,6 +274,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
+				Cluster:       r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf("*[%s]* Task `%s` *%s* %s",
 				lagoonTask.Spec.Project.Name,

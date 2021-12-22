@@ -1,9 +1,10 @@
-name: Lagoon KBD Test
+name: Lagoon Remote Controller Test
 
 on:
   push:
     branches:
       - main
+      - re-namespace
   pull_request:
     branches:
       - main

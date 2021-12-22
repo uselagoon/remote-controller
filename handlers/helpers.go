@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 

@@ -1,4 +1,4 @@
-module github.com/amazeeio/lagoon-kbd
+module github.com/uselagoon/remote-controller
 
 go 1.16
 

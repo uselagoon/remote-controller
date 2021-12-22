@@ -8,10 +8,10 @@ KIND_VER=v1.17.5
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
 KIND_NAME=chart-testing
-CONTROLLER_IMAGE=amazeeio/lagoon-builddeploy:test-tag
+CONTROLLER_IMAGE=uselagoon/remote-controller:test-tag
 
 
-CONTROLLER_NAMESPACE=lagoon-kbd-system
+CONTROLLER_NAMESPACE=remote-controller-system
 CHECK_TIMEOUT=20
 
 NS=drupal-example-install
@@ -238,7 +238,7 @@ echo '
         \"spec\": {
           \"build\": {
             \"ci\": \"true\",
-            \"image\": \"amazeeio\/kubectl-build-deploy-dind:latest\",
+            \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
             \"type\": \"branch\"
           },
           \"gitReference\": \"origin\/install\",

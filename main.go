@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
-	"github.com/amazeeio/lagoon-kbd/controllers"
-	"github.com/amazeeio/lagoon-kbd/handlers"
 	"github.com/cheshir/go-mq"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	"github.com/uselagoon/remote-controller/controllers"
+	"github.com/uselagoon/remote-controller/handlers"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

@@ -33,6 +33,7 @@ jobs:
         sudo mkdir -p /usr/local/kubebuilder/bin
         sudo mv /tmp/kubebuilder_2.3.2_linux_amd64/bin/* /usr/local/kubebuilder/bin
         chmod +x /usr/local/kubebuilder/bin/*
+        echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
         #helm
         curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm

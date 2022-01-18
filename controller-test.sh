@@ -152,13 +152,17 @@ check_lagoon_build () {
 start_docker_compose_services
 install_path_provisioner
 
+echo "==> Install helm-git plugin"
+helm plugin install https://github.com/aslafy-z/helm-git 
+
 echo "==> Install lagoon-remote docker-host"
-helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
+helm repo add lagoon-remote git+https://github.com/uselagoon/lagoon-charts@charts/lagoon-remote?ref=k8s_122
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
-    --set dioscuri.enabled=false
+    --set dioscuri.enabled=false \
+    --set dbaas-operator.enabled=false
 CHECK_COUNTER=1
 echo "===> Ensure docker-host is running"
 until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') --no-headers | grep -q "Running")

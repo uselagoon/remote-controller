@@ -24,8 +24,8 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            amazeeio/lagoon-builddeploy
-            ghcr.io/amazeeio/lagoon-builddeploy
+            uselagoon/remote-controller
+            ghcr.io/uselagoon/remote-controller
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1

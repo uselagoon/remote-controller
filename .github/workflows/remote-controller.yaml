@@ -47,7 +47,7 @@ jobs:
     - name: Create kind cluster
       uses: helm/kind-action@v1.2.0
       with:
-        node_image: kindest/node:v1.21.1
+        node_image: kindest/node:v1.22.0
         config: test-resources/kind-config.yaml
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
@@ -56,7 +56,7 @@ jobs:
       with:
         context: .
         load: true
-        tags: amazeeio/lagoon-builddeploy:test-tag
+        tags: uselagoon/remote-controller:test-tag
     - name: Run Tests
       run: |
         export PATH=$PATH:/usr/local/kubebuilder/bin

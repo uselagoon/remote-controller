@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
-	"github.com/amazeeio/lagoon-kbd/controllers"
-	"github.com/amazeeio/lagoon-kbd/handlers"
 	"github.com/cheshir/go-mq"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	"github.com/uselagoon/remote-controller/controllers"
+	"github.com/uselagoon/remote-controller/handlers"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -101,9 +101,15 @@ func main() {
 	var lffDefaultIsolationNetworkPolicy string
 	var buildPodCleanUpEnable bool
 	var taskPodCleanUpEnable bool
+	var buildsCleanUpEnable bool
+	var taskCleanUpEnable bool
 	var buildPodCleanUpCron string
 	var taskPodCleanUpCron string
+	var buildsCleanUpCron string
+	var taskCleanUpCron string
+	var buildsToKeep int
 	var buildPodsToKeep int
+	var tasksToKeep int
 	var taskPodsToKeep int
 	var lffBackupWeeklyRandom bool
 	var lffHarborEnabled bool
@@ -120,6 +126,13 @@ func main() {
 	var harborCredentialCron string
 	var harborLagoonWebhook string
 	var harborWebhookEventTypes string
+	var nativeCronPodMinFrequency int
+
+	var lffQoSEnabled bool
+	var qosMaxBuilds int
+	var qosDefaultValue int
+
+	var lffRouterURL bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -134,17 +147,17 @@ func main() {
 	flag.StringVar(&mqHost, "rabbitmq-hostname", "localhost:5672",
 		"The hostname:port for the rabbitmq host.")
 	flag.IntVar(&mqWorkers, "rabbitmq-queue-workers", 1,
-		"The hostname:port for the rabbitmq host.")
+		"The number of workers to start with.")
 	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
-		"The hostname:port for the rabbitmq host.")
+		"The retry interval for rabbitmq.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
 	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
-		"The hostname:port for the rabbitmq host.")
+		"The cron definition for pending messages.")
 	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
-		"The hostname:port for the rabbitmq host.")
+		"The number of startup attempts before exiting.")
 	flag.IntVar(&startupConnectionInterval, "startup-connection-interval-seconds", 30,
-		"The hostname:port for the rabbitmq host.")
+		"The duration between startup attempts.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,
@@ -175,15 +188,15 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
-	flag.StringVar(&backupDefaultSchedule, "backupDefaultSchedule", "M H(22-2) * * *",
+	flag.StringVar(&backupDefaultSchedule, "backup-default-schedule", "M H(22-2) * * *",
 		"The default backup schedule for all projects on this cluster.")
-	flag.IntVar(&backupDefaultMonthlyRetention, "backupDefaultMonthlyRetention", 1,
+	flag.IntVar(&backupDefaultMonthlyRetention, "backup-default-monthly-retention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultWeeklyRetention, "backupDefaultWeeklyRetention", 6,
+	flag.IntVar(&backupDefaultWeeklyRetention, "backup-default-weekly-retention", 6,
 		"The number of weekly backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultDailyRetention, "backupDefaultDailyRetention", 7,
+	flag.IntVar(&backupDefaultDailyRetention, "backup-default-daily-retention", 7,
 		"The number of daily backups k8up should retain after a prune operation.")
-	flag.IntVar(&backupDefaultHourlyRetention, "backupDefaultHourlyRetention", 0,
+	flag.IntVar(&backupDefaultHourlyRetention, "backup-default-hourly-retention", 0,
 		"The number of hourly backups k8up should retain after a prune operation.")
 	// Lagoon feature flags
 	flag.StringVar(&lffForceRootlessWorkload, "lagoon-feature-flag-force-rootless-workload", "",
@@ -197,13 +210,29 @@ func main() {
 	flag.BoolVar(&buildPodCleanUpEnable, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the build pod cleanup.")
+	flag.BoolVar(&buildsCleanUpEnable, "enable-lagoonbuilds-cleanup", true, "Flag to enable lagoonbuild resources cleanup.")
+	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "0 * * * *",
+		"The cron definition for how often to run the lagoonbuild resources cleanup.")
+	flag.IntVar(&buildsToKeep, "num-builds-to-keep", 5, "The number of lagoonbuild resources to keep per namespace.")
 	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
 	flag.BoolVar(&taskPodCleanUpEnable, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the task pod cleanup.")
+	flag.BoolVar(&taskCleanUpEnable, "enable-lagoontasks-cleanup", true, "Flag to enable lagoontask resources cleanup.")
+	flag.StringVar(&taskCleanUpCron, "lagoontasks-cleanup-cron", "0 * * * *",
+		"The cron definition for how often to run the lagoontask resources cleanup.")
+	flag.IntVar(&tasksToKeep, "num-tasks-to-keep", 5, "The number of lagoontask resources to keep per namespace.")
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
-	flag.BoolVar(&lffBackupWeeklyRandom, "lffBackupWeeklyRandom", false,
+	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
+
+	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
+
+	// this is enabled by default for now
+	// eventually will be disabled by default because support for the generation/modification of this will
+	// be handled by lagoon or the builds themselves
+	flag.BoolVar(&lffRouterURL, "lagoon-feature-flag-enable-router-url", true,
+		"Tells the controller to handle router-url generation or not")
 
 	// harbor configurations
 	flag.BoolVar(&lffHarborEnabled, "enable-harbor", false, "Flag to enable this controller to talk to a specific harbor.")
@@ -233,6 +262,12 @@ func main() {
 		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
 		"The event types to use for the Lagoon webhook")
+
+	// QoS configuration
+	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
+	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The number of builds that can run at any one time.")
+	flag.IntVar(&qosDefaultValue, "qos-default", 5, "The default qos value to apply if one is not provided.")
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -263,6 +298,8 @@ func main() {
 	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
 	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
 	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
+
+	nativeCronPodMinFrequency = getEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
 
 	// harbor envvars
 	harborURL = getEnv("HARBOR_URL", harborURL)
@@ -488,19 +525,44 @@ func main() {
 		WebhookEventTypes:   strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	podCleanup := handlers.NewCleanup(mgr.GetClient(),
+	buildQoSConfig := controllers.BuildQoS{
+		MaxBuilds:    qosMaxBuilds,
+		DefaultValue: qosDefaultValue,
+	}
+
+	resourceCleanup := handlers.NewCleanup(mgr.GetClient(),
+		buildsToKeep,
 		buildPodsToKeep,
+		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
 		enableDebug,
 	)
+	// if the lagoonbuild cleanup is enabled, add the cronjob for it
+	if buildsCleanUpEnable {
+		setupLog.Info("starting LagoonBuild CRD cleanup handler")
+		// use cron to run a lagoonbuild cleanup task
+		// this will check any Lagoon builds and attempt to delete them
+		c.AddFunc(buildsCleanUpCron, func() {
+			resourceCleanup.LagoonBuildCleanup()
+		})
+	}
 	// if the build pod cleanup is enabled, add the cronjob for it
 	if buildPodCleanUpEnable {
 		setupLog.Info("starting build pod cleanup handler")
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
-			podCleanup.BuildPodCleanup()
+			resourceCleanup.BuildPodCleanup()
+		})
+	}
+	// if the lagoontask cleanup is enabled, add the cronjob for it
+	if taskCleanUpEnable {
+		setupLog.Info("starting LagoonTask CRD cleanup handler")
+		// use cron to run a lagoontask cleanup task
+		// this will check any Lagoon tasks and attempt to delete them
+		c.AddFunc(taskCleanUpCron, func() {
+			resourceCleanup.LagoonTaskCleanup()
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
@@ -509,7 +571,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
-			podCleanup.TaskPodCleanup()
+			resourceCleanup.TaskPodCleanup()
 		})
 	}
 	// if harbor is enabled, add the cronjob for credential rotation
@@ -553,8 +615,13 @@ func main() {
 		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
+		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,
 		Harbor:                           harborConfig,
+		LFFQoSEnabled:                    lffQoSEnabled,
+		BuildQoS:                         buildQoSConfig,
+		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
+		LagoonTargetName:                 lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -567,6 +634,7 @@ func main() {
 		Messaging:           messaging,
 		ControllerNamespace: controllerNamespace,
 		EnableDebug:         enableDebug,
+		LagoonTargetName:    lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
@@ -582,7 +650,8 @@ func main() {
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,
 		},
-		EnableDebug: enableDebug,
+		EnableDebug:      enableDebug,
+		LagoonTargetName: lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
@@ -599,6 +668,16 @@ func main() {
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if value, ok := os.LookupEnv(key); ok {
+		valueInt, e := strconv.Atoi(value)
+		if e == nil {
+			return valueInt
+		}
 	}
 	return fallback
 }

@@ -31,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	// openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 )
@@ -45,6 +45,7 @@ type LagoonTaskReconciler struct {
 	ControllerNamespace string
 	TaskSettings        LagoonTaskSettings
 	EnableDebug         bool
+	LagoonTargetName    string
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -63,7 +64,6 @@ var (
 
 // Reconcile runs when a request comes through
 func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// ctx := context.Background()
 	opLog := r.Log.WithValues("lagoontask", req.NamespacedName)
 
 	// your logic here
@@ -75,10 +75,12 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
 		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == "Pending" && lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == "standard" {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeStandard) {
 			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == "Pending" && lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == "advanced" {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeAdvanced) {
 			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
 		}
 	} else {
@@ -479,6 +481,14 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						{
 							Name:  "PODNAME",
 							Value: lagoonTask.ObjectMeta.Name,
+						},
+						{
+							Name:  "LAGOON_PROJECT",
+							Value: lagoonTask.Spec.Project.Name,
+						},
+						{
+							Name:  "LAGOON_GIT_BRANCH",
+							Value: lagoonTask.Spec.Environment.Name,
 						},
 						{
 							Name:  "TASK_API_HOST",

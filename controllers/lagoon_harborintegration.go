@@ -9,11 +9,11 @@ import (
 	"encoding/json"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
 	harborv2 "github.com/mittwald/goharbor-client/v3/apiv2"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +71,7 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 				h.Log.Info(fmt.Sprintf("Error creating project %s", projectName))
 				return nil, err
 			}
-			time.Sleep(2 * time.Second) // wait 2 seconds
+			time.Sleep(1 * time.Second) // wait 1 seconds
 			tStr := "true"
 			err = h.Client.UpdateProject(ctx, &model.Project{
 				Name:      projectName,
@@ -83,18 +83,18 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.
 				},
 			}, int64Ptr(-1))
 			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error updating project %s", project.Name))
+				h.Log.Info(fmt.Sprintf("Error updating project %s", projectName))
 				return nil, err
 			}
-			time.Sleep(2 * time.Second) // wait 2 seconds
+			time.Sleep(1 * time.Second) // wait 1 seconds
 			project, err = h.Client.GetProjectByName(ctx, projectName)
 			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error getting project after updating %s", project.Name))
+				h.Log.Info(fmt.Sprintf("Error getting project after updating %s", projectName))
 				return nil, err
 			}
-			h.Log.Info(fmt.Sprintf("Created harbor project %s", project.Name))
+			h.Log.Info(fmt.Sprintf("Created harbor project %s", projectName))
 		} else {
-			h.Log.Info(fmt.Sprintf("Error finding project %s", project.Name))
+			h.Log.Info(fmt.Sprintf("Error finding project %s", projectName))
 			return nil, err
 		}
 	}
@@ -330,6 +330,11 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 	// go over every namespace that has a lagoon.sh label
 	// and attempt to create and update the robot account credentials as requred.
 	for _, ns := range namespaces.Items {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			// if the namespace is terminating, don't try to renew the robot credentials
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting robot credentials check", ns.ObjectMeta.Name))
+			return
+		}
 		opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 		// check for running builds!
 		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
@@ -350,7 +355,10 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		// if there are any builds pending or running, don't try and refresh the credentials as this
 		// could break the build
 		if len(lagoonBuilds.Items) > 0 {
-			if lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Running" || lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"] == "Pending" {
+			if containsString(
+				RunningPendingStatus,
+				lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"],
+			) {
 				runningBuilds = true
 			}
 		}
@@ -362,7 +370,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				opLog.Error(err, "error getting or creating project")
 				break
 			}
-			time.Sleep(2 * time.Second) // wait 2 seconds
+			time.Sleep(1 * time.Second) // wait 1 seconds
 			robotCreds, err := h.CreateOrRefreshRobot(ctx,
 				cl,
 				hProject,
@@ -373,7 +381,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				opLog.Error(err, "error getting or creating robot account")
 				break
 			}
-			time.Sleep(2 * time.Second) // wait 2 seconds
+			time.Sleep(1 * time.Second) // wait 1 seconds
 			if robotCreds != nil {
 				// if we have robotcredentials to create, do that here
 				if err := upsertHarborSecret(ctx,

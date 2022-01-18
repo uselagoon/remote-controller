@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/cheshir/go-mq"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -75,7 +74,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					h.ConnectionAttempts,
 				),
 			)
-			time.Sleep(60 * time.Second)
+			time.Sleep(time.Duration(h.ConnectionRetryInterval) * time.Second)
 		}
 		return attempt < h.ConnectionAttempts, err
 	})
@@ -274,8 +273,8 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   "standard",
-					"lagoon.sh/taskStatus": "Pending",
+					"lagoon.sh/taskType":   string(lagoonv1alpha1.TaskTypeStandard),
+					"lagoon.sh/taskStatus": string(lagoonv1alpha1.TaskStatusPending),
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
@@ -481,16 +480,4 @@ func (h *Messaging) GetPendingMessages() {
 		}
 	}
 	return
-}
-
-const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-
-var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-func randString(length int) string {
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-	return string(b)
 }

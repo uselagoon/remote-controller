@@ -1,5 +1,5 @@
 domain: amazee.io
-repo: github.com/amazeeio/lagoon-kbd
+repo: github.com/uselagoon/remote-controller
 resources:
 - group: lagoon
   kind: LagoonBuild

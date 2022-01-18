@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,11 +33,11 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			if container.State.Waiting != nil && containsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the build and get the logs from the container
 				opLog.Info(fmt.Sprintf("Task failed, container exit reason was: %v", container.State.Waiting.Reason))
-				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1alpha1.JobFailed)
+				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1alpha1.TaskStatusFailed)
 				if err := r.Update(ctx, &lagoonTask); err != nil {
 					return err
 				}
-				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, string(lagoonv1alpha1.JobFailed)))
+				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, string(lagoonv1alpha1.TaskStatusFailed)))
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}
@@ -53,8 +53,8 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 					},
 				}
 				jobPod.Status.ContainerStatuses[0] = state
-				r.updateTaskStatusCondition(ctx, &lagoonTask, lagoonv1alpha1.LagoonConditions{
-					Type:   lagoonv1alpha1.JobFailed,
+				r.updateTaskStatusCondition(ctx, &lagoonTask, lagoonv1alpha1.LagoonTaskConditions{
+					Type:   lagoonv1alpha1.TaskStatusFailed,
 					Status: corev1.ConditionTrue,
 				}, []byte(container.State.Waiting.Message))
 				// send any messages to lagoon message queues
@@ -76,12 +76,12 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 		if err != nil {
 			return err
 		}
-		var jobCondition lagoonv1alpha1.JobConditionType
+		var jobCondition lagoonv1alpha1.TaskStatusType
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
-			jobCondition = lagoonv1alpha1.JobFailed
+			jobCondition = lagoonv1alpha1.TaskStatusFailed
 		case corev1.PodSucceeded:
-			jobCondition = lagoonv1alpha1.JobComplete
+			jobCondition = lagoonv1alpha1.TaskStatusComplete
 		}
 		// if the build status doesn't equal the status of the pod
 		// then update the build to reflect the current pod status
@@ -106,7 +106,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 				return err
 			}
 			r.updateTaskStatusCondition(ctx, &lagoonTask,
-				lagoonv1alpha1.LagoonConditions{
+				lagoonv1alpha1.LagoonTaskConditions{
 					Type:   jobCondition,
 					Status: corev1.ConditionTrue,
 				},
@@ -148,13 +148,15 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 		msg := lagoonv1alpha1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "build-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
+			Event:    "task-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
 			Meta: &lagoonv1alpha1.LagoonLogMeta{
-				Task:      &lagoonTask.Spec.Task,
-				JobName:   lagoonTask.ObjectMeta.Name,
-				JobStatus: condition,
-				RemoteID:  string(jobPod.ObjectMeta.UID),
-				Key:       lagoonTask.Spec.Key,
+				Task:        &lagoonTask.Spec.Task,
+				Environment: lagoonTask.Spec.Environment.Name,
+				JobName:     lagoonTask.ObjectMeta.Name,
+				JobStatus:   condition,
+				RemoteID:    string(jobPod.ObjectMeta.UID),
+				Key:         lagoonTask.Spec.Key,
+				Cluster:     r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf(`========================================
 Logs on pod %s
@@ -207,6 +209,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		if _, ok := jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]; ok {
@@ -271,6 +274,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
+				Cluster:       r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf("*[%s]* Task `%s` *%s* %s",
 				lagoonTask.Spec.Project.Name,
@@ -299,10 +303,10 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 // updateTaskStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonMonitorReconciler) updateTaskStatusCondition(ctx context.Context,
 	lagoonTask *lagoonv1alpha1.LagoonTask,
-	condition lagoonv1alpha1.LagoonConditions, log []byte) error {
+	condition lagoonv1alpha1.LagoonTaskConditions, log []byte) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !jobContainsStatus(lagoonTask.Status.Conditions, condition) {
+	if !taskContainsStatus(lagoonTask.Status.Conditions, condition) {
 		lagoonTask.Status.Conditions = append(lagoonTask.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,7 +38,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		opLog.Info(fmt.Sprintf("Unable to find a build pod associated to this build, continuing to process build deletion"))
 		// handle updating lagoon for a deleted build with no running pod
 		// only do it if the build status is Pending or Running though
-		err = r.updateDeploymentWithLogs(ctx, req, *lagoonBuild)
+		err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
 		if err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update the lagoon with LagoonBuild result"))
 		}
@@ -86,7 +86,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": "Running",
+			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -110,7 +110,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": "Pending",
+				"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -137,7 +137,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
-						"lagoon.sh/buildStatus": "Running",
+						"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
 					},
 				},
 			})
@@ -152,7 +152,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	return nil
 }
 
-func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
+func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
 	lagoonBuild lagoonv1alpha1.LagoonBuild,
@@ -165,8 +165,8 @@ func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
 	// so we don't have to do anything else.
 	if containsString(
 		[]string{
-			"Pending",
-			"Running",
+			string(lagoonv1alpha1.BuildStatusPending),
+			string(lagoonv1alpha1.BuildStatusRunning),
 		},
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
@@ -185,8 +185,8 @@ func (r *LagoonBuildReconciler) updateDeploymentWithLogs(
 ========================================
 Build cancelled
 ========================================`))
-		var jobCondition lagoonv1alpha1.JobConditionType
-		jobCondition = lagoonv1alpha1.JobCancelled
+		var jobCondition lagoonv1alpha1.BuildStatusType
+		jobCondition = lagoonv1alpha1.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -213,16 +213,16 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
+		r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
+		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
 	}
 	return nil
 }
 
-// buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
+// cancelledBuildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	logs []byte,
@@ -239,6 +239,7 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 				BuildPhase: condition,
 				RemoteID:   string(lagoonBuild.ObjectMeta.UID),
 				LogLink:    lagoonBuild.Spec.Project.UILink,
+				Cluster:     r.LagoonTargetName,
 			},
 		}
 		// add the actual build log message
@@ -266,9 +267,9 @@ Logs on pod %s
 	}
 }
 
-// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
+// updateCancelledDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
@@ -285,6 +286,7 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
+				Cluster:     r.LagoonTargetName,
 			},
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
@@ -349,8 +351,8 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 	}
 }
 
-// buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
+// cancelledBuildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
+func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1alpha1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap) {
@@ -366,6 +368,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 				BuildPhase:  condition,
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
+				Cluster:     r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
 				lagoonBuild.Spec.Project.Name,

@@ -36,6 +36,7 @@ type LagoonLogMeta struct {
 	Task           *LagoonTaskInfo `json:"task,omitempty"`
 	Key            string          `json:"key,omitempty"`
 	AdvancedData   string          `json:"advancedData,omitempty"`
+	Cluster        string          `json:"clusterName,omitempty"`
 }
 
 // LagoonMessage is used for sending build info back to Lagoon

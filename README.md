@@ -23,7 +23,7 @@ There is currently no documentation for how to do this, we may release more info
 Using [Helm 3](https://helm.sh/docs/intro/install/)
 
 ```
-helm repo add lagoon-builddeploy https://raw.githubusercontent.com/amazeeio/lagoon-kbd/main/charts
+helm repo add lagoon-builddeploy https://raw.githubusercontent.com/uselagoon/remote-controller/main/charts
 
 ## with rabbitmq support for communicating with a lagoon messaging queue
 helm upgrade --install -n lagoon-builddeploy lagoon-builddeploy lagoon-builddeploy/lagoon-builddeploy \
@@ -49,7 +49,7 @@ You will need to install any prerequisites for kubebuilder [see here](https://bo
 # install any requirements
 make install
 # deploy the actual handler
-make IMG=amazeeio/lagoon-builddeploy:latest deploy
+make IMG=uselagoon/remote-controller:latest deploy
 ```
 
 ## LagoonBuild Spec
@@ -62,7 +62,7 @@ metadata:
 spec:
     build:
         ci: 'false' # this is a string, not a bool
-        image: amazeeio/kubectl-build-deploy-dind:v1.8.1
+        image: uselagoon/kubectl-build-deploy-dind:v1.8.1
         type: branch
     gitReference: origin/main
     openshift: false

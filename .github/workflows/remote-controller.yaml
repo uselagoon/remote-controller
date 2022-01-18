@@ -1,9 +1,10 @@
-name: Lagoon KBD Test
+name: Lagoon Remote Controller Test
 
 on:
   push:
     branches:
       - main
+      - re-namespace
   pull_request:
     branches:
       - main
@@ -22,15 +23,16 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: '1.16'
-    - name: Install kustomize, kubebuilder, helm
+    - name: Install kustomize, kubebuilder, helm, docker-compose, kind
       run: |
         #kustomize
         curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
         sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
         curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
-        sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
-        echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
+        sudo mkdir -p /usr/local/kubebuilder/bin
+        sudo mv /tmp/kubebuilder_2.3.2_linux_amd64/bin/* /usr/local/kubebuilder/bin
+        chmod +x /usr/local/kubebuilder/bin/*
         #helm
         curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm

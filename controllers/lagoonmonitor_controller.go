@@ -20,11 +20,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sort"
 
-	lagoonv1alpha1 "github.com/amazeeio/lagoon-kbd/api/v1alpha1"
-	"github.com/amazeeio/lagoon-kbd/handlers"
 	"github.com/go-logr/logr"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	"github.com/uselagoon/remote-controller/handlers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,6 +42,7 @@ type LagoonMonitorReconciler struct {
 	Messaging           *handlers.Messaging
 	ControllerNamespace string
 	EnableDebug         bool
+	LagoonTargetName    string
 }
 
 // slice of the different failure states of pods that we care about
@@ -57,7 +57,6 @@ var failureStates = []string{
 
 // Reconcile runs when a request comes through
 func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// ctx := context.Background()
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
 
 	var jobPod corev1.Pod
@@ -118,7 +117,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(req.Namespace),
-			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": "Running"}),
+			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning)}),
 		})
 		// list all builds in the namespace that have the running buildstatus
 		if err := r.List(ctx, runningBuilds, listOption); err != nil {
@@ -126,27 +125,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// if we have no running builds, then check for any pending builds
 		if len(runningBuilds.Items) == 0 {
-			listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-				client.InNamespace(req.Namespace),
-				client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": "Pending"}),
-			})
-			if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-			}
-			opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
-			// if we have any pending builds, then grab the first one from the items as they are sorted by oldest pending first
-			if len(pendingBuilds.Items) > 0 {
-				// sort the pending builds by creation timestamp
-				sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-					return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
-				})
-				opLog.Info(fmt.Sprintf("Next build is: %s", pendingBuilds.Items[0].ObjectMeta.Name))
-				pendingBuild := pendingBuilds.Items[0].DeepCopy()
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = "Running"
-				if err := r.Update(ctx, pendingBuild); err != nil {
-					return ctrl.Result{}, err
-				}
-			}
+			return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")
 		}
 	}
 	return ctrl.Result{}, nil

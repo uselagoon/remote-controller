@@ -5,7 +5,7 @@ metadata:
 spec:
     build:
         ci: 'true' #to make sure that readwritemany is changed to readwriteonce
-        image: uselagoon/kubectl-build-deploy-dind:latest
+        image: testlagoon/kubectl-build-deploy-dind:pr-2815
         type: branch
     gitReference: origin/install
     project:

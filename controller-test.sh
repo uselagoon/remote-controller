@@ -188,11 +188,11 @@ echo "===> Docker-host is running"
 echo "===> Install Ingress-Nginx"
 kubectl create namespace ingress-nginx
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
 NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
 if [ $NUM_PODS -ne 1 ]; then
     echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
     kubectl get pods --all-namespaces
     echo "Wait for ingress-nginx to become ready"
     sleep 120
@@ -204,13 +204,15 @@ fi
 echo "===> Install Harbor"
 kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.5.2
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.5.6
 
 echo "====> Install dbaas-operator"
-helm repo add amazeeio https://amazeeio.github.io/charts/
+# helm repo add amazeeio https://amazeeio.github.io/charts/
+helm repo add amazeeio git+https://github.com/amazeeio/charts/@charts/dbaas-operator?ref=k8s_122
 kubectl create namespace dbaas-operator
 helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
-helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
+# helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
+helm repo add dbaas-operator git+https://github.com/amazeeio/dbaas-operator/@charts?ref=k8s_122
 helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
 
 echo "==> Configure example environment"

@@ -56,7 +56,7 @@ type LagoonTaskSettings struct {
 }
 
 var (
-	finalizerName = "finalizer.lagoontask.lagoon.amazee.io/v1alpha1"
+	taskFinalizer = "finalizer.lagoontask.lagoon.amazee.io/v1alpha1"
 )
 
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -85,7 +85,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	} else {
 		// The object is being deleted
-		if containsString(lagoonTask.ObjectMeta.Finalizers, finalizerName) {
+		if containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
 			if err := r.deleteExternalResources(&lagoonTask, req.NamespacedName.Namespace); err != nil {
 				// if fail to delete the external dependency here, return with error
@@ -93,7 +93,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			lagoonTask.ObjectMeta.Finalizers = removeString(lagoonTask.ObjectMeta.Finalizers, finalizerName)
+			lagoonTask.ObjectMeta.Finalizers = removeString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 			// use patches to avoid update errors
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
@@ -389,8 +389,8 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !containsString(lagoonTask.ObjectMeta.Finalizers, finalizerName) {
-		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, finalizerName)
+	if !containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

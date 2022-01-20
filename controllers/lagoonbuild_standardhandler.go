@@ -55,8 +55,8 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
-		lagoonBuild.ObjectMeta.Finalizers = append(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
+	if !containsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
+		lagoonBuild.ObjectMeta.Finalizers = append(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

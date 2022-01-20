@@ -74,6 +74,10 @@ type LagoonBuildReconciler struct {
 	LagoonTargetName                 string
 }
 
+var (
+	buildFinalizer = "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
+)
+
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds/status,verbs=get;update;patch
 
@@ -89,8 +93,6 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
-
-	finalizerName := "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -133,7 +135,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
 	}
 	// The object is being deleted
-	if containsString(lagoonBuild.ObjectMeta.Finalizers, finalizerName) {
+	if containsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
 		// our finalizer is present, so lets handle any external dependency
 		// first deleteExternalResources will try and check for any pending builds that it can
 		// can change to running to kick off the next pending build
@@ -148,7 +150,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 		// remove our finalizer from the list and update it.
-		lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, finalizerName)
+		lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

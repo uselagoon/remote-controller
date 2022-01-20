@@ -109,8 +109,8 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					// The object is not being deleted, so if it does not have our finalizer,
 					// then lets add the finalizer and update the object. This is equivalent
 					// registering our finalizer.
-					if !containsString(pBuild.ObjectMeta.Finalizers, finalizerName) {
-						pBuild.ObjectMeta.Finalizers = append(pBuild.ObjectMeta.Finalizers, finalizerName)
+					if !containsString(pBuild.ObjectMeta.Finalizers, buildFinalizer) {
+						pBuild.ObjectMeta.Finalizers = append(pBuild.ObjectMeta.Finalizers, buildFinalizer)
 						// use patches to avoid update errors
 						mergePatch, _ := json.Marshal(map[string]interface{}{
 							"metadata": map[string]interface{}{

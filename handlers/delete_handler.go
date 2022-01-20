@@ -11,7 +11,95 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
 )
+
+// DeleteLagoonBuilds will delete any lagoon builds from the namespace.
+func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
+	lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+	})
+	if err := h.Client.List(ctx, lagoonBuilds, listOption); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to list lagoon build in namespace %s for project %s, branch %s",
+				ns,
+				project,
+				branch,
+			),
+		)
+		return false
+	}
+	for _, lagoonBuild := range lagoonBuilds.Items {
+		if err := h.Client.Delete(ctx, &lagoonBuild); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to delete lagoon build %s in %s for project %s, branch %s",
+					lagoonBuild.ObjectMeta.Name,
+					ns,
+					project,
+					branch,
+				),
+			)
+			return false
+		}
+		opLog.Info(
+			fmt.Sprintf(
+				"Deleted lagoon build %s in  %s for project %s, branch %s",
+				lagoonBuild.ObjectMeta.Name,
+				ns,
+				project,
+				branch,
+			),
+		)
+	}
+	return true
+}
+
+// DeleteLagoonTasks will delete any lagoon tasks from the namespace.
+func (h *Messaging) DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
+	lagoonTasks := &lagoonv1alpha1.LagoonTaskList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+	})
+	if err := h.Client.List(ctx, lagoonTasks, listOption); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to list lagoon task in namespace %s for project %s, branch %s",
+				ns,
+				project,
+				branch,
+			),
+		)
+		return false
+	}
+	for _, lagoonTask := range lagoonTasks.Items {
+		if err := h.Client.Delete(ctx, &lagoonTask); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to delete lagoon task %s in %s for project %s, branch %s",
+					lagoonTask.ObjectMeta.Name,
+					ns,
+					project,
+					branch,
+				),
+			)
+			return false
+		}
+		opLog.Info(
+			fmt.Sprintf(
+				"Deleted lagoon task %s in  %s for project %s, branch %s",
+				lagoonTask.ObjectMeta.Name,
+				ns,
+				project,
+				branch,
+			),
+		)
+	}
+	return true
+}
 
 // DeleteDeployments will delete any deployments from the namespace.
 func (h *Messaging) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
@@ -28,7 +116,6 @@ func (h *Messaging) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns
 				branch,
 			),
 		)
-		//message.Ack(false) // ack to remove from queue
 		return false
 	}
 	for _, dep := range deployments.Items {
@@ -42,7 +129,6 @@ func (h *Messaging) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns
 					branch,
 				),
 			)
-			//message.Ack(false) // ack to remove from queue
 			return false
 		}
 		opLog.Info(
@@ -73,7 +159,6 @@ func (h *Messaging) DeleteStatefulSets(ctx context.Context, opLog logr.Logger, n
 				branch,
 			),
 		)
-		//message.Ack(false) // ack to remove from queue
 		return false
 	}
 	for _, ss := range statefulsets.Items {
@@ -87,7 +172,6 @@ func (h *Messaging) DeleteStatefulSets(ctx context.Context, opLog logr.Logger, n
 					branch,
 				),
 			)
-			//message.Ack(false) // ack to remove from queue
 			return false
 		}
 		opLog.Info(
@@ -118,7 +202,6 @@ func (h *Messaging) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 				branch,
 			),
 		)
-		//message.Ack(false) // ack to remove from queue
 		return false
 	}
 	for _, ds := range daemonsets.Items {
@@ -132,7 +215,6 @@ func (h *Messaging) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 					branch,
 				),
 			)
-			//message.Ack(false) // ack to remove from queue
 			return false
 		}
 		opLog.Info(
@@ -163,7 +245,6 @@ func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 				branch,
 			),
 		)
-		//message.Ack(false) // ack to remove from queue
 		return false
 	}
 	for _, pvc := range pvcs.Items {
@@ -177,7 +258,6 @@ func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 					branch,
 				),
 			)
-			//message.Ack(false) // ack to remove from queue
 			return false
 		}
 		opLog.Info(
@@ -192,6 +272,15 @@ func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 	}
 	for _, pvc := range pvcs.Items {
 		if err := h.CheckPVCExists(ctx, opLog, &pvc); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Waited for pvc %s to delete in %s for project %s, branch %s, but it was not deleted in time",
+					pvc.ObjectMeta.Name,
+					ns,
+					project,
+					branch,
+				),
+			)
 			return false
 		}
 	}
@@ -209,33 +298,32 @@ func (h *Messaging) DeleteNamespace(ctx context.Context, opLog logr.Logger, name
 				branch,
 			),
 		)
-		//message.Ack(false) // ack to remove from queue
 		return false
 	}
 	return true
 }
 
-// CheckPVCExists .
+// CheckPVCExists checks if the PVC being deleted has been deleted.
 func (h *Messaging) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *corev1.PersistentVolumeClaim) error {
 	try.MaxRetries = 60
 	err := try.Do(func(attempt int) (bool, error) {
-		var ingressErr error
+		var pvcErr error
 		err := h.Client.Get(ctx, types.NamespacedName{
 			Namespace: pvc.ObjectMeta.Namespace,
 			Name:      pvc.ObjectMeta.Name,
 		}, pvc)
 		if err != nil {
-			// the ingress doesn't exist anymore, so exit the retry
-			ingressErr = nil
+			// the pvc doesn't exist anymore, so exit the retry
+			pvcErr = nil
 			opLog.Info(fmt.Sprintf("persistent volume claim %s in %s deleted", pvc.ObjectMeta.Name, pvc.ObjectMeta.Namespace))
 		} else {
-			// if the ingress still exists wait 5 seconds before trying again
+			// if the pvc still exists wait 10 seconds before trying again
 			msg := fmt.Sprintf("persistent volume claim %s in %s still exists", pvc.ObjectMeta.Name, pvc.ObjectMeta.Namespace)
-			ingressErr = fmt.Errorf("%s: %v", msg, err)
+			pvcErr = fmt.Errorf("%s: %v", msg, err)
 			opLog.Info(msg)
 		}
-		time.Sleep(1 * time.Second)
-		return attempt < 60, ingressErr
+		time.Sleep(10 * time.Second)
+		return attempt < 6, pvcErr
 	})
 	return err
 }

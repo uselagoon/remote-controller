@@ -150,7 +150,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			ns := removeTask.OpenshiftProjectName
 			branch := removeTask.Branch
 			project := removeTask.ProjectName
-			opLog.WithName("Deletion").Info(
+			opLog.WithName("RemoveTask").Info(
 				fmt.Sprintf(
 					"Received remove task for project %s, branch %s - %s",
 					project,
@@ -164,7 +164,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			}, namespace)
 			if err != nil {
 				if strings.Contains(err.Error(), "not found") {
-					opLog.WithName("Deletion").Info(
+					opLog.WithName("RemoveTask").Info(
 						fmt.Sprintf(
 							"Namespace %s for project %s, branch %s does not exist, marking deleted",
 							ns,
@@ -183,7 +183,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					msgBytes, _ := json.Marshal(msg)
 					h.Publish("lagoon-tasks:controller", msgBytes)
 				} else {
-					opLog.WithName("Deletion").Info(
+					opLog.WithName("RemoveTask").Info(
 						fmt.Sprintf(
 							"Unable to get namespace %s for project %s, branch %s: %v",
 							ns,
@@ -192,42 +192,48 @@ func (h *Messaging) Consumer(targetName string) { //error {
 							err,
 						),
 					)
-
 				}
 				//@TODO: send msg back to lagoon and update task to failed?
 				message.Ack(false) // ack to remove from queue
 				return
 
 			}
-			// @TODO
 			/*
 				get any deployments/statefulsets/daemonsets
 				then delete them
 			*/
-			if del := h.DeleteDeployments(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+			if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			if del := h.DeleteStatefulSets(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+			if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			if del := h.DeleteDaemonSets(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+			if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			if del := h.DeletePVCs(ctx, opLog.WithName("Deletion"), ns, project, branch); del == false {
+			if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
+				message.Ack(false) // ack to remove from queue
+				return
+			}
+			if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
 			/*
 				then delete the namespace
 			*/
-			if del := h.DeleteNamespace(ctx, opLog.WithName("Deletion"), namespace, project, branch); del == false {
+			if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			opLog.WithName("Deletion").Info(
+			opLog.WithName("DeleteNamespace").Info(
 				fmt.Sprintf(
 					"Deleted namespace %s for project %s, branch %s",
 					ns,

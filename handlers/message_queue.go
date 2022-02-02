@@ -323,7 +323,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Environment.OpenshiftProjectName,
 					),
 				)
-				err := h.CancelDeployment(jobSpec)
+				err := h.CancelBuild(jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

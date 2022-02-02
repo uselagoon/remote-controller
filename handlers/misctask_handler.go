@@ -15,8 +15,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// CancelDeployment handles cancelling running deployments.
-func (h *Messaging) CancelDeployment(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error {
+// CancelBuild handles cancelling builds or handling if a build no longer exists.
+func (h *Messaging) CancelBuild(jobSpec *lagoonv1alpha1.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	var jobPod corev1.Pod
 	if err := h.Client.Get(context.Background(), types.NamespacedName{

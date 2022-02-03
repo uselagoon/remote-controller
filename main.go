@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
-	lagoonv1alpha1ctrl "github.com/uselagoon/remote-controller/controllers/v1alpha1"
+	// lagoonv1alpha1ctrl "github.com/uselagoon/remote-controller/controllers/v1alpha1"
 	"github.com/uselagoon/remote-controller/handlers"
 
 	// Openshift
@@ -44,6 +44,7 @@ import (
 	"gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -512,7 +513,7 @@ func main() {
 	if harborURLParsed.Host == "" {
 		harborHostname = harborURL
 	}
-	harborConfig := lagoonv1alpha1ctrl.Harbor{
+	harborConfig := lagoonv1beta1ctrl.Harbor{
 		URL:                 harborURL,
 		Hostname:            harborHostname,
 		API:                 harborAPI,
@@ -529,7 +530,7 @@ func main() {
 		WebhookEventTypes:   strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	buildQoSConfig := lagoonv1alpha1ctrl.BuildQoS{
+	buildQoSConfig := lagoonv1beta1ctrl.BuildQoS{
 		MaxBuilds:    qosMaxBuilds,
 		DefaultValue: qosDefaultValue,
 	}
@@ -584,16 +585,16 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := lagoonv1alpha1ctrl.NewHarbor(harborConfig)
+			lagoonHarbor, _ := lagoonv1beta1ctrl.NewHarbor(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
 	c.Start()
 
 	setupLog.Info("starting controllers")
-	if err = (&lagoonv1alpha1ctrl.LagoonBuildReconciler{
+	if err = (&lagoonv1beta1ctrl.LagoonBuildReconciler{
 		Client:                        mgr.GetClient(),
-		Log:                           ctrl.Log.WithName("v1alpha1").WithName("LagoonBuild"),
+		Log:                           ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),
 		Scheme:                        mgr.GetScheme(),
 		EnableMQ:                      enableMQ,
 		BuildImage:                    overrideBuildDeployImage,
@@ -630,9 +631,9 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
 	}
-	if err = (&lagoonv1alpha1ctrl.LagoonMonitorReconciler{
+	if err = (&lagoonv1beta1ctrl.LagoonMonitorReconciler{
 		Client:              mgr.GetClient(),
-		Log:                 ctrl.Log.WithName("v1alpha1").WithName("LagoonMonitor"),
+		Log:                 ctrl.Log.WithName("v1beta1").WithName("LagoonMonitor"),
 		Scheme:              mgr.GetScheme(),
 		EnableMQ:            enableMQ,
 		Messaging:           messaging,
@@ -643,13 +644,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
 	}
-	if err = (&lagoonv1alpha1ctrl.LagoonTaskReconciler{
+	if err = (&lagoonv1beta1ctrl.LagoonTaskReconciler{
 		Client:              mgr.GetClient(),
-		Log:                 ctrl.Log.WithName("v1alpha1").WithName("LagoonTask"),
+		Log:                 ctrl.Log.WithName("v1beta1").WithName("LagoonTask"),
 		Scheme:              mgr.GetScheme(),
 		IsOpenshift:         isOpenshift,
 		ControllerNamespace: controllerNamespace,
-		TaskSettings: lagoonv1alpha1ctrl.LagoonTaskSettings{
+		TaskSettings: lagoonv1beta1ctrl.LagoonTaskSettings{
 			APIHost: lagoonAPIHost,
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,

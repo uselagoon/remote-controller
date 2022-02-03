@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cheshir/go-mq"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"

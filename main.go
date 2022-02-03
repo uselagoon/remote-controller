@@ -26,9 +26,6 @@ import (
 	"time"
 
 	"github.com/cheshir/go-mq"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
-	"github.com/uselagoon/remote-controller/controllers"
-	"github.com/uselagoon/remote-controller/handlers"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -36,11 +33,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
+	"github.com/uselagoon/remote-controller/controllers"
+	"github.com/uselagoon/remote-controller/handlers"
+
 	// Openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 	projectv1 "github.com/openshift/api/project/v1"
 
 	"gopkg.in/robfig/cron.v2"
+
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -61,6 +64,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = lagoonv1alpha1.AddToScheme(scheme)
+	_ = lagoonv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 	_ = projectv1.AddToScheme(scheme)
 	_ = oappsv1.AddToScheme(scheme)

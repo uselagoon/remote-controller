@@ -1,4 +1,4 @@
-package controllers
+package v1alpha1
 
 // contains all the event watch conditions for secret and ingresses
 

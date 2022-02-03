@@ -1,4 +1,4 @@
-package controllers
+package v1alpha1
 
 import (
 	"context"

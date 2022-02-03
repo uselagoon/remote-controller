@@ -1,4 +1,4 @@
-package controllers
+package v1alpha1
 
 // this file is used by the `lagoonbuild` controller
 

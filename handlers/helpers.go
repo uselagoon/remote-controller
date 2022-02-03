@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -23,25 +23,25 @@ const (
 var (
 	// BuildRunningPendingStatus .
 	BuildRunningPendingStatus = []string{
-		string(lagoonv1alpha1.BuildStatusPending),
-		string(lagoonv1alpha1.BuildStatusRunning),
+		string(lagoonv1beta1.BuildStatusPending),
+		string(lagoonv1beta1.BuildStatusRunning),
 	}
 	// BuildCompletedCancelledFailedStatus .
 	BuildCompletedCancelledFailedStatus = []string{
-		string(lagoonv1alpha1.BuildStatusFailed),
-		string(lagoonv1alpha1.BuildStatusComplete),
-		string(lagoonv1alpha1.BuildStatusCancelled),
+		string(lagoonv1beta1.BuildStatusFailed),
+		string(lagoonv1beta1.BuildStatusComplete),
+		string(lagoonv1beta1.BuildStatusCancelled),
 	}
 	// TaskRunningPendingStatus .
 	TaskRunningPendingStatus = []string{
-		string(lagoonv1alpha1.TaskStatusPending),
-		string(lagoonv1alpha1.TaskStatusRunning),
+		string(lagoonv1beta1.TaskStatusPending),
+		string(lagoonv1beta1.TaskStatusRunning),
 	}
 	// TaskCompletedCancelledFailedStatus .
 	TaskCompletedCancelledFailedStatus = []string{
-		string(lagoonv1alpha1.TaskStatusFailed),
-		string(lagoonv1alpha1.TaskStatusComplete),
-		string(lagoonv1alpha1.TaskStatusCancelled),
+		string(lagoonv1beta1.TaskStatusFailed),
+		string(lagoonv1beta1.TaskStatusComplete),
+		string(lagoonv1beta1.TaskStatusCancelled),
 	}
 )
 
@@ -74,7 +74,7 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func buildContainsStatus(slice []lagoonv1alpha1.LagoonBuildConditions, s lagoonv1alpha1.LagoonBuildConditions) bool {
+func buildContainsStatus(slice []lagoonv1beta1.LagoonBuildConditions, s lagoonv1beta1.LagoonBuildConditions) bool {
 	for _, item := range slice {
 		if item == s {
 			return true
@@ -83,7 +83,7 @@ func buildContainsStatus(slice []lagoonv1alpha1.LagoonBuildConditions, s lagoonv
 	return false
 }
 
-func taskContainsStatus(slice []lagoonv1alpha1.LagoonTaskConditions, s lagoonv1alpha1.LagoonTaskConditions) bool {
+func taskContainsStatus(slice []lagoonv1beta1.LagoonTaskConditions, s lagoonv1beta1.LagoonTaskConditions) bool {
 	for _, item := range slice {
 		if item == s {
 			return true
@@ -143,8 +143,8 @@ func hashString(s string) string {
 }
 
 // removeBuild remove a LagoonBuild from a slice of LagoonBuilds
-func removeBuild(slice []lagoonv1alpha1.LagoonBuild, s lagoonv1alpha1.LagoonBuild) []lagoonv1alpha1.LagoonBuild {
-	result := []lagoonv1alpha1.LagoonBuild{}
+func removeBuild(slice []lagoonv1beta1.LagoonBuild, s lagoonv1beta1.LagoonBuild) []lagoonv1beta1.LagoonBuild {
+	result := []lagoonv1beta1.LagoonBuild{}
 	for _, item := range slice {
 		if item.ObjectMeta.Name == s.ObjectMeta.Name {
 			continue

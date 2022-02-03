@@ -11,7 +11,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 )
 
 type cleanup interface {
@@ -65,7 +65,7 @@ func (h *Cleanup) LagoonBuildCleanup() {
 			return
 		}
 		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
-		lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		lagoonBuilds := &lagoonv1beta1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
@@ -122,7 +122,7 @@ func (h *Cleanup) LagoonTaskCleanup() {
 			return
 		}
 		opLog.Info(fmt.Sprintf("Checking LagoonTasks in namespace %s", ns.ObjectMeta.Name))
-		lagoonTasks := &lagoonv1alpha1.LagoonTaskList{}
+		lagoonTasks := &lagoonv1beta1.LagoonTaskList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{

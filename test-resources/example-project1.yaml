@@ -1,5 +1,5 @@
 kind: LagoonBuild
-apiVersion: lagoon.amazee.io/v1alpha1
+apiVersion: lagoon.sh/v1beta1
 metadata:
     name: lagoon-build-7m5zypx
 spec:

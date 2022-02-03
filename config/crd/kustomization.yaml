@@ -4,6 +4,8 @@
 resources:
 - bases/lagoon.amazee.io_lagoonbuilds.yaml
 - bases/lagoon.amazee.io_lagoontasks.yaml
+- bases/lagoon.sh_lagoonbuilds.yaml
+- bases/lagoon.sh_lagoontasks.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

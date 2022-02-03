@@ -216,6 +216,8 @@ spec:
                         type: string
                       buildPhase:
                         type: string
+                      clusterName:
+                        type: string
                       endTime:
                         type: string
                       environment:
@@ -298,6 +300,8 @@ spec:
                       buildName:
                         type: string
                       buildPhase:
+                        type: string
+                      clusterName:
                         type: string
                       endTime:
                         type: string
@@ -383,6 +387,8 @@ spec:
                       buildName:
                         type: string
                       buildPhase:
+                        type: string
+                      clusterName:
                         type: string
                       endTime:
                         type: string

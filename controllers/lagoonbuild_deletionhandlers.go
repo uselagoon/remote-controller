@@ -239,7 +239,7 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 				BuildPhase: condition,
 				RemoteID:   string(lagoonBuild.ObjectMeta.UID),
 				LogLink:    lagoonBuild.Spec.Project.UILink,
-				Cluster:     r.LagoonTargetName,
+				Cluster:    r.LagoonTargetName,
 			},
 		}
 		// add the actual build log message

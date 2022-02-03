@@ -228,21 +228,23 @@ check_lagoon_build ${LBUILD}
 
 echo "==> Trigger a lagoon build using rabbitmq"
 echo '
-{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:builddeploy",
-  "payload":"{
-      \"kind\": \"LagoonBuild\",
-        \"apiVersion\": \"lagoon.amazee.io\/v1alpha1\",
+{
+    "properties":{
+        "delivery_mode":2
+    },
+    "routing_key":"ci-local-controller-kubernetes:builddeploy",
+    "payload":"{
         \"metadata\": {
-          \"name\": \"lagoon-build-8m5zypx\"
+            \"name\": \"lagoon-build-8m5zypx\"
         },
         \"spec\": {
-          \"build\": {
-            \"ci\": \"true\",
-            \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
-            \"type\": \"branch\"
-          },
-          \"gitReference\": \"origin\/install\",
-          \"project\": {
+            \"build\": {
+                \"ci\": \"true\",
+                \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
+                \"type\": \"branch\"
+            },
+            \"gitReference\": \"origin\/install\",
+            \"project\": {
             \"name\": \"drupal-example\",
             \"environment\": \"install\",
             \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
@@ -255,21 +257,21 @@ echo '
             \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
             \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
             \"monitoring\": {
-              \"contact\": \"1234\",
-              \"statuspageID\": \"1234\"
+                \"contact\": \"1234\",
+                \"statuspageID\": \"1234\"
             },
             \"variables\": {
-              \"project\": \"W10=\",
-              \"environment\": \"W10=\"
+                \"project\": \"W10=\",
+                \"environment\": \"W10=\"
             },
             \"registry\": \"172.17.0.1:5000\"
-          },
-          \"branch\": {
-            \"name\": \"install\"
-          }
+            },
+            \"branch\": {
+                \"name\": \"install\"
+            }
         }
-      }",
-"payload_encoding":"string"
+    }",
+    "payload_encoding":"string"
 }' >payload.json
 curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
 echo ""

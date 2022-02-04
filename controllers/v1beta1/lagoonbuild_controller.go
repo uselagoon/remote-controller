@@ -75,11 +75,11 @@ type LagoonBuildReconciler struct {
 }
 
 var (
-	buildFinalizer = "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
+	buildFinalizer = "finalizer.lagoonbuild.crd.lagoon.sh/v1beta1"
 )
 
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds/status,verbs=get;update;patch
 
 // @TODO: all the things for now, review later
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"

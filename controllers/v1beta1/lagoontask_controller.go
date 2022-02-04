@@ -31,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	// openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 )
@@ -56,18 +56,18 @@ type LagoonTaskSettings struct {
 }
 
 var (
-	taskFinalizer = "finalizer.lagoontask.lagoon.amazee.io/v1alpha1"
+	taskFinalizer = "finalizer.lagoontask.crd.lagoon.sh/v1beta1"
 )
 
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoontasks/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks/status,verbs=get;update;patch
 
 // Reconcile runs when a request comes through
 func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoontask", req.NamespacedName)
 
 	// your logic here
-	var lagoonTask lagoonv1alpha1.LagoonTask
+	var lagoonTask lagoonv1beta1.LagoonTask
 	if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
@@ -75,12 +75,12 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
 		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeStandard) {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1beta1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1beta1.TaskTypeStandard) {
 			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeAdvanced) {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1beta1.TaskStatusPending) &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1beta1.TaskTypeAdvanced) {
 			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
 		}
 	} else {
@@ -112,20 +112,20 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // SetupWithManager sets up the controller with the given manager
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&lagoonv1alpha1.LagoonTask{}).
+		For(&lagoonv1beta1.LagoonTask{}).
 		WithEventFilter(TaskPredicates{
 			ControllerNamespace: r.ControllerNamespace,
 		}).
 		Complete(r)
 }
 
-func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1alpha1.LagoonTask, namespace string) error {
+func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1.LagoonTask, namespace string) error {
 	// delete any external resources if required
 	return nil
 }
 
 // get the task pod information for openshift
-func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (*corev1.Pod, error) {
+func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &oappsv1.DeploymentConfigList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
@@ -193,7 +193,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 							},
 							OwnerReferences: []metav1.OwnerReference{
 								{
-									APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
+									APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
 									Kind:       "LagoonTask",
 									Name:       lagoonTask.ObjectMeta.Name,
 									UID:        lagoonTask.UID,
@@ -227,7 +227,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 }
 
 // get the task pod information for kubernetes
-func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (*corev1.Pod, error) {
+func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
@@ -294,7 +294,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							},
 							OwnerReferences: []metav1.OwnerReference{
 								{
-									APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
+									APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
 									Kind:       "LagoonTask",
 									Name:       lagoonTask.ObjectMeta.Name,
 									UID:        lagoonTask.UID,
@@ -327,7 +327,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	)
 }
 
-func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask, opLog logr.Logger) error {
+func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	newTaskPod := &corev1.Pod{}
 	var err error
 	// get the podspec from openshift or kubernetes, then get or create a new pod to run the task in
@@ -407,7 +407,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 
 // createAdvancedTask allows running of more advanced tasks than the standard lagoon tasks
 // see notes in the docs for infomration about advanced tasks
-func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask, opLog logr.Logger) error {
+func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	serviceAccount := &corev1.ServiceAccount{}
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
 	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
@@ -436,7 +436,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
+					APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
 					Kind:       "LagoonTask",
 					Name:       lagoonTask.ObjectMeta.Name,
 					UID:        lagoonTask.UID,
@@ -548,7 +548,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 }
 
 // check for the API/SSH settings in the task spec first, if nothing there use the one from our settings.
-func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1alpha1.LagoonTask, value string) string {
+func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1beta1.LagoonTask, value string) string {
 	switch value {
 	case "TASK_API_HOST":
 		if lagoonTask.Spec.Task.APIHost == "" {
@@ -586,7 +586,7 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 }
 
 // getDeployerToken will get the deployer token from the service account if it exists
-func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask) (string, error) {
+func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (string, error) {
 	serviceAccount := &corev1.ServiceAccount{}
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
 	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)

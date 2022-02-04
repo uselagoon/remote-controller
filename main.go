@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
-	// lagoonv1alpha1ctrl "github.com/uselagoon/remote-controller/controllers/v1alpha1"
+	lagoonv1alpha1ctrl "github.com/uselagoon/remote-controller/controllers/v1alpha1"
 	"github.com/uselagoon/remote-controller/handlers"
 
 	// Openshift
@@ -592,6 +592,73 @@ func main() {
 	c.Start()
 
 	setupLog.Info("starting controllers")
+	if err = (&lagoonv1alpha1ctrl.LagoonBuildReconciler{
+		Client:                        mgr.GetClient(),
+		Log:                           ctrl.Log.WithName("v1alpha1").WithName("LagoonBuild"),
+		Scheme:                        mgr.GetScheme(),
+		EnableMQ:                      enableMQ,
+		BuildImage:                    overrideBuildDeployImage,
+		Messaging:                     messaging,
+		IsOpenshift:                   isOpenshift,
+		NamespacePrefix:               namespacePrefix,
+		RandomNamespacePrefix:         randomPrefix,
+		ControllerNamespace:           controllerNamespace,
+		EnableDebug:                   enableDebug,
+		FastlyServiceID:               fastlyServiceID,
+		FastlyWatchStatus:             fastlyWatchStatus,
+		BuildPodRunAsUser:             int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
+		BuildPodFSGroup:               int64(buildPodFSGroup),
+		BackupDefaultSchedule:         backupDefaultSchedule,
+		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
+		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
+		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
+		BackupDefaultHourlyRetention:  backupDefaultHourlyRetention,
+		// Lagoon feature flags
+		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
+		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
+		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
+		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
+		LFFRouterURL:                     lffRouterURL,
+		LFFHarborEnabled:                 lffHarborEnabled,
+		LFFQoSEnabled:                    lffQoSEnabled,
+		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
+		LagoonTargetName:                 lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
+		os.Exit(1)
+	}
+	if err = (&lagoonv1alpha1ctrl.LagoonMonitorReconciler{
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("v1alpha1").WithName("LagoonMonitor"),
+		Scheme:              mgr.GetScheme(),
+		EnableMQ:            enableMQ,
+		Messaging:           messaging,
+		ControllerNamespace: controllerNamespace,
+		EnableDebug:         enableDebug,
+		LagoonTargetName:    lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
+		os.Exit(1)
+	}
+	if err = (&lagoonv1alpha1ctrl.LagoonTaskReconciler{
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("v1alpha1").WithName("LagoonTask"),
+		Scheme:              mgr.GetScheme(),
+		IsOpenshift:         isOpenshift,
+		ControllerNamespace: controllerNamespace,
+		TaskSettings: lagoonv1alpha1ctrl.LagoonTaskSettings{
+			APIHost: lagoonAPIHost,
+			SSHHost: lagoonSSHHost,
+			SSHPort: lagoonSSHPort,
+		},
+		EnableDebug:      enableDebug,
+		LagoonTargetName: lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
+		os.Exit(1)
+	}
 	if err = (&lagoonv1beta1ctrl.LagoonBuildReconciler{
 		Client:                        mgr.GetClient(),
 		Log:                           ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),

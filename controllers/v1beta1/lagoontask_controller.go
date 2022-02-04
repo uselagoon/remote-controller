@@ -290,6 +290,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							Labels: map[string]string{
 								"lagoon.sh/jobType":    "task",
 								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/crdVersion": crdVersion,
 								"lagoon.sh/controller": r.ControllerNamespace,
 							},
 							OwnerReferences: []metav1.OwnerReference{
@@ -432,6 +433,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			Labels: map[string]string{
 				"lagoon.sh/jobType":    "task",
 				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+				"lagoon.sh/crdVersion": crdVersion,
 				"lagoon.sh/controller": r.ControllerNamespace,
 			},
 			OwnerReferences: []metav1.OwnerReference{

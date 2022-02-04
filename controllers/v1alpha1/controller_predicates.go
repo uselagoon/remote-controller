@@ -20,16 +20,16 @@ type PodPredicates struct {
 func (p PodPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
+			// old resources for v1alpha1 won't have crdVersion label
+			if _, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+				return false
+			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match
 			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
-					// old resources for v1alpha1 won't have crdVersion label
-					if _, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
-						return false
-					}
 					return true
 				}
 			}
@@ -42,16 +42,16 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
+			// old resources for v1alpha1 won't have crdVersion label
+			if _, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+				return false
+			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match
 			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
-					// old resources for v1alpha1 won't have crdVersion label
-					if _, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
-						return false
-					}
 					return true
 				}
 			}
@@ -64,6 +64,10 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 func (p PodPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
+			// old resources for v1alpha1 won't have crdVersion label
+			if _, ok := e.ObjectNew.GetLabels()["lagoon.sh/crdVersion"]; ok {
+				return false
+			}
 			if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/buildName"]; okOld {
 				if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildName"]; ok {
 					match, _ := regexp.MatchString("^lagoon-build", value)
@@ -73,10 +77,6 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 			if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/jobType"]; ok {
 					if value == "task" {
-						// old resources for v1alpha1 won't have crdVersion label
-						if _, ok := e.ObjectNew.GetLabels()["lagoon.sh/crdVersion"]; ok {
-							return false
-						}
 						return true
 					}
 				}
@@ -90,6 +90,10 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 func (p PodPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
+			// old resources for v1alpha1 won't have crdVersion label
+			if _, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+				return false
+			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 				match, _ := regexp.MatchString("^lagoon-build", value)
 				return match

@@ -188,6 +188,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 							Labels: map[string]string{
 								"lagoon.sh/jobType":    "task",
 								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+								"lagoon.sh/crdVersion": crdVersion,
 								"lagoon.sh/controller": r.ControllerNamespace,
 							},
 							OwnerReferences: []metav1.OwnerReference{

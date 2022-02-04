@@ -26,7 +26,11 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
-					return true
+					if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+						if value == crdVersion {
+							return true
+						}
+					}
 				}
 			}
 		}
@@ -44,7 +48,11 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
-					return true
+					if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+						if value == crdVersion {
+							return true
+						}
+					}
 				}
 			}
 		}
@@ -65,7 +73,11 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 			if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/jobType"]; ok {
 					if value == "task" {
-						return true
+						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/crdVersion"]; ok {
+							if value == crdVersion {
+								return true
+							}
+						}
 					}
 				}
 			}
@@ -84,7 +96,11 @@ func (p PodPredicates) Generic(e event.GenericEvent) bool {
 			}
 			if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 				if value == "task" {
-					return true
+					if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+						if value == crdVersion {
+							return true
+						}
+					}
 				}
 			}
 		}

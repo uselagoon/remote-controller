@@ -36,6 +36,8 @@ var (
 		string(lagoonv1beta1.BuildStatusComplete),
 		string(lagoonv1beta1.BuildStatusCancelled),
 	}
+
+	crdVersion string = "lagoon.sh/v1beta1"
 )
 
 // ignoreNotFound will ignore not found errors

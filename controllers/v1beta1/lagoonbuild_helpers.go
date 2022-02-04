@@ -778,6 +778,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				"lagoon.sh/jobType":       "build",
 				"lagoon.sh/buildName":     lagoonBuild.ObjectMeta.Name,
 				"lagoon.sh/controller":    r.ControllerNamespace,
+				"lagoon.sh/crdVersion":    crdVersion,
 				"lagoon.sh/buildRemoteID": string(lagoonBuild.ObjectMeta.UID),
 			},
 			OwnerReferences: []metav1.OwnerReference{

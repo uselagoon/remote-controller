@@ -1,4 +1,4 @@
-domain: sh
+domain: lagoon.sh
 multigroup: true
 repo: github.com/uselagoon/remote-controller
 resources:
@@ -8,10 +8,10 @@ resources:
 - group: lagoon
   kind: LagoonTask
   version: v1alpha1
-- group: lagoon
+- group: crd
   kind: LagoonBuild
   version: v1beta1
-- group: lagoon
+- group: crd
   kind: LagoonTask
   version: v1beta1
 version: "2"

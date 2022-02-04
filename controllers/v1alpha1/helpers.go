@@ -36,6 +36,14 @@ var (
 		string(lagoonv1alpha1.BuildStatusComplete),
 		string(lagoonv1alpha1.BuildStatusCancelled),
 	}
+
+	//CompletedCancelledFailedPendingStatus .
+	CompletedCancelledFailedPendingStatus = []string{
+		string(lagoonv1alpha1.BuildStatusPending),
+		string(lagoonv1alpha1.BuildStatusFailed),
+		string(lagoonv1alpha1.BuildStatusComplete),
+		string(lagoonv1alpha1.BuildStatusCancelled),
+	}
 )
 
 // ignoreNotFound will ignore not found errors

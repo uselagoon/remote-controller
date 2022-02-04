@@ -213,15 +213,18 @@ echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 build_deploy_controller
 
+kubectl get crd lagoonbuilds.lagoon.amazee.io -o json | jq -r '. | .spec.versions[0].served |= false' | kubectl apply -f -
+kubectl get crd lagoontasks.lagoon.amazee.io -o json | jq -r '. | .spec.versions[0].served |= false' | kubectl apply -f -
+
 # echo "SLEEP"
 # sleep 1200
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml
 # patch the resource with the controller namespace
-kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.lagoon.sh lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
 # patch the resource with a random label to bump the controller event filter
-kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.lagoon.sh lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
 sleep 10
 check_lagoon_build ${LBUILD}
 

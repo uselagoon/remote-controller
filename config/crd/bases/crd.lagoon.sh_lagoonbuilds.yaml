@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
-  name: lagoonbuilds.lagoon.sh
+  name: lagoonbuilds.crd.lagoon.sh
 spec:
-  group: lagoon.sh
+  group: crd.lagoon.sh
   names:
     kind: LagoonBuild
     listKind: LagoonBuildList

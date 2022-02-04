@@ -213,8 +213,6 @@ echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 build_deploy_controller
 
-kubectl get crd lagoonbuilds.lagoon.amazee.io -o json | jq -r '. | .spec.versions[0].deprecated |= true' | kubectl apply -f -
-kubectl get crd lagoontasks.lagoon.amazee.io -o json | jq -r '. | .spec.versions[0].deprecated |= true' | kubectl apply -f -
 
 # echo "SLEEP"
 # sleep 1200

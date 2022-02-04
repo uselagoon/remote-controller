@@ -16,6 +16,7 @@ limitations under the License.
 // Package v1alpha1 contains API Schema definitions for the lagoon v1alpha1 API group
 // +kubebuilder:object:generate=true
 // +groupName=lagoon.amazee.io
+//+kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta1"
 package v1alpha1
 
 import (

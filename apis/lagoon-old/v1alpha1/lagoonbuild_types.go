@@ -41,6 +41,7 @@ const (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 //+kubebuilder:subresource:status
+//+kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta1"
 
 // LagoonBuildSpec defines the desired state of LagoonBuild
 type LagoonBuildSpec struct {

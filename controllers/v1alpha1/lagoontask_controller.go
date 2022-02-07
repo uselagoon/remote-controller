@@ -73,7 +73,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
-		opLog.Info(fmt.Sprintf("deprecated v1alpha1 resource %s found in namespace %s, removing. use v1beta1 version",
+		opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1alpha1 is deprecated in favor of v1beta1",
 			lagoonTask.ObjectMeta.Name,
 			req.NamespacedName.Namespace,
 		))

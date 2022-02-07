@@ -15,21 +15,11 @@ CONTROLLER_NAMESPACE=remote-controller-system
 CHECK_TIMEOUT=20
 
 NS=drupal-example-install
-LBUILD=lagoon-build-7m5zypx
-LBUILD2=lagoon-build-8m5zypx
+LBUILD=7m5zypx
+LBUILD2=8m5zypx
+LBUILDDEPRECATED=9m5zypx
 
 check_controller_log () {
-    echo "=========== CONTROLLER LOG ============"
-    kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
-    if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Build ${1} Failed")
-    then
-        # build failed, exit 1
-        tear_down
-        echo "============== FAILED ==============="
-        exit 1
-    fi
-}
-check_controller_log_build () {
     echo "=========== CONTROLLER LOG ============"
     kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
     if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Build ${1} Failed")
@@ -91,6 +81,15 @@ build_deploy_controller () {
     echo "==> Build and deploy controller"
     make test
     make docker-build IMG=${CONTROLLER_IMAGE}
+    make install
+
+    echo "==> Create a deprecated resource for the controller to clean up"
+    kubectl -n $LBUILDDEPRECATED apply -f test-resources/example-project1-deprecated.yaml
+    # patch the resource with the controller namespace
+    kubectl -n $LBUILDDEPRECATED patch lagoonbuilds.lagoon.amazee.io lagoon-build-${LBUILDDEPRECATED} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+    # patch the resource with a random label to bump the controller event filter
+    kubectl -n $LBUILDDEPRECATED patch lagoonbuilds.lagoon.amazee.io lagoon-build-${LBUILDDEPRECATED} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
     make deploy IMG=${CONTROLLER_IMAGE}
 
@@ -147,6 +146,22 @@ check_lagoon_build () {
     done
     echo "==> Build running"
     kubectl -n ${NS} logs ${1} -f
+}
+
+check_deprecated_build () {
+    CHECK_COUNTER=1
+    echo "==> Check deprecated build is removed"
+    if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "use v1beta1 resource"); then
+        echo "Deprecated build was removed"
+    else
+        echo "Deprecated build was not removed"
+        echo "=========== BUILD LOG ============"
+        check_controller_log ${1}
+        tear_down
+        echo "================ END ================"
+        echo "============== FAILED ==============="
+        exit 1
+    fi
 }
 
 start_docker_compose_services
@@ -217,14 +232,16 @@ build_deploy_controller
 # echo "SLEEP"
 # sleep 1200
 
+check_deprecated_build lagoon-build-${LBUILDDEPRECATED}
+
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml
 # patch the resource with the controller namespace
-kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-${LBUILD} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
 # patch the resource with a random label to bump the controller event filter
-kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-7m5zypx --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-${LBUILD} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
 sleep 10
-check_lagoon_build ${LBUILD}
+check_lagoon_build lagoon-build-${LBUILD}
 
 
 echo "==> Trigger a lagoon build using rabbitmq"
@@ -277,7 +294,7 @@ echo '
 curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
 echo ""
 sleep 10
-check_lagoon_build ${LBUILD2}
+check_lagoon_build lagoon-build-${LBUILD2}
 
 
 echo "==> Check pod cleanup worked"

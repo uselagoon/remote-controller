@@ -98,7 +98,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			CompletedCancelledFailedPendingStatus,
 			lagoonBuild.Labels["lagoon.sh/buildStatus"],
 		) {
-			opLog.Info(fmt.Sprintf("v1alpha1 is deprecated, resource %s found in namespace %s, removing. use v1beta1 resource",
+			opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1alpha1 is deprecated in favor of v1beta1",
 				lagoonBuild.ObjectMeta.Name,
 				req.NamespacedName.Namespace,
 			))

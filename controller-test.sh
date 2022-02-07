@@ -151,7 +151,7 @@ check_lagoon_build () {
 check_deprecated_build () {
     CHECK_COUNTER=1
     echo "==> Check deprecated build is removed"
-    if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "use v1beta1 resource"); then
+    if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "v1alpha1 is deprecated in favor of v1beta1"); then
         echo "Deprecated build was removed"
     else
         echo "Deprecated build was not removed"

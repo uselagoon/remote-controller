@@ -13,7 +13,7 @@ import (
 	harborv2 "github.com/mittwald/goharbor-client/v3/apiv2"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon-old/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -12,12 +12,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 )
 
 // DeleteLagoonBuilds will delete any lagoon builds from the namespace.
 func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
-	lagoonBuilds := &lagoonv1alpha1.LagoonBuildList{}
+	lagoonBuilds := &lagoonv1beta1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
 	})
@@ -60,7 +60,7 @@ func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, n
 
 // DeleteLagoonTasks will delete any lagoon tasks from the namespace.
 func (h *Messaging) DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
-	lagoonTasks := &lagoonv1alpha1.LagoonTaskList{}
+	lagoonTasks := &lagoonv1beta1.LagoonTaskList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
 	})

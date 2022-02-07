@@ -1,4 +1,4 @@
-package controllers
+package v1alpha1
 
 import (
 	"context"
@@ -14,14 +14,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-deprecated/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	// LabelAppManaged for discovery.
-	LabelAppManaged = "lagoon.amazee.io/managed-by"
 	// DefaultNamespacePattern is what is used when one is not provided.
 	DefaultNamespacePattern = "${project}-${environment}"
 )
@@ -34,6 +32,14 @@ var (
 	}
 	// CompletedCancelledFailedStatus .
 	CompletedCancelledFailedStatus = []string{
+		string(lagoonv1alpha1.BuildStatusFailed),
+		string(lagoonv1alpha1.BuildStatusComplete),
+		string(lagoonv1alpha1.BuildStatusCancelled),
+	}
+
+	//CompletedCancelledFailedPendingStatus .
+	CompletedCancelledFailedPendingStatus = []string{
+		string(lagoonv1alpha1.BuildStatusPending),
 		string(lagoonv1alpha1.BuildStatusFailed),
 		string(lagoonv1alpha1.BuildStatusComplete),
 		string(lagoonv1alpha1.BuildStatusCancelled),

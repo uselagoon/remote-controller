@@ -1,0 +1,7 @@
+apiVersion: lagoon.amazee.io/v1alpha1
+kind: LagoonTask
+metadata:
+  name: lagoontask-sample
+spec:
+  # Add fields here
+  foo: bar

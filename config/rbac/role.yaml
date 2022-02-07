@@ -13,6 +13,46 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - crd.lagoon.sh
+  resources:
+  - lagoonbuilds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.lagoon.sh
+  resources:
+  - lagoonbuilds/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - crd.lagoon.sh
+  resources:
+  - lagoontasks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.lagoon.sh
+  resources:
+  - lagoontasks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - lagoon.amazee.io
   resources:
   - lagoonbuilds

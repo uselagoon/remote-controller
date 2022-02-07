@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package v1beta1
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/handlers"
 	// Openshift
 )
@@ -75,11 +75,11 @@ type LagoonBuildReconciler struct {
 }
 
 var (
-	buildFinalizer = "finalizer.lagoonbuild.lagoon.amazee.io/v1alpha1"
+	buildFinalizer = "finalizer.lagoonbuild.crd.lagoon.sh/v1beta1"
 )
 
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=lagoon.amazee.io,resources=lagoonbuilds/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds/status,verbs=get;update;patch
 
 // @TODO: all the things for now, review later
 // +kubebuilder:rbac:groups="*",resources="*",verbs="*"
@@ -89,7 +89,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 
 	// your logic here
-	var lagoonBuild lagoonv1alpha1.LagoonBuild
+	var lagoonBuild lagoonv1beta1.LagoonBuild
 	if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
@@ -99,7 +99,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// if the build isn't being deleted, but the status is cancelled
 		// then clean up the undeployable build
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
-			if value == string(lagoonv1alpha1.BuildStatusCancelled) {
+			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
 				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
 			}
@@ -107,11 +107,11 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			// if we do have a `lagoon.sh/buildStatus` set as running, then process it
-			runningNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
+			runningNSBuilds := &lagoonv1beta1.LagoonBuildList{}
 			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 				client.InNamespace(req.Namespace),
 				client.MatchingLabels(map[string]string{
-					"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
+					"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
 					"lagoon.sh/controller":  r.ControllerNamespace,
 				}),
 			})
@@ -168,7 +168,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // and we set it to watch LagoonBuilds
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&lagoonv1alpha1.LagoonBuild{}).
+		For(&lagoonv1beta1.LagoonBuild{}).
 		WithEventFilter(BuildPredicates{
 			ControllerNamespace: r.ControllerNamespace,
 		}).
@@ -177,7 +177,7 @@ func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild lagoonv1alpha1.LagoonBuild) (ctrl.Result, error) {
+	lagoonBuild lagoonv1beta1.LagoonBuild) (ctrl.Result, error) {
 
 	namespace := &corev1.Namespace{}
 	opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
@@ -218,19 +218,19 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
 	// so end this reconcile process
-	pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
-	return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1alpha1.BuildStatusPending))
+	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
+	return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1beta1.BuildStatusPending))
 }
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace
 // then clean up the old one.
-func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, build *lagoonv1alpha1.LagoonBuild, ns string) error {
+func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, build *lagoonv1beta1.LagoonBuild, ns string) error {
 	newBuild := build.DeepCopy()
 	newBuild.SetNamespace(ns)
 	newBuild.SetResourceVersion("")
 	newBuild.SetLabels(
 		map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
+			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		},
 	)

@@ -1,4 +1,4 @@
-package controllers
+package v1beta1
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/go-logr/logr"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +21,7 @@ type BuildQoS struct {
 
 func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	lagoonBuild lagoonv1beta1.LagoonBuild,
 	req ctrl.Request) (ctrl.Result, error) {
 	// check if we get a lagoonbuild that hasn't got any buildstatus
 	// this means it was created by the message queue handler
@@ -37,11 +37,11 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
+			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
-	runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
+	runningBuilds := &lagoonv1beta1.LagoonBuildList{}
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 	}
@@ -56,11 +56,11 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		// if there are any free slots to start a build, do that here
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
+				"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
-		pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 			return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 		}
@@ -89,11 +89,11 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 			for idx, pBuild := range pendingBuilds.Items {
 				if idx <= buildsToStart {
 					// if we do have a `lagoon.sh/buildStatus` set, then process as normal
-					runningNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
+					runningNSBuilds := &lagoonv1beta1.LagoonBuildList{}
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 						client.InNamespace(pBuild.ObjectMeta.Namespace),
 						client.MatchingLabels(map[string]string{
-							"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
+							"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						}),
 					})
@@ -103,7 +103,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
-						pendingNSBuilds := &lagoonv1alpha1.LagoonBuildList{}
+						pendingNSBuilds := &lagoonv1beta1.LagoonBuildList{}
 						return cancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running")
 					}
 					// The object is not being deleted, so if it does not have our finalizer,

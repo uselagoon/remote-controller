@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package v1alpha1
 
 import (
 	"context"
@@ -27,11 +27,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-deprecated/v1alpha1"
 	// openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 )
@@ -74,14 +73,12 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
-		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeStandard) {
-			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
-		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == string(lagoonv1alpha1.TaskStatusPending) &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == string(lagoonv1alpha1.TaskTypeAdvanced) {
-			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
+		opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1alpha1 is deprecated in favor of v1beta1",
+			lagoonTask.ObjectMeta.Name,
+			req.NamespacedName.Namespace,
+		))
+		if err := r.Delete(ctx, &lagoonTask); err != nil {
+			return ctrl.Result{}, err
 		}
 	} else {
 		// The object is being deleted
@@ -324,226 +321,6 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 		lagoonTask.Spec.Environment.Name,
 		err,
 	)
-}
-
-func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask, opLog logr.Logger) error {
-	newTaskPod := &corev1.Pod{}
-	var err error
-	// get the podspec from openshift or kubernetes, then get or create a new pod to run the task in
-	if r.IsOpenshift {
-		newTaskPod, err = r.getTaskPodDeploymentConfig(ctx, lagoonTask)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("%v", err))
-			//@TODO: send msg back and update task to failed?
-			return nil
-		}
-	} else {
-		newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("%v", err))
-			//@TODO: send msg back and update task to failed?
-			return nil
-		}
-	}
-	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
-	// once the pod spec has been defined, check if it isn't already created
-	err = r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonTask.ObjectMeta.Namespace,
-		Name:      newTaskPod.ObjectMeta.Name,
-	}, newTaskPod)
-	if err != nil {
-		// if it doesn't exist, then create the task pod
-		token, err := r.getDeployerToken(ctx, lagoonTask)
-		if err != nil {
-			return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
-		}
-		config := &rest.Config{
-			BearerToken: token,
-			Host:        "https://kubernetes.default.svc",
-			TLSClientConfig: rest.TLSClientConfig{
-				Insecure: true,
-			},
-		}
-		// create the client using the rest config.
-		c, err := client.New(config, client.Options{})
-		if err != nil {
-			return fmt.Errorf("Task failed creating the client, error was: %v", err)
-		}
-		opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
-		// use the client that was created with the deployer-token to create the task pod
-		if err := c.Create(ctx, newTaskPod); err != nil {
-			opLog.Info(
-				fmt.Sprintf(
-					"Unable to create task pod for project %s, environment %s: %v",
-					lagoonTask.Spec.Project.Name,
-					lagoonTask.Spec.Environment.Name,
-					err,
-				),
-			)
-			//@TODO: send msg back and update task to failed?
-			return nil
-		}
-	} else {
-		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
-	}
-	// The object is not being deleted, so if it does not have our finalizer,
-	// then lets add the finalizer and update the object. This is equivalent
-	// registering our finalizer.
-	if !containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
-		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
-		// use patches to avoid update errors
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"finalizers": lagoonTask.ObjectMeta.Finalizers,
-			},
-		})
-		if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// createAdvancedTask allows running of more advanced tasks than the standard lagoon tasks
-// see notes in the docs for infomration about advanced tasks
-func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1alpha1.LagoonTask, opLog logr.Logger) error {
-	serviceAccount := &corev1.ServiceAccount{}
-	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
-	if err != nil {
-		return err
-	}
-	var serviceaccountTokenSecret string
-	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
-		if match {
-			serviceaccountTokenSecret = secret.Name
-			break
-		}
-	}
-	if serviceaccountTokenSecret == "" {
-		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
-	}
-	newPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      lagoonTask.ObjectMeta.Name,
-			Namespace: lagoonTask.Spec.Environment.OpenshiftProjectName,
-			Labels: map[string]string{
-				"lagoon.sh/jobType":    "task",
-				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
-				"lagoon.sh/controller": r.ControllerNamespace,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: fmt.Sprintf("%v", lagoonv1alpha1.GroupVersion),
-					Kind:       "LagoonTask",
-					Name:       lagoonTask.ObjectMeta.Name,
-					UID:        lagoonTask.UID,
-				},
-			},
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: "Never",
-			Volumes: []corev1.Volume{
-				{
-					Name: serviceaccountTokenSecret,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: intPtr(420),
-						},
-					},
-				},
-				{
-					Name: "lagoon-sshkey",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  "lagoon-sshkey",
-							DefaultMode: intPtr(420),
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:            "lagoon-task",
-					Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
-					ImagePullPolicy: "Always",
-					Env: []corev1.EnvVar{
-						{
-							Name:  "JSON_PAYLOAD",
-							Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
-						},
-						{
-							Name:  "NAMESPACE",
-							Value: lagoonTask.Spec.Environment.OpenshiftProjectName,
-						},
-						{
-							Name:  "PODNAME",
-							Value: lagoonTask.ObjectMeta.Name,
-						},
-						{
-							Name:  "LAGOON_PROJECT",
-							Value: lagoonTask.Spec.Project.Name,
-						},
-						{
-							Name:  "LAGOON_GIT_BRANCH",
-							Value: lagoonTask.Spec.Environment.Name,
-						},
-						{
-							Name:  "TASK_API_HOST",
-							Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
-						},
-						{
-							Name:  "TASK_SSH_HOST",
-							Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
-						},
-						{
-							Name:  "TASK_SSH_PORT",
-							Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
-						},
-						{
-							Name:  "TASK_DATA_ID",
-							Value: lagoonTask.Spec.Task.ID,
-						},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      serviceaccountTokenSecret,
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/deployer",
-						},
-						{
-							Name:      "lagoon-sshkey",
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/ssh",
-						},
-					},
-				},
-			},
-		},
-	}
-	token, err := r.getDeployerToken(ctx, lagoonTask)
-	if err != nil {
-		return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
-	}
-	config := &rest.Config{
-		BearerToken: token,
-		Host:        "https://kubernetes.default.svc",
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-	// create the client using the rest config.
-	c, err := client.New(config, client.Options{})
-	if err != nil {
-		return fmt.Errorf("Task failed creating the client, error was: %v", err)
-	}
-	// use the client that was created with the deployer-token to create the task pod
-	if err := c.Create(ctx, newPod); err != nil {
-		return err
-	}
-	return nil
 }
 
 // check for the API/SSH settings in the task spec first, if nothing there use the one from our settings.

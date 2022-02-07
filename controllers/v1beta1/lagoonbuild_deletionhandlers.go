@@ -1,4 +1,4 @@
-package controllers
+package v1beta1
 
 // this file is used by the `lagoonbuild` controller
 
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -25,7 +25,7 @@ import (
 func (r *LagoonBuildReconciler) deleteExternalResources(
 	ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	req ctrl.Request,
 ) error {
 	// get any running pods that this build may have already created
@@ -82,11 +82,11 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 
 	// if the LagoonBuild is deleted, then check if the only running build is the one being deleted
 	// or if there are any pending builds that can be started
-	runningBuilds := &lagoonv1alpha1.LagoonBuildList{}
+	runningBuilds := &lagoonv1beta1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
+			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -106,11 +106,11 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	}
 	// if the number of runningBuilds is 0 (excluding the one being deleted)
 	if len(newRunningBuilds) == 0 {
-		pendingBuilds := &lagoonv1alpha1.LagoonBuildList{}
+		pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusPending),
+				"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -137,7 +137,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
-						"lagoon.sh/buildStatus": string(lagoonv1alpha1.BuildStatusRunning),
+						"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
 					},
 				},
 			})
@@ -155,7 +155,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
-	lagoonBuild lagoonv1alpha1.LagoonBuild,
+	lagoonBuild lagoonv1beta1.LagoonBuild,
 ) error {
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 	// if the build status is Pending or Running,
@@ -165,8 +165,8 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 	// so we don't have to do anything else.
 	if containsString(
 		[]string{
-			string(lagoonv1alpha1.BuildStatusPending),
-			string(lagoonv1alpha1.BuildStatusRunning),
+			string(lagoonv1beta1.BuildStatusPending),
+			string(lagoonv1beta1.BuildStatusRunning),
 		},
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
@@ -185,8 +185,8 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 ========================================
 Build cancelled
 ========================================`))
-		var jobCondition lagoonv1alpha1.BuildStatusType
-		jobCondition = lagoonv1alpha1.BuildStatusCancelled
+		var jobCondition lagoonv1beta1.BuildStatusType
+		jobCondition = lagoonv1beta1.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -224,16 +224,16 @@ Build cancelled
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
 func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	logs []byte,
 ) {
 	if r.EnableMQ {
 		condition := "cancelled"
-		msg := lagoonv1alpha1.LagoonLog{
+		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
 			Event:    "build-logs:builddeploy-kubernetes:" + lagoonBuild.ObjectMeta.Name,
-			Meta: &lagoonv1alpha1.LagoonLogMeta{
+			Meta: &lagoonv1beta1.LagoonLogMeta{
 				JobName:    lagoonBuild.ObjectMeta.Name,
 				BranchName: lagoonBuild.Spec.Project.Environment,
 				BuildPhase: condition,
@@ -271,15 +271,15 @@ Logs on pod %s
 // this is for the handler in lagoon to process.
 func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 ) {
 	if r.EnableMQ {
 		condition := "cancelled"
-		msg := lagoonv1alpha1.LagoonMessage{
+		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
 			Namespace: lagoonBuild.ObjectMeta.Namespace,
-			Meta: &lagoonv1alpha1.LagoonLogMeta{
+			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,
 				BuildPhase:  condition,
@@ -354,15 +354,15 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 // cancelledBuildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap) {
 	if r.EnableMQ {
 		condition := "cancelled"
-		msg := lagoonv1alpha1.LagoonLog{
+		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
 			Event:    "task:builddeploy-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
-			Meta: &lagoonv1alpha1.LagoonLogMeta{
+			Meta: &lagoonv1beta1.LagoonLogMeta{
 				ProjectName: lagoonBuild.Spec.Project.Name,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
 				BuildPhase:  condition,
@@ -414,8 +414,8 @@ func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context
 
 // updateEnvironmentMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonBuildReconciler) updateEnvironmentMessage(ctx context.Context,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	envMessage lagoonv1alpha1.LagoonMessage,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	envMessage lagoonv1beta1.LagoonMessage,
 ) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
@@ -436,8 +436,8 @@ func (r *LagoonBuildReconciler) updateEnvironmentMessage(ctx context.Context,
 
 // updateBuildStatusMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonBuildReconciler) updateBuildStatusMessage(ctx context.Context,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	statusMessage lagoonv1alpha1.LagoonLog,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	statusMessage lagoonv1beta1.LagoonLog,
 ) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{
@@ -458,7 +458,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusMessage(ctx context.Context,
 
 // removeBuildPendingMessageStatus purges the status messages from the resource once they are successfully re-sent
 func (r *LagoonBuildReconciler) removeBuildPendingMessageStatus(ctx context.Context,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
 ) error {
 	// if we have the pending messages label as true, then we want to remove this label and any pending statusmessages
 	// so we can avoid double handling, or an old pending message from being sent after a new pending message
@@ -482,8 +482,8 @@ func (r *LagoonBuildReconciler) removeBuildPendingMessageStatus(ctx context.Cont
 
 // updateBuildLogMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
 func (r *LagoonBuildReconciler) updateBuildLogMessage(ctx context.Context,
-	lagoonBuild *lagoonv1alpha1.LagoonBuild,
-	buildMessage lagoonv1alpha1.LagoonLog,
+	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	buildMessage lagoonv1beta1.LagoonLog,
 ) error {
 	// set the transition time
 	mergePatch, _ := json.Marshal(map[string]interface{}{

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package v1alpha1
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"io"
 
 	"github.com/go-logr/logr"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1alpha1 "github.com/uselagoon/remote-controller/apis/lagoon-deprecated/v1alpha1"
 	"github.com/uselagoon/remote-controller/handlers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

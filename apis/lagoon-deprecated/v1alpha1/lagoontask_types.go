@@ -139,6 +139,7 @@ type LagoonTask struct {
 }
 
 // +kubebuilder:object:root=true
+//+kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta1"
 
 // LagoonTaskList contains a list of LagoonTask
 type LagoonTaskList struct {

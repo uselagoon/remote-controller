@@ -1,4 +1,4 @@
-package controllers
+package v1beta1
 
 // LagoonEnvironmentVariable is used to define Lagoon environment variables.
 type LagoonEnvironmentVariable struct {

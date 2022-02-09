@@ -220,7 +220,7 @@ func main() {
 	flag.BoolVar(&buildsCleanUpEnable, "enable-lagoonbuilds-cleanup", true, "Flag to enable lagoonbuild resources cleanup.")
 	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the lagoonbuild resources cleanup.")
-	flag.IntVar(&buildsToKeep, "num-builds-to-keep", 5, "The number of lagoonbuild resources to keep per namespace.")
+	flag.IntVar(&buildsToKeep, "num-builds-to-keep", 1, "The number of lagoonbuild resources to keep per namespace.")
 	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
 	flag.BoolVar(&taskPodCleanUpEnable, "enable-task-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&taskPodCleanUpCron, "task-pod-cleanup-cron", "30 * * * *",
@@ -228,7 +228,7 @@ func main() {
 	flag.BoolVar(&taskCleanUpEnable, "enable-lagoontasks-cleanup", true, "Flag to enable lagoontask resources cleanup.")
 	flag.StringVar(&taskCleanUpCron, "lagoontasks-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the lagoontask resources cleanup.")
-	flag.IntVar(&tasksToKeep, "num-tasks-to-keep", 5, "The number of lagoontask resources to keep per namespace.")
+	flag.IntVar(&tasksToKeep, "num-tasks-to-keep", 1, "The number of lagoontask resources to keep per namespace.")
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")

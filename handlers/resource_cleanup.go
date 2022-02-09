@@ -61,7 +61,7 @@ func (h *Cleanup) LagoonBuildCleanup() {
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build cleanup", ns.ObjectMeta.Name))
 			return
 		}
 		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
@@ -69,7 +69,6 @@ func (h *Cleanup) LagoonBuildCleanup() {
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/jobType":    "build",
 				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
 			}),
 		})
@@ -86,7 +85,7 @@ func (h *Cleanup) LagoonBuildCleanup() {
 				if idx >= h.BuildsToKeep {
 					if containsString(
 						BuildCompletedCancelledFailedStatus,
-						lagoonBuild.ObjectMeta.Annotations["lagoon.sh/buildStatus"],
+						lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
 						if err := h.Client.Delete(context.Background(), &lagoonBuild); err != nil {
@@ -118,7 +117,7 @@ func (h *Cleanup) LagoonTaskCleanup() {
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task cleanup", ns.ObjectMeta.Name))
 			return
 		}
 		opLog.Info(fmt.Sprintf("Checking LagoonTasks in namespace %s", ns.ObjectMeta.Name))
@@ -126,7 +125,6 @@ func (h *Cleanup) LagoonTaskCleanup() {
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/jobType":    "task",
 				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
 			}),
 		})
@@ -143,7 +141,7 @@ func (h *Cleanup) LagoonTaskCleanup() {
 				if idx >= h.TasksToKeep {
 					if containsString(
 						TaskCompletedCancelledFailedStatus,
-						lagoonTask.ObjectMeta.Annotations["lagoon.sh/taskStatus"],
+						lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))
 						if err := h.Client.Delete(context.Background(), &lagoonTask); err != nil {
@@ -175,7 +173,7 @@ func (h *Cleanup) BuildPodCleanup() {
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod cleanup", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pod cleanup", ns.ObjectMeta.Name))
 			return
 		}
 		opLog.Info(fmt.Sprintf("Checking Lagoon build pods in namespace %s", ns.ObjectMeta.Name))

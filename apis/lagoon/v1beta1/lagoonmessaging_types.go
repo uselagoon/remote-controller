@@ -17,12 +17,15 @@ type LagoonLog struct {
 type LagoonLogMeta struct {
 	BranchName     string          `json:"branchName,omitempty"`
 	BuildName      string          `json:"buildName,omitempty"`
-	BuildPhase     string          `json:"buildPhase,omitempty"`
+	BuildPhase     string          `json:"buildPhase,omitempty"` // @TODO: deprecate once controller-handler is fixed
+	BuildStatus    string          `json:"buildStatus,omitempty"`
+	BuildStep      string          `json:"buildStep,omitempty"`
 	EndTime        string          `json:"endTime,omitempty"`
 	Environment    string          `json:"environment,omitempty"`
 	EnvironmentID  *uint           `json:"environmentId,omitempty"`
-	JobName        string          `json:"jobName,omitempty"`
-	JobStatus      string          `json:"jobStatus,omitempty"`
+	JobName        string          `json:"jobName,omitempty"`   // used by tasks/jobs
+	JobStatus      string          `json:"jobStatus,omitempty"` // used by tasks/jobs
+	JobStep        string          `json:"jobStep,omitempty"`   // used by tasks/jobs
 	LogLink        string          `json:"logLink,omitempty"`
 	MonitoringURLs []string        `json:"monitoringUrls,omitempty"`
 	Project        string          `json:"project,omitempty"`

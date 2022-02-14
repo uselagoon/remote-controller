@@ -229,17 +229,24 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 ) {
 	if r.EnableMQ {
 		condition := "cancelled"
+		buildStep := "cancelled"
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+			buildStep = value
+		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
 			Event:    "build-logs:builddeploy-kubernetes:" + lagoonBuild.ObjectMeta.Name,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
-				JobName:    lagoonBuild.ObjectMeta.Name,
-				BranchName: lagoonBuild.Spec.Project.Environment,
-				BuildPhase: condition,
-				RemoteID:   string(lagoonBuild.ObjectMeta.UID),
-				LogLink:    lagoonBuild.Spec.Project.UILink,
-				Cluster:    r.LagoonTargetName,
+				JobName:     lagoonBuild.ObjectMeta.Name, // @TODO: remove once lagoon is corrected in controller-handler
+				BuildName:   lagoonBuild.ObjectMeta.Name,
+				BuildPhase:  condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
+				BuildStatus: condition, // same as buildstatus label
+				BuildStep:   buildStep,
+				BranchName:  lagoonBuild.Spec.Project.Environment,
+				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
+				LogLink:     lagoonBuild.Spec.Project.UILink,
+				Cluster:     r.LagoonTargetName,
 			},
 		}
 		// add the actual build log message

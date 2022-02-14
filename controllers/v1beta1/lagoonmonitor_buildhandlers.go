@@ -157,10 +157,14 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 		case corev1.PodSucceeded:
 			condition = "complete"
 		}
-		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if bStatus == string(lagoonv1beta1.BuildStatusCancelled) {
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				condition = "cancelled"
 			}
+		}
+		buildStep := "running"
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
@@ -169,9 +173,12 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				EnvironmentID: lagoonBuild.Spec.Project.EnvironmentID,
 				ProjectID:     lagoonBuild.Spec.Project.ID,
-				JobName:       lagoonBuild.ObjectMeta.Name,
+				JobName:       lagoonBuild.ObjectMeta.Name, // @TODO: remove once lagoon is corrected in controller-handler
+				BuildName:     lagoonBuild.ObjectMeta.Name,
 				BranchName:    lagoonBuild.Spec.Project.Environment,
-				BuildPhase:    condition,
+				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
+				BuildStatus:   condition, // same as buildstatus label
+				BuildStep:     buildStep,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				LogLink:       lagoonBuild.Spec.Project.UILink,
 				Cluster:       r.LagoonTargetName,
@@ -217,10 +224,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		case corev1.PodSucceeded:
 			condition = "complete"
 		}
-		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if bStatus == string(lagoonv1beta1.BuildStatusCancelled) {
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				condition = "cancelled"
 			}
+		}
+		buildStep := "running"
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
@@ -230,8 +241,10 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 				EnvironmentID: lagoonBuild.Spec.Project.EnvironmentID,
 				Project:       lagoonBuild.Spec.Project.Name,
 				ProjectID:     lagoonBuild.Spec.Project.ID,
-				BuildPhase:    condition,
 				BuildName:     lagoonBuild.ObjectMeta.Name,
+				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
+				BuildStatus:   condition, // same as buildstatus label
+				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
 				Cluster:       r.LagoonTargetName,
@@ -325,10 +338,14 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 		case corev1.PodSucceeded:
 			condition = "complete"
 		}
-		if bStatus, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if bStatus == string(lagoonv1beta1.BuildStatusCancelled) {
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				condition = "cancelled"
 			}
+		}
+		buildStep := "running"
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
@@ -339,8 +356,10 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 				ProjectID:     lagoonBuild.Spec.Project.ID,
 				ProjectName:   lagoonBuild.Spec.Project.Name,
 				BranchName:    lagoonBuild.Spec.Project.Environment,
-				BuildPhase:    condition,
 				BuildName:     lagoonBuild.ObjectMeta.Name,
+				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
+				BuildStatus:   condition, // same as buildstatus label
+				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
 				Cluster:       r.LagoonTargetName,
 			},

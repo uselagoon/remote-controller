@@ -230,9 +230,6 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 	if r.EnableMQ {
 		condition := "cancelled"
 		buildStep := "cancelled"
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
-			buildStep = value
-		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,

@@ -163,7 +163,7 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			}
 		}
 		buildStep := "running"
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonLog{
@@ -230,7 +230,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			}
 		}
 		buildStep := "running"
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonMessage{
@@ -344,7 +344,7 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 			}
 		}
 		buildStep := "running"
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStep"]; ok {
+		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonLog{

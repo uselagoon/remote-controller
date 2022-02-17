@@ -764,6 +764,18 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.LFFDefaultIsolationNetworkPolicy,
 		})
 	}
+	if r.LFFForceInsights != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_FEATURE_FLAG_FORCE_INSIGHTS",
+			Value: r.LFFForceInsights,
+		})
+	}
+	if r.LFFDefaultInsights != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_FEATURE_FLAG_DEFAULT_INSIGHTS",
+			Value: r.LFFDefaultInsights,
+		})
+	}
 	// Use the build image in the controller definition
 	buildImage := r.BuildImage
 	if lagoonBuild.Spec.Build.Image != "" {

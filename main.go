@@ -146,6 +146,8 @@ func main() {
 	var httpProxy string = ""
 	var httpsProxy string = ""
 	var noProxy string = ""
+	var enablePodProxy bool
+	var podsUseDifferentProxy bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
@@ -288,6 +290,12 @@ func main() {
 	// If installing this controller from scratch, deprecated APIs should not be configured
 	flag.BoolVar(&enableDeprecatedAPIs, "enable-deprecated-apis", false, "Flag to have this controller enable support for deprecated APIs.")
 
+	// Use a different proxy to what this pod is started with
+	flag.BoolVar(&enablePodProxy, "enable-pod-proxy", false,
+		"Flag to have this controller inject proxy variables to build and task pods.")
+	flag.BoolVar(&podsUseDifferentProxy, "pods-use-different-proxy", false,
+		"Flag to have this controller provide different proxy configuration to build pods.\nUse LAGOON_HTTP_PROXY, LAGOON_HTTPS_PROXY, and LAGOON_NO_PROXY when using this flag")
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -362,9 +370,16 @@ func main() {
 	// this is used to control setting the service id into build pods
 	fastlyWatchStatus = getEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
 
-	httpProxy = getEnv("HTTP_PROXY", httpProxy)
-	httpsProxy = getEnv("HTTPS_PROXY", httpsProxy)
-	noProxy = getEnv("HTTP_PROXY", noProxy)
+	if enablePodProxy {
+		httpProxy = getEnv("HTTP_PROXY", httpProxy)
+		httpsProxy = getEnv("HTTPS_PROXY", httpsProxy)
+		noProxy = getEnv("HTTP_PROXY", noProxy)
+		if podsUseDifferentProxy {
+			httpProxy = getEnv("LAGOON_HTTP_PROXY", httpProxy)
+			httpsProxy = getEnv("LAGOON_HTTPS_PROXY", httpsProxy)
+			noProxy = getEnv("LAGOON_HTTP_PROXY", noProxy)
+		}
+	}
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -754,6 +769,11 @@ func main() {
 		},
 		EnableDebug:      enableDebug,
 		LagoonTargetName: lagoonTargetName,
+		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
+			HTTPProxy:  httpProxy,
+			HTTPSProxy: httpsProxy,
+			NoProxy:    noProxy,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

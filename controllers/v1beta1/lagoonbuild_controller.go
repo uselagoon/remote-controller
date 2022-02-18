@@ -74,6 +74,13 @@ type LagoonBuildReconciler struct {
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int
 	LagoonTargetName                 string
+	ProxyConfig                      ProxyConfig
+}
+
+type ProxyConfig struct {
+	HTTPProxy  string
+	HTTPSProxy string
+	NoProxy    string
 }
 
 var (

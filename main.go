@@ -143,6 +143,10 @@ func main() {
 
 	var enableDeprecatedAPIs bool
 
+	var httpProxy string = ""
+	var httpsProxy string = ""
+	var noProxy string = ""
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -357,6 +361,10 @@ func main() {
 	fastlyServiceID = getEnv("FASTLY_SERVICE_ID", fastlyServiceID)
 	// this is used to control setting the service id into build pods
 	fastlyWatchStatus = getEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
+
+	httpProxy = getEnv("HTTP_PROXY", httpProxy)
+	httpsProxy = getEnv("HTTPS_PROXY", httpsProxy)
+	noProxy = getEnv("HTTP_PROXY", noProxy)
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -711,6 +719,11 @@ func main() {
 		BuildQoS:                         buildQoSConfig,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
+		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
+			HTTPProxy:  httpProxy,
+			HTTPSProxy: httpsProxy,
+			NoProxy:    noProxy,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

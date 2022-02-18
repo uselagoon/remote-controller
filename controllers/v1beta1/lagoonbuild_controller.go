@@ -59,6 +59,8 @@ type LagoonBuildReconciler struct {
 	LFFDefaultRootlessWorkload       string
 	LFFForceIsolationNetworkPolicy   string
 	LFFDefaultIsolationNetworkPolicy string
+	LFFForceInsights                 string
+	LFFDefaultInsights               string
 	BackupDefaultSchedule            string
 	BackupDefaultMonthlyRetention    int
 	BackupDefaultWeeklyRetention     int

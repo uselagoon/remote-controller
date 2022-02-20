@@ -46,6 +46,7 @@ type LagoonTaskReconciler struct {
 	TaskSettings        LagoonTaskSettings
 	EnableDebug         bool
 	LagoonTargetName    string
+	ProxyConfig         ProxyConfig
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -163,6 +164,37 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
 					})
+					// add proxy variables to builds if they are defined
+					if r.ProxyConfig.HTTPProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "HTTP_PROXY",
+							Value: r.ProxyConfig.HTTPProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "http_proxy",
+							Value: r.ProxyConfig.HTTPProxy,
+						})
+					}
+					if r.ProxyConfig.HTTPSProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "HTTPS_PROXY",
+							Value: r.ProxyConfig.HTTPSProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "https_proxy",
+							Value: r.ProxyConfig.HTTPSProxy,
+						})
+					}
+					if r.ProxyConfig.NoProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "NO_PROXY",
+							Value: r.ProxyConfig.NoProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "no_proxy",
+							Value: r.ProxyConfig.NoProxy,
+						})
+					}
 					for idx2, env := range depCon.Env {
 						// remove any cronjobs from the envvars
 						if env.Name == "CRONJOBS" {
@@ -265,6 +297,37 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
 					})
+					// add proxy variables to builds if they are defined
+					if r.ProxyConfig.HTTPProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "HTTP_PROXY",
+							Value: r.ProxyConfig.HTTPProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "http_proxy",
+							Value: r.ProxyConfig.HTTPProxy,
+						})
+					}
+					if r.ProxyConfig.HTTPSProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "HTTPS_PROXY",
+							Value: r.ProxyConfig.HTTPSProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "https_proxy",
+							Value: r.ProxyConfig.HTTPSProxy,
+						})
+					}
+					if r.ProxyConfig.NoProxy != "" {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "NO_PROXY",
+							Value: r.ProxyConfig.NoProxy,
+						})
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "no_proxy",
+							Value: r.ProxyConfig.NoProxy,
+						})
+					}
 					for idx2, env := range depCon.Env {
 						// remove any cronjobs from the envvars
 						if env.Name == "CRONJOBS" {

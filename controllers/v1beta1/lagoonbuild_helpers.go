@@ -514,6 +514,37 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: strconv.Itoa(r.NativeCronPodMinFrequency),
 		},
 	}
+	// add proxy variables to builds if they are defined
+	if r.ProxyConfig.HTTPProxy != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "HTTP_PROXY",
+			Value: r.ProxyConfig.HTTPProxy,
+		})
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "http_proxy",
+			Value: r.ProxyConfig.HTTPProxy,
+		})
+	}
+	if r.ProxyConfig.HTTPSProxy != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "HTTPS_PROXY",
+			Value: r.ProxyConfig.HTTPSProxy,
+		})
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "https_proxy",
+			Value: r.ProxyConfig.HTTPSProxy,
+		})
+	}
+	if r.ProxyConfig.NoProxy != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "NO_PROXY",
+			Value: r.ProxyConfig.NoProxy,
+		})
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "no_proxy",
+			Value: r.ProxyConfig.NoProxy,
+		})
+	}
 	if r.IsOpenshift {
 		// openshift builds have different names for some things, and also additional values to add
 		podEnvs = append(podEnvs, corev1.EnvVar{

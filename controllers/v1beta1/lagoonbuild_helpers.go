@@ -901,13 +901,27 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		},
 	}
 
+	namespace := &corev1.Namespace{}
+	if err := r.Get(ctx, types.NamespacedName{Name: lagoonBuild.ObjectMeta.Namespace}, namespace); err != nil {
+		if ignoreNotFound(err) != nil {
+			return err
+		}
+	}
+	var runAsUser int64 = 0
+	var fsGroup int64 = 0
+	if val, ok := namespace.Annotations["openshift.io/sa.scc.uid-range"]; ok {
+		i, err := strconv.ParseInt(strings.Split(val, "/")[0], 10, 64)
+		if err != nil {
+			return err
+		}
+		runAsUser = i
+		fsGroup = i
+	}
 	// set the pod security context, if defined to a non-default value
-	if r.BuildPodRunAsUser != 0 || r.BuildPodRunAsGroup != 0 ||
-		r.BuildPodFSGroup != 0 {
+	if runAsUser != 0 || fsGroup != 0 {
 		newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
-			RunAsUser:  &r.BuildPodRunAsUser,
-			RunAsGroup: &r.BuildPodRunAsGroup,
-			FSGroup:    &r.BuildPodFSGroup,
+			RunAsUser: &runAsUser,
+			FSGroup:   &fsGroup,
 		}
 	}
 

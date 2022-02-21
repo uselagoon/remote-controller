@@ -834,7 +834,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: "Never",
+			ServiceAccountName: "lagoon-deployer",
+			RestartPolicy:      "Never",
 			Volumes: []corev1.Volume{
 				{
 					Name: serviceaccountTokenSecret,

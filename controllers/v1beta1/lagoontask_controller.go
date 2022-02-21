@@ -509,7 +509,8 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: "Never",
+			ServiceAccountName: "lagoon-deployer",
+			RestartPolicy:      "Never",
 			Volumes: []corev1.Volume{
 				{
 					Name: serviceaccountTokenSecret,

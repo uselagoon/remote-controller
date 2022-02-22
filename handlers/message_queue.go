@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cheshir/go-mq"
-	lagoonv1alpha1 "github.com/uselagoon/remote-controller/api/v1alpha1"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -96,7 +96,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 	err = messageQueue.SetConsumerHandler("builddeploy-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshal the body into a lagoonbuild
-			newBuild := &lagoonv1alpha1.LagoonBuild{}
+			newBuild := &lagoonv1beta1.LagoonBuild{}
 			json.Unmarshal(message.Body(), newBuild)
 			// new builds that come in should initially get created in the controllers own
 			// namespace before being handled and re-created in the correct namespace
@@ -172,10 +172,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 							branch,
 						),
 					)
-					msg := lagoonv1alpha1.LagoonMessage{
+					msg := lagoonv1beta1.LagoonMessage{
 						Type:      "remove",
 						Namespace: ns,
-						Meta: &lagoonv1alpha1.LagoonLogMeta{
+						Meta: &lagoonv1beta1.LagoonLogMeta{
 							Project:     project,
 							Environment: branch,
 						},
@@ -241,10 +241,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					branch,
 				),
 			)
-			msg := lagoonv1alpha1.LagoonMessage{
+			msg := lagoonv1beta1.LagoonMessage{
 				Type:      "remove",
 				Namespace: ns,
-				Meta: &lagoonv1alpha1.LagoonLogMeta{
+				Meta: &lagoonv1beta1.LagoonLogMeta{
 					Project:     project,
 					Environment: branch,
 				},
@@ -263,7 +263,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 	err = messageQueue.SetConsumerHandler("jobs-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshall the message into a remove task to be processed
-			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
+			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			opLog.Info(
 				fmt.Sprintf(
@@ -273,14 +273,14 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					jobSpec.Environment.OpenshiftProjectName,
 				),
 			)
-			job := &lagoonv1alpha1.LagoonTask{}
+			job := &lagoonv1beta1.LagoonTask{}
 			job.Spec = *jobSpec
 			// set the namespace to the `openshiftProjectName` from the environment
 			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   string(lagoonv1alpha1.TaskTypeStandard),
-					"lagoon.sh/taskStatus": string(lagoonv1alpha1.TaskStatusPending),
+					"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeStandard),
+					"lagoon.sh/taskStatus": string(lagoonv1beta1.TaskStatusPending),
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
@@ -310,7 +310,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		if err == nil {
 			opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 			// unmarshall the message into a remove task to be processed
-			jobSpec := &lagoonv1alpha1.LagoonTaskSpec{}
+			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
 			switch jobSpec.Key {
@@ -323,7 +323,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Environment.OpenshiftProjectName,
 					),
 				)
-				err := h.CancelDeployment(jobSpec)
+				err := h.CancelBuild(jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -425,7 +425,7 @@ func (h *Messaging) GetPendingMessages() {
 	opLog := ctrl.Log.WithName("handlers").WithName("PendingMessages")
 	ctx := context.Background()
 	opLog.Info(fmt.Sprintf("Checking pending messages across all namespaces"))
-	pendingMsgs := &lagoonv1alpha1.LagoonBuildList{}
+	pendingMsgs := &lagoonv1beta1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
 			"lagoon.sh/pendingMessages": "true",

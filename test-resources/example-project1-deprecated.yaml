@@ -1,17 +1,25 @@
-kind: LagoonBuild
-apiVersion: crd.lagoon.sh/v1beta1
+kind: Namespace
+apiVersion: v1
 metadata:
-    name: lagoon-build-7m5zypx
+    name: 9m5zypx
+---
+kind: LagoonBuild
+apiVersion: lagoon.amazee.io/v1alpha1
+metadata:
+    name: lagoon-build-9m5zypx
+    namespace: 9m5zypx
+    labels:
+        lagoon.sh/buildStatus: Complete
 spec:
     build:
         ci: 'true' #to make sure that readwritemany is changed to readwriteonce
-        image: testlagoon/kubectl-build-deploy-dind:pr-2815
+        image: uselagoon/kubectl-build-deploy-dind:latest
         type: branch
     gitReference: origin/install
     project:
         name: drupal-example
         environment: install
-        uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-7m5zypx
+        uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-9m5zypx
         routerPattern: 'install-drupal-example'
         environmentType: production
         productionEnvironment: install

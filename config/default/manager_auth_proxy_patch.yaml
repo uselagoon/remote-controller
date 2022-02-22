@@ -31,3 +31,4 @@ spec:
         - "--harbor-enable-project-webhook"
         - "--enable-qos"
         - "--qos-max-builds=3"
+        - "--enable-deprecated-apis"

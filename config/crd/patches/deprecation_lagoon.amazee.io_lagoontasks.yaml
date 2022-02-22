@@ -1,0 +1,6 @@
+- op: add
+  path: /spec/versions/0/deprecated
+  value: true
+- op: add
+  path: /spec/versions/0/deprecationWarning
+  value: "use lagoontasks.crd.lagoon.sh/v1beta1"

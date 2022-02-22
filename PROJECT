@@ -1,4 +1,5 @@
-domain: amazee.io
+domain: lagoon.sh
+multigroup: true
 repo: github.com/uselagoon/remote-controller
 resources:
 - group: lagoon
@@ -7,4 +8,10 @@ resources:
 - group: lagoon
   kind: LagoonTask
   version: v1alpha1
+- group: crd
+  kind: LagoonBuild
+  version: v1beta1
+- group: crd
+  kind: LagoonTask
+  version: v1beta1
 version: "2"

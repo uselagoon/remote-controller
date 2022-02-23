@@ -106,6 +106,8 @@ func main() {
 	var lffDefaultIsolationNetworkPolicy string
 	var lffForceInsights string
 	var lffDefaultInsights string
+	var lffForceRWX2RWO string
+	var lffDefaultRWX2RWO string
 	var buildPodCleanUpEnable bool
 	var taskPodCleanUpEnable bool
 	var buildsCleanUpEnable bool
@@ -226,6 +228,10 @@ func main() {
 		"sets the LAGOON_FEATURE_FLAG_FORCE_INSIGHTS build environment variable to enforce cluster policy")
 	flag.StringVar(&lffDefaultInsights, "lagoon-feature-flag-default-insights", "",
 		"sets the LAGOON_FEATURE_FLAG_DEFAULT_INSIGHTS build environment variable to control default cluster policy")
+	flag.StringVar(&lffForceRWX2RWO, "lagoon-feature-flag-force-rwx-rwo", "",
+		"sets the LAGOON_FEATURE_FLAG_FORCE_RWX_TO_RWO build environment variable to enforce cluster policy")
+	flag.StringVar(&lffDefaultRWX2RWO, "lagoon-feature-flag-default-rwx-rwo", "",
+		"sets the LAGOON_FEATURE_FLAG_DEFAULT_RWX_TO_RWO build environment variable to control default cluster policy")
 	flag.BoolVar(&buildPodCleanUpEnable, "enable-build-pod-cleanup", true, "Flag to enable build pod cleanup.")
 	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the build pod cleanup.")
@@ -726,6 +732,8 @@ func main() {
 		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
 		LFFForceInsights:                 lffForceInsights,
 		LFFDefaultInsights:               lffDefaultInsights,
+		LFFForceRWX2RWO:                  lffForceRWX2RWO,
+		LFFDefaultRWX2RWO:                lffDefaultRWX2RWO,
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,

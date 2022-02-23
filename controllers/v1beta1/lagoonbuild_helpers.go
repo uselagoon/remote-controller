@@ -807,6 +807,18 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.LFFDefaultInsights,
 		})
 	}
+	if r.LFFForceRWX2RWO != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_FEATURE_FLAG_FORCE_RWX_TO_RWO",
+			Value: r.LFFForceRWX2RWO,
+		})
+	}
+	if r.LFFDefaultRWX2RWO != "" {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_FEATURE_FLAG_DEFAULT_RWX_TO_RWO",
+			Value: r.LFFDefaultRWX2RWO,
+		})
+	}
 	// Use the build image in the controller definition
 	buildImage := r.BuildImage
 	if lagoonBuild.Spec.Build.Image != "" {

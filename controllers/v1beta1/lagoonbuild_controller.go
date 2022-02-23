@@ -61,6 +61,8 @@ type LagoonBuildReconciler struct {
 	LFFDefaultIsolationNetworkPolicy string
 	LFFForceInsights                 string
 	LFFDefaultInsights               string
+	LFFForceRWX2RWO                  string
+	LFFDefaultRWX2RWO                string
 	BackupDefaultSchedule            string
 	BackupDefaultMonthlyRetention    int
 	BackupDefaultWeeklyRetention     int

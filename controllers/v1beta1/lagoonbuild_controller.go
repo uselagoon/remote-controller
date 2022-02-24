@@ -79,6 +79,7 @@ type LagoonBuildReconciler struct {
 	ProxyConfig                      ProxyConfig
 }
 
+// ProxyConfig is used for proxy configuration.
 type ProxyConfig struct {
 	HTTPProxy  string
 	HTTPSProxy string

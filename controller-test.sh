@@ -17,7 +17,6 @@ CHECK_TIMEOUT=20
 NS=drupal-example-install
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
-LBUILDDEPRECATED=9m5zypx
 
 check_controller_log () {
     echo "=========== CONTROLLER LOG ============"
@@ -83,13 +82,6 @@ build_deploy_controller () {
     make docker-build IMG=${CONTROLLER_IMAGE}
     make install
 
-    # echo "==> Create a deprecated resource for the controller to clean up"
-    # kubectl -n $LBUILDDEPRECATED apply -f test-resources/example-project1-deprecated.yaml
-    # # patch the resource with the controller namespace
-    # kubectl -n $LBUILDDEPRECATED patch lagoonbuilds.lagoon.amazee.io lagoon-build-${LBUILDDEPRECATED} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
-    # # patch the resource with a random label to bump the controller event filter
-    # kubectl -n $LBUILDDEPRECATED patch lagoonbuilds.lagoon.amazee.io lagoon-build-${LBUILDDEPRECATED} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
-
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
     make deploy IMG=${CONTROLLER_IMAGE}
 
@@ -147,22 +139,6 @@ check_lagoon_build () {
     echo "==> Build running"
     kubectl -n ${NS} logs ${1} -f
 }
-
-# check_deprecated_build () {
-#     CHECK_COUNTER=1
-#     echo "==> Check deprecated build is removed"
-#     if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "v1alpha1 is deprecated in favor of v1beta1"); then
-#         echo "Deprecated build was removed"
-#     else
-#         echo "Deprecated build was not removed"
-#         echo "=========== BUILD LOG ============"
-#         check_controller_log ${1}
-#         tear_down
-#         echo "================ END ================"
-#         echo "============== FAILED ==============="
-#         exit 1
-#     fi
-# }
 
 start_docker_compose_services
 install_path_provisioner
@@ -227,12 +203,6 @@ helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbp
 echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
 build_deploy_controller
-
-
-# echo "SLEEP"
-# sleep 1200
-
-# check_deprecated_build lagoon-build-${LBUILDDEPRECATED}
 
 echo "==> Trigger a lagoon build using kubectl apply"
 kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project1.yaml

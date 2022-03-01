@@ -2,12 +2,6 @@ domain: lagoon.sh
 multigroup: true
 repo: github.com/uselagoon/remote-controller
 resources:
-- group: lagoon
-  kind: LagoonBuild
-  version: v1alpha1
-- group: lagoon
-  kind: LagoonTask
-  version: v1alpha1
 - group: crd
   kind: LagoonBuild
   version: v1beta1

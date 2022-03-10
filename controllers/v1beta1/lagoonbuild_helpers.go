@@ -165,7 +165,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
 		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.ObjectMeta.Name))
-		r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog)
+		r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
 		return fmt.Errorf("%s is currently terminating, aborting build", ns)
 	}
 
@@ -970,27 +970,30 @@ func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 	lagoonBuild lagoonv1beta1.LagoonBuild,
 	message string,
 	opLog logr.Logger,
+	cancelled bool,
 ) error {
 	var allContainerLogs []byte
-	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
-	// so just set the logs to be cancellation message
-	allContainerLogs = []byte(fmt.Sprintf(`
+	if cancelled {
+		// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
+		// so just set the logs to be cancellation message
+		allContainerLogs = []byte(fmt.Sprintf(`
 ========================================
 Build cancelled
 ========================================
 %s`, message))
-	var jobCondition lagoonv1beta1.BuildStatusType
-	jobCondition = lagoonv1beta1.BuildStatusCancelled
-	lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"lagoon.sh/buildStatus": string(jobCondition),
+		var jobCondition lagoonv1beta1.BuildStatusType
+		jobCondition = lagoonv1beta1.BuildStatusCancelled
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]interface{}{
+					"lagoon.sh/buildStatus": string(jobCondition),
+				},
 			},
-		},
-	})
-	if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to update build status"))
+		})
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to update build status"))
+		}
 	}
 	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
 	var lagoonEnv corev1.ConfigMap
@@ -1009,7 +1012,9 @@ Build cancelled
 	// update the deployment with the status
 	r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
 	r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
-	r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+	if cancelled {
+		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
 	if err != nil {
@@ -1052,8 +1057,8 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 			}, &lagoonBuild); err != nil {
 				return ignoreNotFound(err)
 			}
-			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
+			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled extra build", lagoonBuild.ObjectMeta.Name))
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
 		}
 	}
 	return nil

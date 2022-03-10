@@ -223,6 +223,7 @@ func cancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.ObjectMeta.Name))
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return err

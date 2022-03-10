@@ -113,7 +113,13 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
 			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
-				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog)
+				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok {
+					if value == "true" {
+						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
+					} else {
+						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
+					}
+				}
 			}
 		}
 		if r.LFFQoSEnabled {

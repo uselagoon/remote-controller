@@ -150,6 +150,23 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		return fmt.Errorf("%s is currently terminating, aborting build", ns)
 	}
 
+	// if the namespace exists, check that the controller label exists and matches this controllers namespace name
+	if namespace.Status.Phase == corev1.NamespaceActive {
+		if value, ok := namespace.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
+			if value != r.ControllerNamespace {
+				// if the namespace is deployed by a different controller, fail the build
+				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.ObjectMeta.Name))
+				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Lagoon remote-controller ownership issue - contact your Lagoon support team for help", opLog, true)
+				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
+			}
+		} else {
+			// if the label doesn't exist at all, fail the build
+			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.ObjectMeta.Name))
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Lagoon remote-controller ownership issue - contact your Lagoon support team for help", opLog, true)
+			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
+		}
+	}
+
 	// this is an openshift build, then we need to create a projectrequest
 	// we use projectrequest so that we ensure any openshift specific things can happen.
 	if r.IsOpenshift {
@@ -182,6 +199,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			}
 		}
 	}
+
 	// once the namespace exists, then we can patch it with our labels
 	// this means the labels will always get added or updated if we need to change them or add new labels
 	// after the namespace has been created

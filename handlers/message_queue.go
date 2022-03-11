@@ -276,7 +276,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						ns,
 						project,
 						branch,
-						fmt.Errorf("The controller label value %s is not defined or does not match %s for this namespace", value, h.ControllerNamespace),
+						fmt.Errorf("The controller label value %s does not match %s for this namespace", value, h.ControllerNamespace),
 					),
 				)
 				message.Ack(false) // ack to remove from queue

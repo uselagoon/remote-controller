@@ -41,14 +41,16 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log                 logr.Logger
-	Scheme              *runtime.Scheme
-	IsOpenshift         bool
-	ControllerNamespace string
-	TaskSettings        LagoonTaskSettings
-	EnableDebug         bool
-	LagoonTargetName    string
-	ProxyConfig         ProxyConfig
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	IsOpenshift           bool
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	TaskSettings          LagoonTaskSettings
+	EnableDebug           bool
+	LagoonTargetName      string
+	ProxyConfig           ProxyConfig
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -130,8 +132,16 @@ func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1
 // get the task pod information for openshift
 func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &oappsv1.DeploymentConfigList{}
+	namespace := helpers.GenerateNamespaceName(
+		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
+		client.InNamespace(namespace),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
@@ -253,7 +263,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 	// no deployments found return error
 	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
-		lagoonTask.Spec.Environment.OpenshiftProjectName,
+		namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
 		err,
@@ -263,8 +273,16 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 // get the task pod information for kubernetes
 func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
+	namespace := helpers.GenerateNamespaceName(
+		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
+		client.InNamespace(namespace),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
@@ -386,7 +404,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	// no deployments found return error
 	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
-		lagoonTask.Spec.Environment.OpenshiftProjectName,
+		namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
 		err,
@@ -475,8 +493,16 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 // see notes in the docs for infomration about advanced tasks
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	serviceAccount := &corev1.ServiceAccount{}
+	namespace := helpers.GenerateNamespaceName(
+		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
+	err := r.getServiceAccount(ctx, serviceAccount, namespace)
 	if err != nil {
 		return err
 	}
@@ -494,7 +520,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	newPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lagoonTask.ObjectMeta.Name,
-			Namespace: lagoonTask.Spec.Environment.OpenshiftProjectName,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"lagoon.sh/jobType":    "task",
 				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
@@ -544,7 +570,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						},
 						{
 							Name:  "NAMESPACE",
-							Value: lagoonTask.Spec.Environment.OpenshiftProjectName,
+							Value: namespace,
 						},
 						{
 							Name:  "PODNAME",
@@ -655,8 +681,16 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 // getDeployerToken will get the deployer token from the service account if it exists
 func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (string, error) {
 	serviceAccount := &corev1.ServiceAccount{}
+	namespace := helpers.GenerateNamespaceName(
+		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
+	err := r.getServiceAccount(ctx, serviceAccount, namespace)
 	if err != nil {
 		return "", err
 	}

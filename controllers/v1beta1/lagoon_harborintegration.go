@@ -27,22 +27,24 @@ import (
 
 // Harbor defines a harbor struct
 type Harbor struct {
-	URL                 string
-	Hostname            string
-	API                 string
-	Username            string
-	Password            string
-	Log                 logr.Logger
-	Client              *harborv2.RESTClient
-	DeleteDisabled      bool
-	WebhookAddition     bool
-	RobotPrefix         string
-	ExpiryInterval      time.Duration
-	RotateInterval      time.Duration
-	RobotAccountExpiry  time.Duration
-	ControllerNamespace string
-	WebhookURL          string
-	WebhookEventTypes   []string
+	URL                   string
+	Hostname              string
+	API                   string
+	Username              string
+	Password              string
+	Log                   logr.Logger
+	Client                *harborv2.RESTClient
+	DeleteDisabled        bool
+	WebhookAddition       bool
+	RobotPrefix           string
+	ExpiryInterval        time.Duration
+	RotateInterval        time.Duration
+	RobotAccountExpiry    time.Duration
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	WebhookURL            string
+	WebhookEventTypes     []string
 }
 
 type robotAccountCredential struct {

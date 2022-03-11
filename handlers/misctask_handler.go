@@ -17,25 +17,25 @@ import (
 )
 
 // CancelBuild handles cancelling builds or handling if a build no longer exists.
-func (h *Messaging) CancelBuild(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	var jobPod corev1.Pod
 	if err := h.Client.Get(context.Background(), types.NamespacedName{
 		Name:      jobSpec.Misc.Name,
-		Namespace: jobSpec.Environment.OpenshiftProjectName,
+		Namespace: namespace,
 	}, &jobPod); err != nil {
 		// since there was no build pod, check for the lagoon build resource
 		var lagoonBuild lagoonv1beta1.LagoonBuild
 		if err := h.Client.Get(context.Background(), types.NamespacedName{
 			Name:      jobSpec.Misc.Name,
-			Namespace: jobSpec.Environment.OpenshiftProjectName,
+			Namespace: namespace,
 		}, &lagoonBuild); err != nil {
 			opLog.Info(fmt.Sprintf(
 				"Unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
 				jobSpec.Misc.Name,
 			))
 			// if there is no pod or build, update the build in Lagoon to cancelled
-			h.updateLagoonBuild(opLog, *jobSpec)
+			h.updateLagoonBuild(opLog, namespace, *jobSpec)
 			return nil
 		}
 		// as there is no build pod, but there is a lagoon build resource
@@ -51,7 +51,7 @@ func (h *Messaging) CancelBuild(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 			return err
 		}
 		// and then send the response back to lagoon to say it was cancelled.
-		h.updateLagoonBuild(opLog, *jobSpec)
+		h.updateLagoonBuild(opLog, namespace, *jobSpec)
 		return nil
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
@@ -67,13 +67,13 @@ func (h *Messaging) CancelBuild(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 	return nil
 }
 
-func (h *Messaging) updateLagoonBuild(opLog logr.Logger, jobSpec lagoonv1beta1.LagoonTaskSpec) {
+func (h *Messaging) updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
 	msg := lagoonv1beta1.LagoonMessage{
 		Type:      "build",
-		Namespace: jobSpec.Environment.OpenshiftProjectName,
+		Namespace: namespace,
 		Meta: &lagoonv1beta1.LagoonLogMeta{
 			Environment: jobSpec.Environment.Name,
 			Project:     jobSpec.Project.Name,
@@ -96,7 +96,7 @@ func (h *Messaging) updateLagoonBuild(opLog logr.Logger, jobSpec lagoonv1beta1.L
 }
 
 // ResticRestore handles creating the restic restore jobs.
-func (h *Messaging) ResticRestore(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (h *Messaging) ResticRestore(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	restore := unstructured.Unstructured{}
 	if err := restore.UnmarshalJSON(jobSpec.Misc.MiscResource); err != nil {
@@ -109,7 +109,7 @@ func (h *Messaging) ResticRestore(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 		// just log the error then return
 		return nil
 	}
-	restore.SetNamespace(jobSpec.Environment.OpenshiftProjectName)
+	restore.SetNamespace(namespace)
 	if err := h.Client.Create(context.Background(), &restore); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
@@ -124,23 +124,23 @@ func (h *Messaging) ResticRestore(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 }
 
 // IngressRouteMigration handles running the ingress migrations.
-func (h *Messaging) IngressRouteMigration(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	return createAdvancedTask(jobSpec, h)
+func (h *Messaging) IngressRouteMigration(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+	return createAdvancedTask(namespace, jobSpec, h)
 }
 
 // AdvancedTask handles running the ingress migrations.
-func (h *Messaging) AdvancedTask(jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	return createAdvancedTask(jobSpec, h)
+func (h *Messaging) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+	return createAdvancedTask(namespace, jobSpec, h)
 }
 
 // CreateAdvancedTask takes care of creating actual advanced tasks
-func createAdvancedTask(jobSpec *lagoonv1beta1.LagoonTaskSpec, h *Messaging) error {
+func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, h *Messaging) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	// create the advanced task
 	task := lagoonv1beta1.LagoonTask{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "lagoon-advanced-task-" + helpers.RandString(6),
-			Namespace: jobSpec.Environment.OpenshiftProjectName,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeAdvanced),
 				"lagoon.sh/taskStatus": string(lagoonv1beta1.TaskStatusPending),

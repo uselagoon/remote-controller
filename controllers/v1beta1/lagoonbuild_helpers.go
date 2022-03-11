@@ -105,38 +105,14 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagoonv1beta1.LagoonBuild, opLog logr.Logger) error {
 	// parse the project/env through the project pattern, or use the default
 	var err error
-	nsPattern := lagoonBuild.Spec.Project.NamespacePattern
-	if lagoonBuild.Spec.Project.NamespacePattern == "" {
-		nsPattern = helpers.DefaultNamespacePattern
-	}
-	// lowercase and dnsify the namespace against the namespace pattern
-	ns := helpers.MakeSafe(
-		strings.Replace(
-			strings.Replace(
-				nsPattern,
-				"${environment}",
-				lagoonBuild.Spec.Project.Environment,
-				-1,
-			),
-			"${project}",
-			lagoonBuild.Spec.Project.Name,
-			-1,
-		),
+	ns := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
 	)
-	// If there is a namespaceprefix defined, and random prefix is disabled
-	// then add the prefix to the namespace
-	if r.NamespacePrefix != "" && r.RandomNamespacePrefix == false {
-		ns = fmt.Sprintf("%s-%s", r.NamespacePrefix, ns)
-	}
-	// If the randomprefix is enabled, then add a prefix based on the hash of the controller namespace
-	if r.RandomNamespacePrefix {
-		ns = fmt.Sprintf("%s-%s", helpers.HashString(r.ControllerNamespace)[0:8], ns)
-	}
-	// Once the namespace is fully calculated, then truncate the generated namespace
-	// to 63 characters to not exceed the kubernetes namespace limit
-	if len(ns) > 63 {
-		ns = fmt.Sprintf("%s-%s", ns[0:58], helpers.HashString(ns)[0:4])
-	}
 	nsLabels := map[string]string{
 		"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
 		"lagoon.sh/environment":     lagoonBuild.Spec.Project.Environment,

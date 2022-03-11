@@ -553,20 +553,22 @@ func main() {
 		harborHostname = harborURL
 	}
 	harborConfig := lagoonv1beta1ctrl.Harbor{
-		URL:                 harborURL,
-		Hostname:            harborHostname,
-		API:                 harborAPI,
-		Username:            harborUsername,
-		Password:            harborPassword,
-		RobotPrefix:         harborRobotPrefix,
-		ExpiryInterval:      harborExpiryIntervalDuration,
-		RotateInterval:      harborRotateIntervalDuration,
-		DeleteDisabled:      harborRobotDeleteDisabled,
-		RobotAccountExpiry:  harborRobotAccountExpiryDuration,
-		WebhookAddition:     harborWebhookAdditionEnabled,
-		ControllerNamespace: controllerNamespace,
-		WebhookURL:          harborLagoonWebhook,
-		WebhookEventTypes:   strings.Split(harborWebhookEventTypes, ","),
+		URL:                   harborURL,
+		Hostname:              harborHostname,
+		API:                   harborAPI,
+		Username:              harborUsername,
+		Password:              harborPassword,
+		RobotPrefix:           harborRobotPrefix,
+		ExpiryInterval:        harborExpiryIntervalDuration,
+		RotateInterval:        harborRotateIntervalDuration,
+		DeleteDisabled:        harborRobotDeleteDisabled,
+		RobotAccountExpiry:    harborRobotAccountExpiryDuration,
+		WebhookAddition:       harborWebhookAdditionEnabled,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		WebhookURL:            harborLagoonWebhook,
+		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
 	buildQoSConfig := lagoonv1beta1ctrl.BuildQoS{
@@ -683,24 +685,28 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&lagoonv1beta1ctrl.LagoonMonitorReconciler{
-		Client:              mgr.GetClient(),
-		Log:                 ctrl.Log.WithName("v1beta1").WithName("LagoonMonitor"),
-		Scheme:              mgr.GetScheme(),
-		EnableMQ:            enableMQ,
-		Messaging:           messaging,
-		ControllerNamespace: controllerNamespace,
-		EnableDebug:         enableDebug,
-		LagoonTargetName:    lagoonTargetName,
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonMonitor"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		Messaging:             messaging,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		EnableDebug:           enableDebug,
+		LagoonTargetName:      lagoonTargetName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)
 	}
 	if err = (&lagoonv1beta1ctrl.LagoonTaskReconciler{
-		Client:              mgr.GetClient(),
-		Log:                 ctrl.Log.WithName("v1beta1").WithName("LagoonTask"),
-		Scheme:              mgr.GetScheme(),
-		IsOpenshift:         isOpenshift,
-		ControllerNamespace: controllerNamespace,
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonTask"),
+		Scheme:                mgr.GetScheme(),
+		IsOpenshift:           isOpenshift,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
 		TaskSettings: lagoonv1beta1ctrl.LagoonTaskSettings{
 			APIHost: lagoonAPIHost,
 			SSHHost: lagoonSSHHost,

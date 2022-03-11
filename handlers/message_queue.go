@@ -25,7 +25,6 @@ type removeTask struct {
 	PullrequestNumber                string `json:"pullrequestNumber"`
 	Branch                           string `json:"branch"`
 	BranchName                       string `json:"branchName"`
-	OpenshiftProjectName             string `json:"openshiftProjectName"`
 }
 
 type messaging interface {
@@ -152,7 +151,15 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			if removeTask.Type == "pullrequest" {
 				removeTask.Branch = removeTask.BranchName
 			}
-			ns := removeTask.OpenshiftProjectName
+			// generate the namespace name from the branch and project and any prefixes that the controller may add
+			ns := helpers.GenerateNamespaceName(
+				"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				removeTask.Branch,
+				removeTask.ProjectName,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			branch := removeTask.Branch
 			project := removeTask.ProjectName
 			opLog.WithName("RemoveTask").Info(
@@ -275,13 +282,27 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"Received task for project %s, environment %s - %s",
 					jobSpec.Project.Name,
 					jobSpec.Environment.Name,
-					jobSpec.Environment.OpenshiftProjectName,
+					helpers.GenerateNamespaceName(
+						"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+						jobSpec.Environment.Name,
+						jobSpec.Project.Name,
+						h.NamespacePrefix,
+						h.ControllerNamespace,
+						h.RandomNamespacePrefix,
+					),
 				),
 			)
 			job := &lagoonv1beta1.LagoonTask{}
 			job.Spec = *jobSpec
 			// set the namespace to the `openshiftProjectName` from the environment
-			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
+			job.ObjectMeta.Namespace = helpers.GenerateNamespaceName(
+				"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				jobSpec.Environment.Name,
+				jobSpec.Project.Name,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			job.SetLabels(
 				map[string]string{
 					"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeStandard),
@@ -318,6 +339,14 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
+			jobNamespace := helpers.GenerateNamespaceName(
+				"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				jobSpec.Environment.Name,
+				jobSpec.Project.Name,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			switch jobSpec.Key {
 			case "kubernetes:build:cancel":
 				opLog.Info(
@@ -325,10 +354,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						"Received build cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						jobSpec.Environment.OpenshiftProjectName,
+						jobNamespace,
 					),
 				)
-				err := h.CancelBuild(jobSpec)
+				err := h.CancelBuild(jobNamespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -342,7 +371,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Environment.Name,
 					),
 				)
-				err := h.ResticRestore(jobSpec)
+				err := h.ResticRestore(jobNamespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -355,7 +384,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.IngressRouteMigration(jobSpec)
+				err := h.IngressRouteMigration(jobNamespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -368,7 +397,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.IngressRouteMigration(jobSpec)
+				err := h.IngressRouteMigration(jobNamespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -381,7 +410,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.AdvancedTask(jobSpec)
+				err := h.AdvancedTask(jobNamespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

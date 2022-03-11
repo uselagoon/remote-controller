@@ -103,11 +103,10 @@ type LagoonTaskProject struct {
 
 // LagoonTaskEnvironment defines the lagoon environment information.
 type LagoonTaskEnvironment struct {
-	ID                   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name                 string `json:"name"`
-	Project              string `json:"project"` // should be int, but the api sends it as a string :\
-	EnvironmentType      string `json:"environmentType"`
-	OpenshiftProjectName string `json:"openshiftProjectName"`
+	ID              string `json:"id"` // should be int, but the api sends it as a string :\
+	Name            string `json:"name"`
+	Project         string `json:"project"` // should be int, but the api sends it as a string :\
+	EnvironmentType string `json:"environmentType"`
 }
 
 // LagoonTaskStatus defines the observed state of LagoonTask

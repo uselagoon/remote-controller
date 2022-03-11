@@ -37,13 +37,15 @@ import (
 // LagoonMonitorReconciler reconciles a LagoonBuild object
 type LagoonMonitorReconciler struct {
 	client.Client
-	Log                 logr.Logger
-	Scheme              *runtime.Scheme
-	EnableMQ            bool
-	Messaging           *handlers.Messaging
-	ControllerNamespace string
-	EnableDebug         bool
-	LagoonTargetName    string
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	EnableMQ              bool
+	Messaging             *handlers.Messaging
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	EnableDebug           bool
+	LagoonTargetName      string
 }
 
 // slice of the different failure states of pods that we care about

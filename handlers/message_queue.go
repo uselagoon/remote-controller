@@ -210,59 +210,89 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				return
 
 			}
-			/*
-				get any deployments/statefulsets/daemonsets
-				then delete them
-			*/
-			if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
+			// check that the namespace selected for deletion is owned by this controller
+			if value, ok := namespace.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
+				if value == h.ControllerNamespace {
+					/*
+						get any deployments/statefulsets/daemonsets
+						then delete them
+					*/
+					if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					/*
+						then delete the namespace
+					*/
+					if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					opLog.WithName("DeleteNamespace").Info(
+						fmt.Sprintf(
+							"Deleted namespace %s for project %s, branch %s",
+							ns,
+							project,
+							branch,
+						),
+					)
+					msg := lagoonv1beta1.LagoonMessage{
+						Type:      "remove",
+						Namespace: ns,
+						Meta: &lagoonv1beta1.LagoonLogMeta{
+							Project:     project,
+							Environment: branch,
+						},
+					}
+					msgBytes, _ := json.Marshal(msg)
+					h.Publish("lagoon-tasks:controller", msgBytes)
+					message.Ack(false) // ack to remove from queue
+					return
+				} else {
+					// controller label didn't match, log the message
+					opLog.WithName("RemoveTask").Info(
+						fmt.Sprintf(
+							"Selected namespace %s for project %s, branch %s: %v",
+							ns,
+							project,
+							branch,
+							fmt.Errorf("The controller label value %s is not defined or does not match %s for this namespace", value, h.ControllerNamespace),
+						),
+					)
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			}
-			if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			/*
-				then delete the namespace
-			*/
-			if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			opLog.WithName("DeleteNamespace").Info(
+			// controller label didn't match, log the message
+			opLog.WithName("RemoveTask").Info(
 				fmt.Sprintf(
-					"Deleted namespace %s for project %s, branch %s",
+					"Selected namespace %s for project %s, branch %s: %v",
 					ns,
 					project,
 					branch,
+					fmt.Errorf("The controller ownership label does not exist on this namespace, nothing will be done for this removal request"),
 				),
 			)
-			msg := lagoonv1beta1.LagoonMessage{
-				Type:      "remove",
-				Namespace: ns,
-				Meta: &lagoonv1beta1.LagoonLogMeta{
-					Project:     project,
-					Environment: branch,
-				},
-			}
-			msgBytes, _ := json.Marshal(msg)
-			h.Publish("lagoon-tasks:controller", msgBytes)
 		}
 		message.Ack(false) // ack to remove from queue
 	})

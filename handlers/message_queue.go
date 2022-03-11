@@ -10,6 +10,7 @@ import (
 
 	"github.com/cheshir/go-mq"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,17 +41,21 @@ type Messaging struct {
 	ConnectionAttempts      int
 	ConnectionRetryInterval int
 	ControllerNamespace     string
+	NamespacePrefix         string
+	RandomNamespacePrefix   bool
 	EnableDebug             bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace string, enableDebug bool) *Messaging {
+func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace, namespacePrefix string, randomNamespacePrefix, enableDebug bool) *Messaging {
 	return &Messaging{
 		Config:                  config,
 		Client:                  client,
 		ConnectionAttempts:      startupAttempts,
 		ConnectionRetryInterval: startupInterval,
 		ControllerNamespace:     controllerNamespace,
+		NamespacePrefix:         namespacePrefix,
+		RandomNamespacePrefix:   randomNamespacePrefix,
 		EnableDebug:             enableDebug,
 	}
 }
@@ -284,7 +289,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
-			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.RandString(6))
 			if err := h.Client.Create(ctx, job); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(

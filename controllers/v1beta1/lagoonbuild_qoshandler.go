@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -104,12 +105,12 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
 						pendingNSBuilds := &lagoonv1beta1.LagoonBuildList{}
-						return cancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running")
+						return helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running")
 					}
 					// The object is not being deleted, so if it does not have our finalizer,
 					// then lets add the finalizer and update the object. This is equivalent
 					// registering our finalizer.
-					if !containsString(pBuild.ObjectMeta.Finalizers, buildFinalizer) {
+					if !helpers.ContainsString(pBuild.ObjectMeta.Finalizers, buildFinalizer) {
 						pBuild.ObjectMeta.Finalizers = append(pBuild.ObjectMeta.Finalizers, buildFinalizer)
 						// use patches to avoid update errors
 						mergePatch, _ := json.Marshal(map[string]interface{}{

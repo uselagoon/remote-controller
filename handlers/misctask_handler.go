@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -138,7 +139,7 @@ func createAdvancedTask(jobSpec *lagoonv1beta1.LagoonTaskSpec, h *Messaging) err
 	// create the advanced task
 	task := lagoonv1beta1.LagoonTask{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "lagoon-advanced-task-" + randString(6),
+			Name:      "lagoon-advanced-task-" + helpers.RandString(6),
 			Namespace: jobSpec.Environment.OpenshiftProjectName,
 			Labels: map[string]string{
 				"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeAdvanced),

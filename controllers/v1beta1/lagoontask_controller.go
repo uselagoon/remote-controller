@@ -32,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
+
 	// openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 )
@@ -70,7 +72,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// your logic here
 	var lagoonTask lagoonv1beta1.LagoonTask
 	if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err != nil {
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -86,7 +88,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	} else {
 		// The object is being deleted
-		if containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
 			if err := r.deleteExternalResources(&lagoonTask, req.NamespacedName.Namespace); err != nil {
 				// if fail to delete the external dependency here, return with error
@@ -94,7 +96,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			lagoonTask.ObjectMeta.Finalizers = removeString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
+			lagoonTask.ObjectMeta.Finalizers = helpers.RemoveString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 			// use patches to avoid update errors
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
@@ -454,7 +456,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+	if !helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
@@ -516,7 +518,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},
@@ -525,7 +527,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  "lagoon-sshkey",
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},

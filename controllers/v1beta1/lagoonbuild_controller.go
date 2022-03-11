@@ -30,6 +30,7 @@ import (
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	// Openshift
 )
 
@@ -103,7 +104,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// your logic here
 	var lagoonBuild lagoonv1beta1.LagoonBuild
 	if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err != nil {
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -153,7 +154,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
 	}
 	// The object is being deleted
-	if containsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
+	if helpers.ContainsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
 		// our finalizer is present, so lets handle any external dependency
 		// first deleteExternalResources will try and check for any pending builds that it can
 		// can change to running to kick off the next pending build
@@ -168,7 +169,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 		// remove our finalizer from the list and update it.
-		lagoonBuild.ObjectMeta.Finalizers = removeString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
+		lagoonBuild.ObjectMeta.Finalizers = helpers.RemoveString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -176,7 +177,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			},
 		})
 		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			return ctrl.Result{}, ignoreNotFound(err)
+			return ctrl.Result{}, helpers.IgnoreNotFound(err)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -237,7 +238,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// the `lagoon.sh/buildStatus = Pending` now
 	// so end this reconcile process
 	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
-	return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1beta1.BuildStatusPending))
+	return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1beta1.BuildStatusPending))
 }
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace

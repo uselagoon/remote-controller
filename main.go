@@ -529,6 +529,8 @@ func main() {
 		startupConnectionAttempts,
 		startupConnectionInterval,
 		controllerNamespace,
+		namespacePrefix,
+		randomPrefix,
 		enableDebug,
 	)
 	c := cron.New()
@@ -578,6 +580,8 @@ func main() {
 		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
+		namespacePrefix,
+		randomPrefix,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it

@@ -20,9 +20,14 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 
 	// Openshift
 	projectv1 "github.com/openshift/api/project/v1"
+)
+
+var (
+	crdVersion string = "v1beta1"
 )
 
 // updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
@@ -33,7 +38,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 ) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
+	if !helpers.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
 		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{
@@ -102,10 +107,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	var err error
 	nsPattern := lagoonBuild.Spec.Project.NamespacePattern
 	if lagoonBuild.Spec.Project.NamespacePattern == "" {
-		nsPattern = DefaultNamespacePattern
+		nsPattern = helpers.DefaultNamespacePattern
 	}
 	// lowercase and dnsify the namespace against the namespace pattern
-	ns := makeSafe(
+	ns := helpers.MakeSafe(
 		strings.Replace(
 			strings.Replace(
 				nsPattern,
@@ -125,12 +130,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	// If the randomprefix is enabled, then add a prefix based on the hash of the controller namespace
 	if r.RandomNamespacePrefix {
-		ns = fmt.Sprintf("%s-%s", hashString(r.ControllerNamespace)[0:8], ns)
+		ns = fmt.Sprintf("%s-%s", helpers.HashString(r.ControllerNamespace)[0:8], ns)
 	}
 	// Once the namespace is fully calculated, then truncate the generated namespace
 	// to 63 characters to not exceed the kubernetes namespace limit
 	if len(ns) > 63 {
-		ns = fmt.Sprintf("%s-%s", ns[0:58], hashString(ns)[0:4])
+		ns = fmt.Sprintf("%s-%s", ns[0:58], helpers.HashString(ns)[0:4])
 	}
 	nsLabels := map[string]string{
 		"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
@@ -159,7 +164,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		if ignoreNotFound(err) != nil {
+		if helpers.IgnoreNotFound(err) != nil {
 			return err
 		}
 	}
@@ -557,7 +562,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		})
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name:  "SAFE_PROJECT",
-			Value: makeSafe(lagoonBuild.Spec.Project.Name),
+			Value: helpers.MakeSafe(lagoonBuild.Spec.Project.Name),
 		})
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name:  "OPENSHIFT_NAME",
@@ -628,11 +633,11 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 						strings.Replace(
 							lagoonBuild.Spec.Project.RouterPattern,
 							"${environment}",
-							shortName(lagoonBuild.Spec.Project.Environment),
+							helpers.ShortName(lagoonBuild.Spec.Project.Environment),
 							-1,
 						),
 						"${project}",
-						shortName(lagoonBuild.Spec.Project.Name),
+						helpers.ShortName(lagoonBuild.Spec.Project.Name),
 						-1,
 					),
 				),
@@ -690,8 +695,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	// if local/regional harbor is enabled, and this is not an openshift 3 cluster
 	if r.LFFHarborEnabled && !r.IsOpenshift {
 		// unmarshal the project variables
-		lagoonProjectVariables := &[]LagoonEnvironmentVariable{}
-		lagoonEnvironmentVariables := &[]LagoonEnvironmentVariable{}
+		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
+		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
 		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
 		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
 		// check if INTERNAL_REGISTRY_SOURCE_LAGOON is defined, and if it isn't true
@@ -699,8 +704,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// if it is false, or not set, then we use what is provided by this controller
 		// this allows us to make it so a specific environment or the project entirely
 		// can still use whats provided by lagoon
-		if !variableExists(lagoonProjectVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
-			!variableExists(lagoonEnvironmentVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") {
+		if !helpers.VariableExists(lagoonProjectVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
+			!helpers.VariableExists(lagoonEnvironmentVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") {
 			// source the robot credential, and inject it into the lagoon project variables
 			// this will overwrite what is provided by lagoon (if lagoon has provided them)
 			// or it will add them.
@@ -711,7 +716,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			}, robotCredential); err != nil {
 				return fmt.Errorf("Could not find Harbor RobotAccount credential")
 			}
-			auths := Auths{}
+			auths := helpers.Auths{}
 			if secretData, ok := robotCredential.Data[".dockerconfigjson"]; ok {
 				if err := json.Unmarshal(secretData, &auths); err != nil {
 					return fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
@@ -719,15 +724,15 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				// if the defined regional harbor key exists using the hostname
 				if creds, ok := auths.Registries[r.Harbor.URL]; ok {
 					// use the regional harbor in the build
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.URL, "internal_container_registry")
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.URL, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
 				}
 				if creds, ok := auths.Registries[r.Harbor.Hostname]; ok {
 					// use the regional harbor in the build
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.Hostname, "internal_container_registry")
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
-					replaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.Hostname, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
+					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
 				}
 			}
 			// marshal any changes into the project spec on the fly, don't save the spec though
@@ -853,7 +858,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},
@@ -862,7 +867,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  "lagoon-sshkey",
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},
@@ -936,7 +941,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  builderServiceaccountTokenSecret,
-					DefaultMode: intPtr(420),
+					DefaultMode: helpers.IntPtr(420),
 				},
 			},
 		}
@@ -1055,7 +1060,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 				Namespace: pendingBuild.ObjectMeta.Namespace,
 				Name:      pendingBuild.ObjectMeta.Name,
 			}, &lagoonBuild); err != nil {
-				return ignoreNotFound(err)
+				return helpers.IgnoreNotFound(err)
 			}
 			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled extra build", lagoonBuild.ObjectMeta.Name))
 			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)

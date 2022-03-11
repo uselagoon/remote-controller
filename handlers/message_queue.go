@@ -268,20 +268,19 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					h.Publish("lagoon-tasks:controller", msgBytes)
 					message.Ack(false) // ack to remove from queue
 					return
-				} else {
-					// controller label didn't match, log the message
-					opLog.WithName("RemoveTask").Info(
-						fmt.Sprintf(
-							"Selected namespace %s for project %s, branch %s: %v",
-							ns,
-							project,
-							branch,
-							fmt.Errorf("The controller label value %s is not defined or does not match %s for this namespace", value, h.ControllerNamespace),
-						),
-					)
-					message.Ack(false) // ack to remove from queue
-					return
 				}
+				// controller label didn't match, log the message
+				opLog.WithName("RemoveTask").Info(
+					fmt.Sprintf(
+						"Selected namespace %s for project %s, branch %s: %v",
+						ns,
+						project,
+						branch,
+						fmt.Errorf("The controller label value %s is not defined or does not match %s for this namespace", value, h.ControllerNamespace),
+					),
+				)
+				message.Ack(false) // ack to remove from queue
+				return
 			}
 			// controller label didn't match, log the message
 			opLog.WithName("RemoveTask").Info(

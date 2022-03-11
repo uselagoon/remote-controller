@@ -156,13 +156,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			if value != r.ControllerNamespace {
 				// if the namespace is deployed by a different controller, fail the build
 				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.ObjectMeta.Name))
-				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Lagoon remote-controller ownership issue - contact your Lagoon support team for help", opLog, true)
+				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Build was cancelled due to unexpected issue - contact your Lagoon support team for help", opLog, true)
 				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
 			}
 		} else {
 			// if the label doesn't exist at all, fail the build
 			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Lagoon remote-controller ownership issue - contact your Lagoon support team for help", opLog, true)
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Build was cancelled due to unexpected issue - contact your Lagoon support team for help", opLog, true)
 			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
 		}
 	}

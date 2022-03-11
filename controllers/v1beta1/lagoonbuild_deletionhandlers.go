@@ -279,11 +279,19 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "cancelled"
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,

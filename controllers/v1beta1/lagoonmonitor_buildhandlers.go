@@ -215,6 +215,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "pending"
 		switch jobPod.Status.Phase {
@@ -235,16 +243,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			buildStep = value
 		}
 		msg := lagoonv1beta1.LagoonMessage{
-			Type: "build",
-			// Namespace: lagoonBuild.ObjectMeta.Namespace,
-			Namespace: helpers.GenerateNamespaceName(
-				lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-				lagoonBuild.Spec.Project.Environment,
-				lagoonBuild.Spec.Project.Name,
-				r.NamespacePrefix,
-				r.ControllerNamespace,
-				r.RandomNamespacePrefix,
-			),
+			Type:      "build",
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment:   lagoonBuild.Spec.Project.Environment,
 				EnvironmentID: lagoonBuild.Spec.Project.EnvironmentID,

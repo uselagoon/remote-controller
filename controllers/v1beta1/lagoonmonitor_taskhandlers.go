@@ -187,6 +187,14 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "active"
 		switch jobPod.Status.Phase {
@@ -199,7 +207,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",
-			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,

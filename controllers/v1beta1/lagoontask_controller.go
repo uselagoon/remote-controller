@@ -133,7 +133,7 @@ func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1
 func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &oappsv1.DeploymentConfigList{}
 	namespace := helpers.GenerateNamespaceName(
-		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		lagoonTask.Spec.Environment.Name,
 		lagoonTask.Spec.Project.Name,
 		r.NamespacePrefix,
@@ -274,7 +274,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	namespace := helpers.GenerateNamespaceName(
-		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		lagoonTask.Spec.Environment.Name,
 		lagoonTask.Spec.Project.Name,
 		r.NamespacePrefix,
@@ -494,7 +494,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	serviceAccount := &corev1.ServiceAccount{}
 	namespace := helpers.GenerateNamespaceName(
-		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		lagoonTask.Spec.Environment.Name,
 		lagoonTask.Spec.Project.Name,
 		r.NamespacePrefix,
@@ -682,7 +682,7 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (string, error) {
 	serviceAccount := &corev1.ServiceAccount{}
 	namespace := helpers.GenerateNamespaceName(
-		"", // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		lagoonTask.Spec.Environment.Name,
 		lagoonTask.Spec.Project.Name,
 		r.NamespacePrefix,

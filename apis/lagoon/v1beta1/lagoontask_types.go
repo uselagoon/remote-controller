@@ -97,8 +97,9 @@ type LagoonMiscBackupInfo struct {
 
 // LagoonTaskProject defines the lagoon project information.
 type LagoonTaskProject struct {
-	ID   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name string `json:"name"`
+	ID               string `json:"id"` // should be int, but the api sends it as a string :\
+	Name             string `json:"name"`
+	NamespacePattern string `json:"namespacePattern,omitempty"`
 }
 
 // LagoonTaskEnvironment defines the lagoon environment information.

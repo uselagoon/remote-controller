@@ -262,6 +262,7 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 	if pattern == "" {
 		nsPattern = DefaultNamespacePattern
 	}
+	environmentName = ShortenEnvironment(projectname, environmentName)
 	// lowercase and dnsify the namespace against the namespace pattern
 	ns := MakeSafe(
 		strings.Replace(
@@ -291,4 +292,13 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 		ns = fmt.Sprintf("%s-%s", ns[0:58], HashString(ns)[0:4])
 	}
 	return ns
+}
+
+// ShortenEnvironment shortens the environment name down the same way that Lagoon does
+func ShortenEnvironment(project, environment string) string {
+	overlength := 58 - len(project)
+	if len(environment) > overlength {
+		environment = fmt.Sprintf("%s-%s", environment[0:overlength-5], HashString(environment)[0:4])
+	}
+	return environment
 }

@@ -89,6 +89,7 @@ func RemoveString(slice []string, s string) (result []string) {
 	return
 }
 
+// BuildContainsStatus .
 func BuildContainsStatus(slice []lagoonv1beta1.LagoonBuildConditions, s lagoonv1beta1.LagoonBuildConditions) bool {
 	for _, item := range slice {
 		if item == s {
@@ -98,6 +99,7 @@ func BuildContainsStatus(slice []lagoonv1beta1.LagoonBuildConditions, s lagoonv1
 	return false
 }
 
+// TaskContainsStatus .
 func TaskContainsStatus(slice []lagoonv1beta1.LagoonTaskConditions, s lagoonv1beta1.LagoonTaskConditions) bool {
 	for _, item := range slice {
 		if item == s {
@@ -107,6 +109,7 @@ func TaskContainsStatus(slice []lagoonv1beta1.LagoonTaskConditions, s lagoonv1be
 	return false
 }
 
+// IntPtr .
 func IntPtr(i int32) *int32 {
 	var iPtr *int32
 	iPtr = new(int32)
@@ -114,6 +117,7 @@ func IntPtr(i int32) *int32 {
 	return iPtr
 }
 
+// Int64Ptr .
 func Int64Ptr(i int64) *int64 {
 	var iPtr *int64
 	iPtr = new(int64)
@@ -121,6 +125,7 @@ func Int64Ptr(i int64) *int64 {
 	return iPtr
 }
 
+// UintPtr .
 func UintPtr(i uint) *uint {
 	var iPtr *uint
 	iPtr = new(uint)

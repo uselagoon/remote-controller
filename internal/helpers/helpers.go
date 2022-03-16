@@ -262,7 +262,7 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 	if pattern == "" {
 		nsPattern = DefaultNamespacePattern
 	}
-	environmentName = ShortenEnvironment(projectname, environmentName)
+	environmentName = ShortenEnvironment(projectname, MakeSafe(environmentName))
 	// lowercase and dnsify the namespace against the namespace pattern
 	ns := MakeSafe(
 		strings.Replace(

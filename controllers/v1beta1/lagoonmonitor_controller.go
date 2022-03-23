@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,13 +37,15 @@ import (
 // LagoonMonitorReconciler reconciles a LagoonBuild object
 type LagoonMonitorReconciler struct {
 	client.Client
-	Log                 logr.Logger
-	Scheme              *runtime.Scheme
-	EnableMQ            bool
-	Messaging           *handlers.Messaging
-	ControllerNamespace string
-	EnableDebug         bool
-	LagoonTargetName    string
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	EnableMQ              bool
+	Messaging             *handlers.Messaging
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	EnableDebug           bool
+	LagoonTargetName      string
 }
 
 // slice of the different failure states of pods that we care about
@@ -61,7 +64,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var jobPod corev1.Pod
 	if err := r.Get(ctx, req.NamespacedName, &jobPod); err != nil {
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
 	// if this is a lagoon task, then run the handle task monitoring process
@@ -125,7 +128,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// if we have no running builds, then check for any pending builds
 		if len(runningBuilds.Items) == 0 {
-			return ctrl.Result{}, cancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")
+			return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")
 		}
 	}
 	return ctrl.Result{}, nil

@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -101,7 +102,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		// if there are any running builds, check if it is the one currently being deleted
 		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
 			// if the one being deleted is a running one, remove it from the list of running builds
-			newRunningBuilds = removeBuild(newRunningBuilds, runningBuild)
+			newRunningBuilds = helpers.RemoveBuild(newRunningBuilds, runningBuild)
 		}
 	}
 	// if the number of runningBuilds is 0 (excluding the one being deleted)
@@ -124,7 +125,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			// if there are any pending builds, check if it is the one currently being deleted
 			if lagoonBuild.ObjectMeta.Name == pendingBuild.ObjectMeta.Name {
 				// if the one being deleted a the pending one, remove it from the list of pending builds
-				newPendingBuilds = removeBuild(newPendingBuilds, pendingBuild)
+				newPendingBuilds = helpers.RemoveBuild(newPendingBuilds, pendingBuild)
 			}
 		}
 		// sort the pending builds by creation timestamp
@@ -163,7 +164,7 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 	// this is because we are deleting it, so we are basically cancelling it
 	// if it was already Failed or Completed, lagoon probably already knows
 	// so we don't have to do anything else.
-	if containsString(
+	if helpers.ContainsString(
 		[]string{
 			string(lagoonv1beta1.BuildStatusPending),
 			string(lagoonv1beta1.BuildStatusRunning),
@@ -278,11 +279,19 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "cancelled"
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,

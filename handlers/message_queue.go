@@ -10,6 +10,7 @@ import (
 
 	"github.com/cheshir/go-mq"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,7 +25,7 @@ type removeTask struct {
 	PullrequestNumber                string `json:"pullrequestNumber"`
 	Branch                           string `json:"branch"`
 	BranchName                       string `json:"branchName"`
-	OpenshiftProjectName             string `json:"openshiftProjectName"`
+	NamespacePattern                 string `json:"namespacePattern,omitempty"`
 }
 
 type messaging interface {
@@ -40,17 +41,21 @@ type Messaging struct {
 	ConnectionAttempts      int
 	ConnectionRetryInterval int
 	ControllerNamespace     string
+	NamespacePrefix         string
+	RandomNamespacePrefix   bool
 	EnableDebug             bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace string, enableDebug bool) *Messaging {
+func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace, namespacePrefix string, randomNamespacePrefix, enableDebug bool) *Messaging {
 	return &Messaging{
 		Config:                  config,
 		Client:                  client,
 		ConnectionAttempts:      startupAttempts,
 		ConnectionRetryInterval: startupInterval,
 		ControllerNamespace:     controllerNamespace,
+		NamespacePrefix:         namespacePrefix,
+		RandomNamespacePrefix:   randomNamespacePrefix,
 		EnableDebug:             enableDebug,
 	}
 }
@@ -147,7 +152,15 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			if removeTask.Type == "pullrequest" {
 				removeTask.Branch = removeTask.BranchName
 			}
-			ns := removeTask.OpenshiftProjectName
+			// generate the namespace name from the branch and project and any prefixes that the controller may add
+			ns := helpers.GenerateNamespaceName(
+				removeTask.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				removeTask.Branch,
+				removeTask.ProjectName,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			branch := removeTask.Branch
 			project := removeTask.ProjectName
 			opLog.WithName("RemoveTask").Info(
@@ -198,59 +211,88 @@ func (h *Messaging) Consumer(targetName string) { //error {
 				return
 
 			}
-			/*
-				get any deployments/statefulsets/daemonsets
-				then delete them
-			*/
-			if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
+			// check that the namespace selected for deletion is owned by this controller
+			if value, ok := namespace.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
+				if value == h.ControllerNamespace {
+					/*
+						get any deployments/statefulsets/daemonsets
+						then delete them
+					*/
+					if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					/*
+						then delete the namespace
+					*/
+					if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
+					opLog.WithName("DeleteNamespace").Info(
+						fmt.Sprintf(
+							"Deleted namespace %s for project %s, branch %s",
+							ns,
+							project,
+							branch,
+						),
+					)
+					msg := lagoonv1beta1.LagoonMessage{
+						Type:      "remove",
+						Namespace: ns,
+						Meta: &lagoonv1beta1.LagoonLogMeta{
+							Project:     project,
+							Environment: branch,
+						},
+					}
+					msgBytes, _ := json.Marshal(msg)
+					h.Publish("lagoon-tasks:controller", msgBytes)
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+				// controller label didn't match, log the message
+				opLog.WithName("RemoveTask").Info(
+					fmt.Sprintf(
+						"Selected namespace %s for project %s, branch %s: %v",
+						ns,
+						project,
+						branch,
+						fmt.Errorf("The controller label value %s does not match %s for this namespace", value, h.ControllerNamespace),
+					),
+				)
 				message.Ack(false) // ack to remove from queue
 				return
 			}
-			if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			/*
-				then delete the namespace
-			*/
-			if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
-				message.Ack(false) // ack to remove from queue
-				return
-			}
-			opLog.WithName("DeleteNamespace").Info(
+			// controller label didn't match, log the message
+			opLog.WithName("RemoveTask").Info(
 				fmt.Sprintf(
-					"Deleted namespace %s for project %s, branch %s",
+					"Selected namespace %s for project %s, branch %s: %v",
 					ns,
 					project,
 					branch,
+					fmt.Errorf("The controller ownership label does not exist on this namespace, nothing will be done for this removal request"),
 				),
 			)
-			msg := lagoonv1beta1.LagoonMessage{
-				Type:      "remove",
-				Namespace: ns,
-				Meta: &lagoonv1beta1.LagoonLogMeta{
-					Project:     project,
-					Environment: branch,
-				},
-			}
-			msgBytes, _ := json.Marshal(msg)
-			h.Publish("lagoon-tasks:controller", msgBytes)
 		}
 		message.Ack(false) // ack to remove from queue
 	})
@@ -265,18 +307,26 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			// unmarshall the message into a remove task to be processed
 			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
+			namespace := helpers.GenerateNamespaceName(
+				jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				jobSpec.Environment.Name,
+				jobSpec.Project.Name,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			opLog.Info(
 				fmt.Sprintf(
 					"Received task for project %s, environment %s - %s",
 					jobSpec.Project.Name,
 					jobSpec.Environment.Name,
-					jobSpec.Environment.OpenshiftProjectName,
+					namespace,
 				),
 			)
 			job := &lagoonv1beta1.LagoonTask{}
 			job.Spec = *jobSpec
 			// set the namespace to the `openshiftProjectName` from the environment
-			job.ObjectMeta.Namespace = job.Spec.Environment.OpenshiftProjectName
+			job.ObjectMeta.Namespace = namespace
 			job.SetLabels(
 				map[string]string{
 					"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeStandard),
@@ -284,7 +334,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
-			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, randString(6))
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.RandString(6))
 			if err := h.Client.Create(ctx, job); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(
@@ -313,6 +363,14 @@ func (h *Messaging) Consumer(targetName string) { //error {
 			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
+			namespace := helpers.GenerateNamespaceName(
+				jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+				jobSpec.Environment.Name,
+				jobSpec.Project.Name,
+				h.NamespacePrefix,
+				h.ControllerNamespace,
+				h.RandomNamespacePrefix,
+			)
 			switch jobSpec.Key {
 			case "kubernetes:build:cancel":
 				opLog.Info(
@@ -320,10 +378,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						"Received build cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						jobSpec.Environment.OpenshiftProjectName,
+						namespace,
 					),
 				)
-				err := h.CancelBuild(jobSpec)
+				err := h.CancelBuild(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -337,7 +395,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Environment.Name,
 					),
 				)
-				err := h.ResticRestore(jobSpec)
+				err := h.ResticRestore(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -350,7 +408,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.IngressRouteMigration(jobSpec)
+				err := h.IngressRouteMigration(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -363,7 +421,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.IngressRouteMigration(jobSpec)
+				err := h.IngressRouteMigration(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -376,7 +434,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.AdvancedTask(jobSpec)
+				err := h.AdvancedTask(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

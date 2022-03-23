@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,7 +31,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 	if jobPod.Status.Phase == corev1.PodPending {
 		opLog.Info(fmt.Sprintf("Task %s is %v", jobPod.ObjectMeta.Name, jobPod.Status.Phase))
 		for _, container := range jobPod.Status.ContainerStatuses {
-			if container.State.Waiting != nil && containsString(failureStates, container.State.Waiting.Reason) {
+			if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the build and get the logs from the container
 				opLog.Info(fmt.Sprintf("Task failed, container exit reason was: %v", container.State.Waiting.Reason))
 				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1beta1.TaskStatusFailed)
@@ -186,6 +187,14 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonTask.Spec.Environment.Name,
+		lagoonTask.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "active"
 		switch jobPod.Status.Phase {
@@ -198,13 +207,13 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",
-			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				Project:       lagoonTask.Spec.Project.Name,
-				EnvironmentID: stringToUintPtr(lagoonTask.Spec.Environment.ID),
-				ProjectID:     stringToUintPtr(lagoonTask.Spec.Project.ID),
+				EnvironmentID: helpers.StringToUintPtr(lagoonTask.Spec.Environment.ID),
+				ProjectID:     helpers.StringToUintPtr(lagoonTask.Spec.Project.ID),
 				JobName:       lagoonTask.ObjectMeta.Name,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
@@ -268,8 +277,8 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,
 				Environment:   lagoonTask.Spec.Environment.Name,
-				EnvironmentID: stringToUintPtr(lagoonTask.Spec.Environment.ID),
-				ProjectID:     stringToUintPtr(lagoonTask.Spec.Project.ID),
+				EnvironmentID: helpers.StringToUintPtr(lagoonTask.Spec.Environment.ID),
+				ProjectID:     helpers.StringToUintPtr(lagoonTask.Spec.Project.ID),
 				JobName:       lagoonTask.ObjectMeta.Name,
 				JobStatus:     condition,
 				RemoteID:      string(jobPod.ObjectMeta.UID),
@@ -306,7 +315,7 @@ func (r *LagoonMonitorReconciler) updateTaskStatusCondition(ctx context.Context,
 	condition lagoonv1beta1.LagoonTaskConditions, log []byte) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !taskContainsStatus(lagoonTask.Status.Conditions, condition) {
+	if !helpers.TaskContainsStatus(lagoonTask.Status.Conditions, condition) {
 		lagoonTask.Status.Conditions = append(lagoonTask.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{

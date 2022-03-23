@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
 type cleanup interface {
@@ -22,25 +23,29 @@ type cleanup interface {
 
 // Cleanup is used for cleaning up old pods or resources.
 type Cleanup struct {
-	Client              client.Client
-	BuildsToKeep        int
-	TasksToKeep         int
-	BuildPodsToKeep     int
-	TaskPodsToKeep      int
-	ControllerNamespace string
-	EnableDebug         bool
+	Client                client.Client
+	BuildsToKeep          int
+	TasksToKeep           int
+	BuildPodsToKeep       int
+	TaskPodsToKeep        int
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	EnableDebug           bool
 }
 
 // NewCleanup returns a cleanup with controller-runtime client.
-func NewCleanup(client client.Client, buildsToKeep int, buildPodsToKeep int, tasksToKeep int, taskPodsToKeep int, controllerNamespace string, enableDebug bool) *Cleanup {
+func NewCleanup(client client.Client, buildsToKeep int, buildPodsToKeep int, tasksToKeep int, taskPodsToKeep int, controllerNamespace, namespacePrefix string, randomNamespacePrefix, enableDebug bool) *Cleanup {
 	return &Cleanup{
-		Client:              client,
-		BuildsToKeep:        buildsToKeep,
-		TasksToKeep:         tasksToKeep,
-		BuildPodsToKeep:     buildPodsToKeep,
-		TaskPodsToKeep:      taskPodsToKeep,
-		ControllerNamespace: controllerNamespace,
-		EnableDebug:         enableDebug,
+		Client:                client,
+		BuildsToKeep:          buildsToKeep,
+		TasksToKeep:           tasksToKeep,
+		BuildPodsToKeep:       buildPodsToKeep,
+		TaskPodsToKeep:        taskPodsToKeep,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomNamespacePrefix,
+		EnableDebug:           enableDebug,
 	}
 }
 
@@ -83,8 +88,8 @@ func (h *Cleanup) LagoonBuildCleanup() {
 		if len(lagoonBuilds.Items) > h.BuildsToKeep {
 			for idx, lagoonBuild := range lagoonBuilds.Items {
 				if idx >= h.BuildsToKeep {
-					if containsString(
-						BuildCompletedCancelledFailedStatus,
+					if helpers.ContainsString(
+						helpers.BuildCompletedCancelledFailedStatus,
 						lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
@@ -139,8 +144,8 @@ func (h *Cleanup) LagoonTaskCleanup() {
 		if len(lagoonTasks.Items) > h.TasksToKeep {
 			for idx, lagoonTask := range lagoonTasks.Items {
 				if idx >= h.TasksToKeep {
-					if containsString(
-						TaskCompletedCancelledFailedStatus,
+					if helpers.ContainsString(
+						helpers.TaskCompletedCancelledFailedStatus,
 						lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))

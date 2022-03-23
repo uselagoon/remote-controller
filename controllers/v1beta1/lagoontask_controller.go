@@ -32,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
+
 	// openshift
 	oappsv1 "github.com/openshift/api/apps/v1"
 )
@@ -39,14 +41,16 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log                 logr.Logger
-	Scheme              *runtime.Scheme
-	IsOpenshift         bool
-	ControllerNamespace string
-	TaskSettings        LagoonTaskSettings
-	EnableDebug         bool
-	LagoonTargetName    string
-	ProxyConfig         ProxyConfig
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	IsOpenshift           bool
+	ControllerNamespace   string
+	NamespacePrefix       string
+	RandomNamespacePrefix bool
+	TaskSettings          LagoonTaskSettings
+	EnableDebug           bool
+	LagoonTargetName      string
+	ProxyConfig           ProxyConfig
 }
 
 // LagoonTaskSettings is for the settings for task API/SSH host/ports
@@ -70,7 +74,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// your logic here
 	var lagoonTask lagoonv1beta1.LagoonTask
 	if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err != nil {
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -86,7 +90,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	} else {
 		// The object is being deleted
-		if containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
 			if err := r.deleteExternalResources(&lagoonTask, req.NamespacedName.Namespace); err != nil {
 				// if fail to delete the external dependency here, return with error
@@ -94,7 +98,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			lagoonTask.ObjectMeta.Finalizers = removeString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
+			lagoonTask.ObjectMeta.Finalizers = helpers.RemoveString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 			// use patches to avoid update errors
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
@@ -129,7 +133,7 @@ func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1
 func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &oappsv1.DeploymentConfigList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
+		client.InNamespace(lagoonTask.ObjectMeta.Namespace),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
@@ -251,7 +255,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 	// no deployments found return error
 	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
-		lagoonTask.Spec.Environment.OpenshiftProjectName,
+		lagoonTask.ObjectMeta.Namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
 		err,
@@ -262,7 +266,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, l
 func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.Spec.Environment.OpenshiftProjectName),
+		client.InNamespace(lagoonTask.ObjectMeta.Namespace),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
@@ -384,7 +388,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	// no deployments found return error
 	return nil, fmt.Errorf(
 		"No deployments %s for project %s, environment %s: %v",
-		lagoonTask.Spec.Environment.OpenshiftProjectName,
+		lagoonTask.ObjectMeta.Namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
 		err,
@@ -454,7 +458,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !containsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+	if !helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
@@ -474,7 +478,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	serviceAccount := &corev1.ServiceAccount{}
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
+	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}
@@ -492,7 +496,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	newPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lagoonTask.ObjectMeta.Name,
-			Namespace: lagoonTask.Spec.Environment.OpenshiftProjectName,
+			Namespace: lagoonTask.ObjectMeta.Namespace,
 			Labels: map[string]string{
 				"lagoon.sh/jobType":    "task",
 				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
@@ -516,7 +520,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},
@@ -525,7 +529,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  "lagoon-sshkey",
-							DefaultMode: intPtr(420),
+							DefaultMode: helpers.IntPtr(420),
 						},
 					},
 				},
@@ -542,7 +546,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						},
 						{
 							Name:  "NAMESPACE",
-							Value: lagoonTask.Spec.Environment.OpenshiftProjectName,
+							Value: lagoonTask.ObjectMeta.Namespace,
 						},
 						{
 							Name:  "PODNAME",
@@ -654,7 +658,7 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (string, error) {
 	serviceAccount := &corev1.ServiceAccount{}
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Spec.Environment.OpenshiftProjectName)
+	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
 	if err != nil {
 		return "", err
 	}

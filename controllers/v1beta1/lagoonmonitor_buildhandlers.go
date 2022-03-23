@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -53,7 +54,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 			// which currently it will be as only one container is spawned in a build
 			if container.Name == "lagoon-build" {
 				// check if the state of the pod is one of our failure states
-				if container.State.Waiting != nil && containsString(failureStates, container.State.Waiting.Reason) {
+				if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 					// if we have a failure state, then fail the build and get the logs from the container
 					opLog.Info(fmt.Sprintf("Build failed, container exit reason was: %v", container.State.Waiting.Reason))
 					lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusFailed)
@@ -214,6 +215,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
 ) {
+	namespace := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		r.NamespacePrefix,
+		r.ControllerNamespace,
+		r.RandomNamespacePrefix,
+	)
 	if r.EnableMQ {
 		condition := "pending"
 		switch jobPod.Status.Phase {
@@ -235,7 +244,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
+			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment:   lagoonBuild.Spec.Project.Environment,
 				EnvironmentID: lagoonBuild.Spec.Project.EnvironmentID,
@@ -416,7 +425,7 @@ func (r *LagoonMonitorReconciler) updateBuildStatusCondition(ctx context.Context
 ) error {
 	// set the transition time
 	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !buildContainsStatus(lagoonBuild.Status.Conditions, condition) {
+	if !helpers.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
 		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"status": map[string]interface{}{
@@ -568,8 +577,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	// then the jobCondition is Failed, Complete, or Cancelled
 	// then update the build to reflect the current pod status
 	// we do this so we don't update the status of the build again
-	if containsString(
-		RunningPendingStatus,
+	if helpers.ContainsString(
+		helpers.RunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
 		opLog.Info(

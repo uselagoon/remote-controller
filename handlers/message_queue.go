@@ -387,6 +387,21 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "kubernetes:task:cancel":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received task cancellation for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						namespace,
+					),
+				)
+				err := h.CancelTask(namespace, jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			case "kubernetes:restic:backup:restore":
 				opLog.Info(
 					fmt.Sprintf(

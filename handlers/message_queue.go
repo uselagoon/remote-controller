@@ -334,7 +334,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
-			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.RandString(6))
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.HashString(job.Spec.Task.ID)[0:6])
+			if job.Spec.Task.TaskName != "" {
+				job.ObjectMeta.Name = job.Spec.Task.TaskName
+			}
 			if err := h.Client.Create(ctx, job); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(

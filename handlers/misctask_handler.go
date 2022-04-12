@@ -71,19 +71,24 @@ func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 func (h *Messaging) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	var jobPod corev1.Pod
+	//@TODO: use `taskName` in the future only
+	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
+	if jobSpec.Task.TaskName != "" {
+		taskName = jobSpec.Task.TaskName
+	}
 	if err := h.Client.Get(context.Background(), types.NamespacedName{
-		Name:      jobSpec.Misc.Name,
+		Name:      taskName,
 		Namespace: namespace,
 	}, &jobPod); err != nil {
 		// since there was no build pod, check for the lagoon build resource
 		var lagoonTask lagoonv1beta1.LagoonTask
 		if err := h.Client.Get(context.Background(), types.NamespacedName{
-			Name:      jobSpec.Misc.Name,
+			Name:      taskName,
 			Namespace: namespace,
 		}, &lagoonTask); err != nil {
 			opLog.Info(fmt.Sprintf(
 				"Unable to find task %s to cancel it. Sending response to Lagoon to update the task to cancelled.",
-				jobSpec.Misc.Name,
+				taskName,
 			))
 			// if there is no pod or task, update the task in Lagoon to cancelled
 			h.updateLagoonTask(opLog, namespace, *jobSpec)
@@ -96,7 +101,7 @@ func (h *Messaging) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTa
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to update task %s to cancel it.",
-					jobSpec.Misc.Name,
+					taskName,
 				),
 			)
 			return err
@@ -147,6 +152,11 @@ func (h *Messaging) updateLagoonBuild(opLog logr.Logger, namespace string, jobSp
 }
 
 func (h *Messaging) updateLagoonTask(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
+	//@TODO: use `taskName` in the future only
+	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
+	if jobSpec.Task.TaskName != "" {
+		taskName = jobSpec.Task.TaskName
+	}
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
@@ -156,8 +166,8 @@ func (h *Messaging) updateLagoonTask(opLog logr.Logger, namespace string, jobSpe
 		Meta: &lagoonv1beta1.LagoonLogMeta{
 			Environment: jobSpec.Environment.Name,
 			Project:     jobSpec.Project.Name,
-			// BuildPhase:  "cancelled",
-			// BuildName:   jobSpec.Misc.Name,
+			JobName:     taskName,
+			JobStatus:   "cancelled",
 		},
 	}
 	// if the build isn't found at all, then set the start/end time to be now

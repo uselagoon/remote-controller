@@ -13,6 +13,10 @@ import (
 	harborv2 "github.com/mittwald/goharbor-client/v3/apiv2"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
+
+	harborv22 "github.com/mittwald/goharbor-client/v5/apiv2"
+	// modelv22 "github.com/mittwald/goharbor-client/v5/apiv2/model"
+
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 
@@ -34,6 +38,7 @@ type Harbor struct {
 	Password              string
 	Log                   logr.Logger
 	Client                *harborv2.RESTClient
+	Client2               *harborv22.RESTClient
 	DeleteDisabled        bool
 	WebhookAddition       bool
 	RobotPrefix           string
@@ -59,8 +64,13 @@ func NewHarbor(harbor Harbor) (*Harbor, error) {
 	if err != nil {
 		return nil, err
 	}
+	c2, err := harborv22.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, nil)
+	if err != nil {
+		return nil, err
+	}
 	harbor.Log = ctrl.Log.WithName("controllers").WithName("HarborIntegration")
 	harbor.Client = c
+	harbor.Client2 = c2
 	return &harbor, nil
 }
 
@@ -176,6 +186,11 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	robotName, namespace string,
 	expiry int64,
 ) (*helpers.RegistryCredentials, error) {
+	harborVersion, err := h.Client2.GetSystemInfo(ctx)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error listing system info"))
+	}
+	h.Log.Info(*harborVersion.HarborVersion)
 	robots, err := h.Client.ListProjectRobots(
 		ctx,
 		project,

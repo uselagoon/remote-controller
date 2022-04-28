@@ -280,6 +280,8 @@ spec:
                             type: string
                           sshPort:
                             type: string
+                          taskName:
+                            type: string
                         required:
                         - id
                         type: object
@@ -370,6 +372,8 @@ spec:
                           sshHost:
                             type: string
                           sshPort:
+                            type: string
+                          taskName:
                             type: string
                         required:
                         - id
@@ -463,6 +467,8 @@ spec:
                           sshHost:
                             type: string
                           sshPort:
+                            type: string
+                          taskName:
                             type: string
                         required:
                         - id

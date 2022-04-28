@@ -14,8 +14,9 @@ import (
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
 
-	harborv22 "github.com/mittwald/goharbor-client/v5/apiv2"
 	// modelv22 "github.com/mittwald/goharbor-client/v5/apiv2/model"
+
+	harborv22 "github.com/mittwald/goharbor-client/v5/apiv2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"

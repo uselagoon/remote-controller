@@ -220,6 +220,7 @@ github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8Nz
 github.com/coreos/go-oidc v2.1.0+incompatible/go.mod h1:CgnwVTmzoESiwO9qyAFEMiHoZ1nMCKZlZ9V6mm3/LKc=
 github.com/coreos/go-oidc/v3 v3.0.0/go.mod h1:rEJ/idjfUyfkBit1eI1fvyr+64/g9dcKpAm8MJMesvo=
 github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
+github.com/coreos/go-semver v0.3.0 h1:wkHLiw0WNATZnSG7epLsujiMCgPAc9xhjJ4tgnAxmfM=
 github.com/coreos/go-semver v0.3.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
 github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
@@ -755,8 +756,6 @@ github.com/mailru/easyjson v0.7.1/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/manhtukhang/goharbor-client/v5 v5.0.0-20220412103901-87d1d79b12db h1:JdFCY+Az66GBkxeZ0vR3oRwYgwR03HN27iYBCGSCS8A=
-github.com/manhtukhang/goharbor-client/v5 v5.0.0-20220412103901-87d1d79b12db/go.mod h1:+DjAU20D4IpPhPfF99q217eOttGt9SsMMvsNg45sWBk=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
 github.com/markbates/pkger v0.15.1/go.mod h1:0JoVlrol20BSywW79rN3kdFFsE5xYM+rSCQDXbLhiuI=
 github.com/markbates/pkger v0.17.1/go.mod h1:0JoVlrol20BSywW79rN3kdFFsE5xYM+rSCQDXbLhiuI=
@@ -986,6 +985,8 @@ github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead h1:brBqfI3SWHk
 github.com/shreddedbacon/go-mq v0.0.0-20200419104937-b8e9af912ead/go.mod h1:lAwW/xhfO27t6WSVHFtLdgYioymwJvQxMSH19z00/BY=
 github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75 h1:Qk4BJhm8cnP2WCIW6gpqBDyYwN/bqzqhjyHoGttFkgc=
 github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75/go.mod h1:B6DcW8mCOdRr3gYxZ5OIaM5S3P89VBNadTtrgunAj5Q=
+github.com/shreddedbacon/goharbor-client/v5 v5.0.0-20220428084313-5cd125b168ef h1:iC2QY226rVGQowsGnGJjCRrxyCq+QaU9ABVJREr5w0I=
+github.com/shreddedbacon/goharbor-client/v5 v5.0.0-20220428084313-5cd125b168ef/go.mod h1:+DjAU20D4IpPhPfF99q217eOttGt9SsMMvsNg45sWBk=
 github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204 h1:jXml7E4X/d9v6LATMXFPCF1yW6TKrs+o5wMtYTaBdTw=
 github.com/shreddedbacon/wabbit v0.0.0-20200419104837-5b7b769d7204/go.mod h1:l7t6U3j3uZUYroWctp1FvWEktRMuGqx2zCcb5cd8cS8=
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=

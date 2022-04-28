@@ -3,6 +3,7 @@ package v1beta1
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"context"
 	"encoding/base64"
@@ -14,13 +15,14 @@ import (
 	"github.com/mittwald/goharbor-client/v3/apiv2/model"
 	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
 
-	// modelv22 "github.com/mittwald/goharbor-client/v5/apiv2/model"
+	modelv22 "github.com/mittwald/goharbor-client/v5/apiv2/model"
 
 	harborv22 "github.com/mittwald/goharbor-client/v5/apiv2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 
+	"github.com/coreos/go-semver/semver"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -58,6 +60,10 @@ type robotAccountCredential struct {
 	CreatedAt int64  `json:"created_at"`
 	Token     string `json:"token"`
 }
+
+var (
+	harborRobotVersionChanged = semver.New("2.2.0")
+)
 
 // NewHarbor create a new harbor connection.
 func NewHarbor(harbor Harbor) (*Harbor, error) {
@@ -191,10 +197,12 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error listing system info"))
 	}
-	h.Log.Info(*harborVersion.HarborVersion)
-	robots, err := h.Client.ListProjectRobots(
+	// harborVersionSemver := semver.New(strings.Split(*harborVersion.HarborVersion, "-")[0][1:])
+	h.Log.Info(fmt.Sprintf("Harbor version is %s", strings.Split(*harborVersion.HarborVersion, "-")[0][1:]))
+	// if harborVersionSemver.LessThan(*harborRobotVersionChanged) {
+	robots, err := h.Client2.ListProjectRobotsV1(
 		ctx,
-		project,
+		project.Name,
 	)
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", project.Name))
@@ -236,10 +244,10 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 				// account is required, as there isn't a way to get the credentials after
 				// robot accounts are created
 				h.Log.Info(fmt.Sprintf("Kubernetes secret doesn't exist, robot account %s needs to be re-created", robot.Name))
-				err := h.Client.DeleteProjectRobot(
+				err := h.Client2.DeleteProjectRobotV1(
 					ctx,
-					project,
-					int(robot.ID),
+					project.Name,
+					int64(robot.ID),
 				)
 				if err != nil {
 					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
@@ -248,14 +256,14 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 				deleted = true
 				continue
 			}
-			if robot.Disabled && h.DeleteDisabled {
+			if robot.Disable && h.DeleteDisabled {
 				// if accounts are disabled, and deletion of disabled accounts is enabled
 				// then this will delete the account to get re-created
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s disabled, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
+				err := h.Client2.DeleteProjectRobotV1(
 					ctx,
-					project,
-					int(robot.ID),
+					project.Name,
+					int64(robot.ID),
 				)
 				if err != nil {
 					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
@@ -267,10 +275,10 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			if h.shouldRotate(robot, h.RotateInterval) {
 				// this forces a rotation after a certain period, whether its expiring or already expired.
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  should rotate, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
+				err := h.Client2.DeleteProjectRobotV1(
 					ctx,
-					project,
-					int(robot.ID),
+					project.Name,
+					int64(robot.ID),
 				)
 				if err != nil {
 					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
@@ -282,10 +290,10 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			if h.expiresSoon(robot, h.ExpiryInterval) {
 				// if the account is about to expire, then refresh the credentials
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  expires soon, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
+				err := h.Client2.DeleteProjectRobotV1(
 					ctx,
-					project,
-					int(robot.ID),
+					project.Name,
+					int64(robot.ID),
 				)
 				if err != nil {
 					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
@@ -299,13 +307,13 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	if !exists || deleted {
 		// if it doesn't exist, or was deleted
 		// create a new robot account
-		token, err := h.Client.AddProjectRobot(
+		robotAcc, err := h.Client2.AddProjectRobotV1(
 			ctx,
-			project,
-			&legacy.RobotAccountCreate{
+			project.Name,
+			&modelv22.RobotCreateV1{
 				Name:      robotName,
 				ExpiresAt: expiry,
-				Access: []*legacy.RobotAccountAccess{
+				Access: []*modelv22.Access{
 					{Action: "push", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
 					{Action: "pull", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
 				},
@@ -318,13 +326,14 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		// then craft and return the harbor credential secret
 		harborRegistryCredentials := makeHarborSecret(
 			robotAccountCredential{
-				Token: token,
+				Token: robotAcc.Payload.Secret,
 				Name:  h.addPrefix(robotName),
 			},
 		)
 		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
 		return &harborRegistryCredentials, nil
 	}
+	// }
 	return nil, err
 }
 
@@ -427,7 +436,7 @@ func (h *Harbor) addPrefix(str string) string {
 }
 
 // matchRobotAccount will check if the robotaccount exists or not
-func (h *Harbor) matchRobotAccount(robot *legacy.RobotAccount,
+func (h *Harbor) matchRobotAccount(robot *modelv22.Robot,
 	project *model.Project,
 	accountSuffix string,
 ) bool {
@@ -446,8 +455,8 @@ func (h *Harbor) matchRobotAccount(robot *legacy.RobotAccount,
 }
 
 // already expired?
-func (h *Harbor) shouldRotate(robot *legacy.RobotAccount, interval time.Duration) bool {
-	created, err := time.Parse(time.RFC3339Nano, robot.CreationTime)
+func (h *Harbor) shouldRotate(robot *modelv22.Robot, interval time.Duration) bool {
+	created, err := time.Parse(time.RFC3339Nano, robot.CreationTime.String())
 	if err != nil {
 		h.Log.Error(err, "error parsing time")
 		return true
@@ -456,7 +465,7 @@ func (h *Harbor) shouldRotate(robot *legacy.RobotAccount, interval time.Duration
 }
 
 // expiresSoon checks if the robot account will expire soon
-func (h *Harbor) expiresSoon(robot *legacy.RobotAccount, duration time.Duration) bool {
+func (h *Harbor) expiresSoon(robot *modelv22.Robot, duration time.Duration) bool {
 	now := time.Now().UTC().Add(duration)
 	expiry := time.Unix(robot.ExpiresAt, 0)
 	return expiry.Before(now)

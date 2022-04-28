@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/cheshir/go-mq v1.0.2
+	github.com/coreos/go-semver v0.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/mittwald/goharbor-client/v5 v5.0.3
@@ -129,5 +130,5 @@ replace github.com/NeowayLabs/wabbit v0.0.0-20200409220312-12e68ab5b0c6 => githu
 // includes page_size 100 for listing projects
 replace github.com/mittwald/goharbor-client/v3 v3.3.0 => github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75
 
-// includes fixes for broken robot accounts
-replace github.com/mittwald/goharbor-client/v5 v5.0.3 => github.com/manhtukhang/goharbor-client/v5 v5.0.0-20220412103901-87d1d79b12db
+// includes fixes for broken robot accounts (original by manhtukhang)
+replace github.com/mittwald/goharbor-client/v5 v5.0.3 => github.com/shreddedbacon/goharbor-client/v5 v5.0.0-20220428084313-5cd125b168ef

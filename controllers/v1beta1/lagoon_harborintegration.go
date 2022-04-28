@@ -303,10 +303,10 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		harborRegistryCredentials := makeHarborSecret(
 			robotAccountCredential{
 				Token: token.Secret,
-				Name:  h.addPrefix(robotName),
+				Name:  token.Name,
 			},
 		)
-		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
+		h.Log.Info(fmt.Sprintf("Created robot account %s -%s", h.addPrefix(robotName), token.Name))
 		return &harborRegistryCredentials, nil
 	}
 	return nil, err

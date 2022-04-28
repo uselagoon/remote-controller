@@ -191,7 +191,7 @@ fi
 echo "===> Install Harbor"
 kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.5.2
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.6.0
 
 echo "====> Install dbaas-operator"
 helm repo add amazeeio https://amazeeio.github.io/charts/

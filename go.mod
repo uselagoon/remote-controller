@@ -131,4 +131,4 @@ replace github.com/NeowayLabs/wabbit v0.0.0-20200409220312-12e68ab5b0c6 => githu
 replace github.com/mittwald/goharbor-client/v3 v3.3.0 => github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75
 
 // includes fixes for broken robot accounts (original by manhtukhang)
-replace github.com/mittwald/goharbor-client/v5 v5.0.3 => github.com/shreddedbacon/goharbor-client/v5 v5.0.0-20220428084313-5cd125b168ef
+replace github.com/mittwald/goharbor-client/v5 v5.0.3 => github.com/shreddedbacon/goharbor-client/v5 v5.0.0-20220429061334-39715ba1490d

@@ -223,29 +223,62 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			return err
 		}
 		// create the project in harbor
-		hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
+		robotCreds := &helpers.RegistryCredentials{}
+		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
 		if err != nil {
 			return err
 		}
-		// create or refresh the robot credentials
-		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
-			r.Client,
-			hProject,
-			lagoonBuild.Spec.Project.Environment,
-			ns,
-			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
-		if err != nil {
-			return err
-		}
-		if robotCreds != nil {
-			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx,
-				r.Client,
-				ns,
-				"lagoon-internal-registry-secret",
-				lagoonHarbor.Hostname,
-				robotCreds); err != nil {
+		if lagoonHarbor.useV2Functions(curVer) {
+			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
+			if err != nil {
 				return err
+			}
+			// create or refresh the robot credentials
+			robotCreds, err = lagoonHarbor.CreateOrRefreshRobotV2(ctx,
+				r.Client,
+				hProject,
+				lagoonBuild.Spec.Project.Environment,
+				ns,
+				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
+			if err != nil {
+				return err
+			}
+			if robotCreds != nil {
+				// if we have robotcredentials to create, do that here
+				if err := upsertHarborSecret(ctx,
+					r.Client,
+					ns,
+					"lagoon-internal-registry-secret",
+					lagoonHarbor.Hostname,
+					robotCreds); err != nil {
+					return err
+				}
+			}
+		} else {
+			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
+			if err != nil {
+				return err
+			}
+			// create or refresh the robot credentials
+			robotCreds, err = lagoonHarbor.CreateOrRefreshRobot(ctx,
+				r.Client,
+				hProject,
+				lagoonBuild.Spec.Project.Environment,
+				ns,
+				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
+			if err != nil {
+				return err
+			}
+			if robotCreds != nil {
+				// if we have robotcredentials to create, do that here
+				if err := upsertHarborSecret(ctx,
+					r.Client,
+					ns,
+					"lagoon-internal-registry-secret",
+					lagoonHarbor.Hostname,
+					robotCreds); err != nil {
+					return err
+				}
 			}
 		}
 	}

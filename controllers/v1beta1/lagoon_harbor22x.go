@@ -14,8 +14,8 @@ import (
 
 // addPrefix adds the robot account prefix to robot accounts
 // @TODO: Harbor 2.2.0 changes this behavior, see note below in `matchRobotAccount`
-func (h *Harbor) addPrefixV2(projectName, robotName string) string {
-	return fmt.Sprintf("%s%s+%s", h.RobotPrefix, projectName, robotName)
+func (h *Harbor) addPrefixV2(projectName, environmentName string) string {
+	return fmt.Sprintf("%s%s+%s", h.RobotPrefix, projectName, environmentName)
 }
 
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
@@ -124,7 +124,7 @@ func (h *Harbor) CreateProjectV2(ctx context.Context, projectName string) (*harb
 func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	k8s client.Client,
 	project *harborclientv5model.Project,
-	robotName, namespace string,
+	environmentName, namespace string,
 	expiry int64,
 ) (*helpers.RegistryCredentials, error) {
 	robots, err := h.ClientV5.ListProjectRobotsV1(
@@ -163,8 +163,10 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			forceRecreate = false
 		}
 	}
+	h.Log.Info(fmt.Sprintf("robots %v", robots))
 	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, project.Name, robotName) {
+		h.Log.Info(fmt.Sprintf("Match robot account %v / %s / %s / %s", h.matchRobotAccount(robot.Name, project.Name, environmentName), robot.Name, project.Name, environmentName))
+		if h.matchRobotAccount(robot.Name, project.Name, environmentName) {
 			exists = true
 			if forceRecreate {
 				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
@@ -238,7 +240,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			ctx,
 			project.Name,
 			&harborclientv5model.RobotCreateV1{
-				Name:      robotName,
+				Name:      environmentName,
 				ExpiresAt: expiry,
 				Access: []*harborclientv5model.Access{
 					{Action: "push", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
@@ -247,7 +249,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			},
 		)
 		if err != nil {
-			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, h.addPrefixV2(project.Name, robotName)))
+			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, h.addPrefixV2(project.Name, environmentName)))
 			return nil, err
 		}
 		// then craft and return the harbor credential secret

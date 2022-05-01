@@ -243,17 +243,6 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			if err != nil {
 				return err
 			}
-			if robotCreds != nil {
-				// if we have robotcredentials to create, do that here
-				if err := upsertHarborSecret(ctx,
-					r.Client,
-					ns,
-					"lagoon-internal-registry-secret",
-					lagoonHarbor.Hostname,
-					robotCreds); err != nil {
-					return err
-				}
-			}
 		} else {
 			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
@@ -269,16 +258,16 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			if err != nil {
 				return err
 			}
-			if robotCreds != nil {
-				// if we have robotcredentials to create, do that here
-				if err := upsertHarborSecret(ctx,
-					r.Client,
-					ns,
-					"lagoon-internal-registry-secret",
-					lagoonHarbor.Hostname,
-					robotCreds); err != nil {
-					return err
-				}
+		}
+		if robotCreds != nil {
+			// if we have robotcredentials to create, do that here
+			if err := upsertHarborSecret(ctx,
+				r.Client,
+				ns,
+				"lagoon-internal-registry-secret",
+				lagoonHarbor.Hostname,
+				robotCreds); err != nil {
+				return err
 			}
 		}
 	}

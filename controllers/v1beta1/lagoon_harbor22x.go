@@ -200,7 +200,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				deleted = true
 				continue
 			}
-			h.Log.Info(fmt.Sprintf("should rotate %v / %v / %s / %s", h.shouldRotate(robot.CreationTime.String(), h.RotateInterval), robot.CreationTime.String(), h.RotateInterval))
+			h.Log.Info(fmt.Sprintf("should rotate %v / %s / %v", h.shouldRotate(robot.CreationTime.String(), h.RotateInterval), robot.CreationTime.String(), h.RotateInterval))
 			if h.shouldRotate(robot.CreationTime.String(), h.RotateInterval) {
 				// this forces a rotation after a certain period, whether its expiring or already expired.
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  should rotate, deleting it", robot.Name))
@@ -216,7 +216,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				deleted = true
 				continue
 			}
-			h.Log.Info(fmt.Sprintf("expires soon %v / %s / %s", h.expiresSoon(robot.ExpiresAt, h.ExpiryInterval), robot.ExpiresAt, h.ExpiryInterval))
+			h.Log.Info(fmt.Sprintf("expires soon %v / %v / %v", h.expiresSoon(robot.ExpiresAt, h.ExpiryInterval), robot.ExpiresAt, h.ExpiryInterval))
 			if h.expiresSoon(robot.ExpiresAt, h.ExpiryInterval) {
 				// if the account is about to expire, then refresh the credentials
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  expires soon, deleting it", robot.Name))

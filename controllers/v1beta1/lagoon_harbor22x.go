@@ -185,7 +185,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			}
 			continue
 		}
-		// only add non legacy robots into the sliced
+		// only add non legacy robots into the slice
 		tempRobots = append(tempRobots, robot)
 	}
 	robots = tempRobots

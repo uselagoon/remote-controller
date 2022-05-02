@@ -18,6 +18,8 @@ NS=drupal-example-install
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
 
+HARBOR_VERSION=${HARBOR_VERSION:-1.6.4}
+
 check_controller_log () {
     echo "=========== CONTROLLER LOG ============"
     kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
@@ -191,7 +193,7 @@ fi
 echo "===> Install Harbor"
 kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version 1.6.0
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
 
 echo "====> Install dbaas-operator"
 helm repo add amazeeio https://amazeeio.github.io/charts/

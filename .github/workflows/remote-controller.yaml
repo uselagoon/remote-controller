@@ -11,6 +11,9 @@ on:
 
 jobs:
   test-suite:
+    strategy:
+      matrix:
+        harbor: ["1.5.6", "1.6.4"]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -53,5 +56,6 @@ jobs:
         export PATH=$PATH:/usr/local/kubebuilder/bin
         export PATH=$PATH:/usr/local/go/bin
         export GOPATH=$HOME/go
+        export HARBOR_VERSION=${{matrix.harbor}}
         # export GO111MODULE=on
         make controller-test

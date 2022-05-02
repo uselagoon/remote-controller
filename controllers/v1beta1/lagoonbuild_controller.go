@@ -31,7 +31,6 @@ import (
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/handlers"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	// Openshift
 )
 
 // LagoonBuildReconciler reconciles a LagoonBuild object
@@ -42,7 +41,6 @@ type LagoonBuildReconciler struct {
 	EnableMQ              bool
 	Messaging             *handlers.Messaging
 	BuildImage            string
-	IsOpenshift           bool
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
 	ControllerNamespace   string
@@ -227,13 +225,6 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
 	if err != nil {
 		return ctrl.Result{}, err
-	}
-	// create the service account role binding for openshift to allow promotions in the openshift 3.11 clusters
-	if r.IsOpenshift && lagoonBuild.Spec.Build.Type == "promote" {
-		err := r.getOrCreatePromoteSARoleBinding(ctx, lagoonBuild.Spec.Promote.SourceProject, namespace.ObjectMeta.Name)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	// copy the build resource into a new resource and set the status to pending

@@ -14,7 +14,7 @@ CONTROLLER_IMAGE=uselagoon/remote-controller:test-tag
 CONTROLLER_NAMESPACE=remote-controller-system
 CHECK_TIMEOUT=20
 
-NS=drupal-example-install
+NS=nginx-example-main
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
 
@@ -49,8 +49,8 @@ start_docker_compose_services () {
     echo "==> Bring up local provider"
     docker-compose up -d
     CHECK_COUNTER=1
-    echo "==> Ensure mariadb database provider is running"
-    mariadb_start_check
+    # echo "==> Ensure mariadb database provider is running"
+    # mariadb_start_check
 }
 
 mariadb_start_check () {
@@ -195,12 +195,12 @@ kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
 helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
 
-echo "====> Install dbaas-operator"
-helm repo add amazeeio https://amazeeio.github.io/charts/
-kubectl create namespace dbaas-operator
-helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
-helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
-helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
+# echo "====> Install dbaas-operator"
+# helm repo add amazeeio https://amazeeio.github.io/charts/
+# kubectl create namespace dbaas-operator
+# helm upgrade --install -n dbaas-operator dbaas-operator amazeeio/dbaas-operator 
+# helm repo add dbaas-operator https://raw.githubusercontent.com/amazeeio/dbaas-operator/main/charts
+# helm upgrade --install -n dbaas-operator mariadbprovider dbaas-operator/mariadbprovider -f test-resources/helm-values-mariadbprovider.yml
 
 echo "==> Configure example environment"
 echo "====> Install build deploy controllers"
@@ -233,16 +233,16 @@ echo '
                 \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
                 \"type\": \"branch\"
             },
-            \"gitReference\": \"origin\/install\",
+            \"gitReference\": \"origin\/main\",
             \"project\": {
-            \"name\": \"drupal-example\",
-            \"environment\": \"install\",
+            \"name\": \"nginx-example\",
+            \"environment\": \"main\",
             \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
-            \"routerPattern\": \"install-drupal-example\",
+            \"routerPattern\": \"main-nginx-example\",
             \"environmentType\": \"production\",
-            \"productionEnvironment\": \"install\",
-            \"standbyEnvironment\": \"master\",
-            \"gitUrl\": \"https:\/\/github.com\/amazeeio\/drupal-example-simple.git\",
+            \"productionEnvironment\": \"main\",
+            \"standbyEnvironment\": \"\",
+            \"gitUrl\": \"https:\/\/github.com\/shreddedbacon\/lagoon-nginx-example.git\",
             \"deployTarget\": \"kind\",
             \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
             \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
@@ -257,7 +257,7 @@ echo '
             \"registry\": \"172.17.0.1:5000\"
             },
             \"branch\": {
-                \"name\": \"install\"
+                \"name\": \"main\"
             }
         }
     }",
@@ -271,7 +271,7 @@ check_lagoon_build lagoon-build-${LBUILD2}
 
 echo "==> Check pod cleanup worked"
 CHECK_COUNTER=1
-until ! $(kubectl -n drupal-example-install get pods lagoon-build-7m5zypx &> /dev/null)
+until ! $(kubectl -n nginx-example-main get pods lagoon-build-7m5zypx &> /dev/null)
 do
 if [ $CHECK_COUNTER -lt 14 ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -287,7 +287,7 @@ else
 fi
 done
 echo "==> Pod cleanup output (should only be 1 lagoon-build pod)"
-POD_CLEANUP_OUTPUT=$(kubectl -n drupal-example-install get pods | grep "lagoon-build")
+POD_CLEANUP_OUTPUT=$(kubectl -n nginx-example-main get pods | grep "lagoon-build")
 echo "${POD_CLEANUP_OUTPUT}"
 POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")
 if [ $POD_CLEANUP_COUNT -gt 1 ]; then
@@ -323,18 +323,18 @@ echo "==> Delete the environment"
 echo '
 {"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:remove",
     "payload":"{
-        \"projectName\": \"drupal-example\",
+        \"projectName\": \"nginx-example\",
         \"type\":\"branch\",
         \"forceDeleteProductionEnvironment\":true,
-        \"branch\":\"install\",
-        \"openshiftProjectName\":\"drupal-example-install\"
+        \"branch\":\"main\",
+        \"openshiftProjectName\":\"nginx-example-main\"
     }",
 "payload_encoding":"string"
 }' >payload.json
 curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
 echo ""
 CHECK_COUNTER=1
-until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Deleted namespace drupal-example-install for project drupal-example, branch install")
+until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Deleted namespace nginx-example-main for project nginx-example, branch main")
 do
 if [ $CHECK_COUNTER -lt 20 ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1

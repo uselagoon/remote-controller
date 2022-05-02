@@ -508,23 +508,39 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		},
 		{
 			Name:  "DEFAULT_BACKUP_SCHEDULE",
-			Value: r.BackupDefaultSchedule,
+			Value: r.BackupConfig.BackupDefaultSchedule,
 		},
 		{
 			Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultMonthlyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultMonthlyRetention),
 		},
 		{
 			Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultWeeklyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultWeeklyRetention),
 		},
 		{
 			Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultDailyRetention),
 		},
 		{
 			Name:  "HOURLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultHourlyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultHourlyRetention),
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_DEV_SCHEDULE",
+			Value: r.BackupConfig.BackupDefaultDevelopmentSchedule,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_PR_SCHEDULE",
+			Value: r.BackupConfig.BackupDefaultPullrequestSchedule,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_DEV_RETENTION",
+			Value: r.BackupConfig.BackupDefaultDevelopmentRetention,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_PR_RETENTION",
+			Value: r.BackupConfig.BackupDefaultPullrequestRetention,
 		},
 		{
 			Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",

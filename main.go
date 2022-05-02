@@ -94,6 +94,12 @@ func main() {
 	var backupDefaultWeeklyRetention int
 	var backupDefaultMonthlyRetention int
 	var backupDefaultSchedule string
+
+	var backupDefaultDevelopmentSchedule string
+	var backupDefaultPullrequestSchedule string
+	var backupDefaultDevelopmentRetention string
+	var backupDefaultPullrequestRetention string
+
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
@@ -204,6 +210,14 @@ func main() {
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
 	flag.StringVar(&backupDefaultSchedule, "backup-default-schedule", "M H(22-2) * * *",
 		"The default backup schedule for all projects on this cluster.")
+	flag.StringVar(&backupDefaultDevelopmentSchedule, "backup-default-dev-schedule", "",
+		"The default backup schedule for all devlopment environments on this cluster.")
+	flag.StringVar(&backupDefaultPullrequestSchedule, "backup-default-pr-schedule", "",
+		"The default backup schedule for all pullrequest environments on this cluster.")
+	flag.StringVar(&backupDefaultDevelopmentRetention, "backup-default-dev-retention", "",
+		"The default backup retention for all devlopment environments on this cluster (H:D:W:M).")
+	flag.StringVar(&backupDefaultPullrequestRetention, "backup-default-pr-retention", "",
+		"The default backup retention for all pullrequest environments on this cluster (H:D:W:M).")
 	flag.IntVar(&backupDefaultMonthlyRetention, "backup-default-monthly-retention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
 	flag.IntVar(&backupDefaultWeeklyRetention, "backup-default-weekly-retention", 6,
@@ -637,27 +651,33 @@ func main() {
 	setupLog.Info("starting controllers")
 
 	if err = (&lagoonv1beta1ctrl.LagoonBuildReconciler{
-		Client:                        mgr.GetClient(),
-		Log:                           ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),
-		Scheme:                        mgr.GetScheme(),
-		EnableMQ:                      enableMQ,
-		BuildImage:                    overrideBuildDeployImage,
-		Messaging:                     messaging,
-		IsOpenshift:                   isOpenshift,
-		NamespacePrefix:               namespacePrefix,
-		RandomNamespacePrefix:         randomPrefix,
-		ControllerNamespace:           controllerNamespace,
-		EnableDebug:                   enableDebug,
-		FastlyServiceID:               fastlyServiceID,
-		FastlyWatchStatus:             fastlyWatchStatus,
-		BuildPodRunAsUser:             int64(buildPodRunAsUser),
-		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
-		BuildPodFSGroup:               int64(buildPodFSGroup),
-		BackupDefaultSchedule:         backupDefaultSchedule,
-		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
-		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
-		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
-		BackupDefaultHourlyRetention:  backupDefaultHourlyRetention,
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		BuildImage:            overrideBuildDeployImage,
+		Messaging:             messaging,
+		IsOpenshift:           isOpenshift,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		ControllerNamespace:   controllerNamespace,
+		EnableDebug:           enableDebug,
+		FastlyServiceID:       fastlyServiceID,
+		FastlyWatchStatus:     fastlyWatchStatus,
+		BuildPodRunAsUser:     int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
+		BuildPodFSGroup:       int64(buildPodFSGroup),
+		BackupConfig: lagoonv1beta1ctrl.BackupConfig{
+			BackupDefaultSchedule:             backupDefaultSchedule,
+			BackupDefaultDevelopmentSchedule:  backupDefaultDevelopmentSchedule,
+			BackupDefaultPullrequestSchedule:  backupDefaultPullrequestSchedule,
+			BackupDefaultDevelopmentRetention: backupDefaultDevelopmentRetention,
+			BackupDefaultPullrequestRetention: backupDefaultPullrequestRetention,
+			BackupDefaultMonthlyRetention:     backupDefaultMonthlyRetention,
+			BackupDefaultWeeklyRetention:      backupDefaultWeeklyRetention,
+			BackupDefaultDailyRetention:       backupDefaultDailyRetention,
+			BackupDefaultHourlyRetention:      backupDefaultHourlyRetention,
+		},
 		// Lagoon feature flags
 		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
 		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,

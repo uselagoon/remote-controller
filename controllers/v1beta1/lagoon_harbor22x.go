@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"time"
 
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
 	"github.com/uselagoon/remote-controller/internal/helpers"
@@ -125,8 +127,9 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	k8s client.Client,
 	project *harborclientv5model.Project,
 	environmentName, namespace string,
-	expiry int64,
+	expiry time.Duration,
 ) (*helpers.RegistryCredentials, error) {
+	expiryDays := int64(math.Ceil(expiry.Hours() / 24))
 	robots, err := h.ClientV5.ListProjectRobotsV1(
 		ctx,
 		project.Name,
@@ -237,18 +240,30 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	if !exists || deleted {
 		// if it doesn't exist, or was deleted
 		// create a new robot account
-		token, err := h.ClientV5.AddProjectRobotV1(
-			ctx,
-			project.Name,
-			&harborclientv5model.RobotCreateV1{
-				Name:      environmentName,
-				ExpiresAt: expiry,
-				Access: []*harborclientv5model.Access{
-					{Action: "push", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
-					{Action: "pull", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
+		robotf := harborclientv5model.RobotCreate{
+			Level:    "project",
+			Name:     environmentName,
+			Duration: expiryDays,
+			Permissions: []*harborclientv5model.RobotPermission{
+				{
+					Kind:      "project",
+					Namespace: project.Name,
+					Access: []*harborclientv5model.Access{
+						{
+							Action:   "push",
+							Resource: "repository",
+						},
+						{
+							Action:   "pull",
+							Resource: "repository",
+						},
+					},
 				},
 			},
-		)
+			Disable:     false,
+			Description: "222",
+		}
+		token, err := h.ClientV5.NewRobotAccount(ctx, &robotf)
 		if err != nil {
 			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, h.addPrefixV2(project.Name, environmentName)))
 			return nil, err
@@ -256,11 +271,11 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		// then craft and return the harbor credential secret
 		harborRegistryCredentials := makeHarborSecret(
 			robotAccountCredential{
-				Token: token.Payload.Secret,
-				Name:  token.Payload.Name,
+				Token: token.Secret,
+				Name:  token.Name,
 			},
 		)
-		h.Log.Info(fmt.Sprintf("Created robot account %s", token.Payload.Name))
+		h.Log.Info(fmt.Sprintf("Created robot account %s", token.Name))
 		return &harborRegistryCredentials, nil
 	}
 	return nil, err

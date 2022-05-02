@@ -168,7 +168,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 					hProject,
 					ns.Labels["lagoon.sh/environment"],
 					ns.ObjectMeta.Name,
-					time.Now().Add(h.RobotAccountExpiry).Unix())
+					h.RobotAccountExpiry)
 				if err != nil {
 					opLog.Error(err, "error getting or creating robot account")
 					break

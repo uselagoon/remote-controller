@@ -239,7 +239,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				hProject,
 				lagoonBuild.Spec.Project.Environment,
 				ns,
-				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
+				lagoonHarbor.RobotAccountExpiry)
 			if err != nil {
 				return err
 			}

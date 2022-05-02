@@ -64,20 +64,30 @@ type LagoonBuildReconciler struct {
 	LFFDefaultInsights               string
 	LFFForceRWX2RWO                  string
 	LFFDefaultRWX2RWO                string
-	BackupDefaultSchedule            string
-	BackupDefaultMonthlyRetention    int
-	BackupDefaultWeeklyRetention     int
-	BackupDefaultDailyRetention      int
-	BackupDefaultHourlyRetention     int
 	LFFBackupWeeklyRandom            bool
 	LFFRouterURL                     bool
 	LFFHarborEnabled                 bool
+	BackupConfig                     BackupConfig
 	Harbor                           Harbor
 	LFFQoSEnabled                    bool
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int
 	LagoonTargetName                 string
 	ProxyConfig                      ProxyConfig
+}
+
+// BackupConfig holds all the backup configuration settings
+type BackupConfig struct {
+	BackupDefaultSchedule         string
+	BackupDefaultMonthlyRetention int
+	BackupDefaultWeeklyRetention  int
+	BackupDefaultDailyRetention   int
+	BackupDefaultHourlyRetention  int
+
+	BackupDefaultDevelopmentSchedule  string
+	BackupDefaultPullrequestSchedule  string
+	BackupDefaultDevelopmentRetention string
+	BackupDefaultPullrequestRetention string
 }
 
 // ProxyConfig is used for proxy configuration.

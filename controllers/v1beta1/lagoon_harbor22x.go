@@ -166,8 +166,10 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			forceRecreate = false
 		}
 	}
+	tempRobots := robots[:0]
 	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, project.Name, environmentName) && robot.Editable {
+		h.Log.Info(fmt.Sprintf("Checking harbor robot account %s (matchv1: %v, editable: %v)", robot.Name, h.matchRobotAccount(robot.Name, project.Name, environmentName), robot.Editable))
+		if h.matchRobotAccount(robot.Name, project.Name, environmentName) && !robot.Editable {
 			// this is an old (legacy) robot account, get rid of it
 			// if accounts are disabled, and deletion of disabled accounts is enabled
 			// then this will delete the account to get re-created
@@ -181,10 +183,15 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
 				return nil, err
 			}
-			deleted = true
 			continue
 		}
-		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && !robot.Editable {
+		// only add non legacy robots into the sliced
+		tempRobots = append(tempRobots, robot)
+	}
+	robots = tempRobots
+	for _, robot := range robots {
+		h.Log.Info(fmt.Sprintf("Checking harbor robot account %s (matchv2: %v, editable: %v)", robot.Name, h.matchRobotAccountV2(robot.Name, project.Name, environmentName), robot.Editable))
+		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
 			// if it is a new robot account, follow through here
 			exists = true
 			if forceRecreate {

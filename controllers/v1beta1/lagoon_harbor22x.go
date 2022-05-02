@@ -167,7 +167,25 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		}
 	}
 	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, project.Name, environmentName) {
+		if h.matchRobotAccount(robot.Name, project.Name, environmentName) && robot.Editable {
+			// this is an old (legacy) robot account, get rid of it
+			// if accounts are disabled, and deletion of disabled accounts is enabled
+			// then this will delete the account to get re-created
+			h.Log.Info(fmt.Sprintf("Harbor robot account %s is a legacy account, deleting it", robot.Name))
+			err := h.ClientV5.DeleteProjectRobotV1(
+				ctx,
+				project.Name,
+				int64(robot.ID),
+			)
+			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
+				return nil, err
+			}
+			deleted = true
+			continue
+		}
+		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && !robot.Editable {
+			// if it is a new robot account, follow through here
 			exists = true
 			if forceRecreate {
 				// if the secret doesn't exist in kubernetes, then force re-creation of the robot

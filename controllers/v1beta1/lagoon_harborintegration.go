@@ -227,10 +227,14 @@ func (h *Harbor) matchRobotAccount(robotName string,
 	if robotName == h.addPrefix(environmentName) {
 		return true
 	}
-	// 2.2.0 introduces "global" robot accounts
-	// when using the old API they get created
-	// with a different name: robot${project-name}+{provided-name}
-	// on the GET side we map them back to robot${provided-name}
+	return false
+}
+
+// matchRobotAccountV2 will check if the robotaccount exists or not
+func (h *Harbor) matchRobotAccountV2(robotName string,
+	projectName string,
+	environmentName string,
+) bool {
 	if robotName == h.addPrefix(fmt.Sprintf("%s+%s", projectName, environmentName)) {
 		return true
 	}

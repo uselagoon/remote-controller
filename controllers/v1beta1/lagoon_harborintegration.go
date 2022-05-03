@@ -3,6 +3,7 @@ package v1beta1
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"context"
 	"encoding/base64"
@@ -10,9 +11,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	harborv2 "github.com/mittwald/goharbor-client/v3/apiv2"
-	"github.com/mittwald/goharbor-client/v3/apiv2/model"
-	"github.com/mittwald/goharbor-client/v3/apiv2/model/legacy"
+	harborclientv3 "github.com/mittwald/goharbor-client/v3/apiv2"
+
+	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
+
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 
@@ -23,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/coreos/go-semver/semver"
 )
 
 // Harbor defines a harbor struct
@@ -33,7 +37,8 @@ type Harbor struct {
 	Username              string
 	Password              string
 	Log                   logr.Logger
-	Client                *harborv2.RESTClient
+	ClientV3              *harborclientv3.RESTClient
+	ClientV5              *harborclientv5.RESTClient
 	DeleteDisabled        bool
 	WebhookAddition       bool
 	RobotPrefix           string
@@ -55,261 +60,37 @@ type robotAccountCredential struct {
 
 // NewHarbor create a new harbor connection.
 func NewHarbor(harbor Harbor) (*Harbor, error) {
-	c, err := harborv2.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password)
+	harbor.Log = ctrl.Log.WithName("controllers").WithName("HarborIntegration")
+	c, err := harborclientv3.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password)
 	if err != nil {
 		return nil, err
 	}
-	harbor.Log = ctrl.Log.WithName("controllers").WithName("HarborIntegration")
-	harbor.Client = c
+	harbor.ClientV3 = c
+	c2, err := harborclientv5.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, nil)
+	if err != nil {
+		return nil, err
+	}
+	harbor.ClientV5 = c2
 	return &harbor, nil
 }
 
-// CreateProject will create a project if one doesn't exist, but will update as required.
-func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*model.Project, error) {
-	project, err := h.Client.GetProjectByName(ctx, projectName)
+// GetHarborVersion returns the version of harbor.
+func (h *Harbor) GetHarborVersion(ctx context.Context) (string, error) {
+	harborVersion, err := h.ClientV5.GetSystemInfo(ctx)
 	if err != nil {
-		if err.Error() == "project not found on server side" || err.Error() == "resource unknown" {
-			project, err = h.Client.NewProject(ctx, projectName, helpers.Int64Ptr(-1))
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error creating project %s", projectName))
-				return nil, err
-			}
-			time.Sleep(1 * time.Second) // wait 1 seconds
-			tStr := "true"
-			err = h.Client.UpdateProject(ctx, &model.Project{
-				Name:      projectName,
-				ProjectID: project.ProjectID,
-				Metadata: &model.ProjectMetadata{
-					AutoScan:             &tStr,
-					ReuseSysCveAllowlist: &tStr,
-					Public:               "false",
-				},
-			}, helpers.Int64Ptr(-1))
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error updating project %s", projectName))
-				return nil, err
-			}
-			time.Sleep(1 * time.Second) // wait 1 seconds
-			project, err = h.Client.GetProjectByName(ctx, projectName)
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error getting project after updating %s", projectName))
-				return nil, err
-			}
-			h.Log.Info(fmt.Sprintf("Created harbor project %s", projectName))
-		} else {
-			h.Log.Info(fmt.Sprintf("Error finding project %s", projectName))
-			return nil, err
-		}
+		return "", err
 	}
-
-	// TODO: Repository support not required yet
-	// this is a place holder
-	// w, err := h.Client.ListRepositories(ctx, project)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// for _, x := range w {
-	// 	fmt.Println(x)
-	// }
-
-	if h.WebhookAddition {
-		wps, err := h.Client.ListProjectWebhookPolicies(ctx, project)
-		if err != nil {
-			h.Log.Info(fmt.Sprintf("Error listing project %s webhooks", project.Name))
-			return nil, err
-		}
-		exists := false
-		for _, wp := range wps {
-			// if the webhook policy already exists with the name we want
-			// then update it with any changes that may be required
-			if wp.Name == "Lagoon Default Webhook" {
-				exists = true
-				newPolicy := &legacy.WebhookPolicy{
-					Name:      wp.Name,
-					ProjectID: int64(project.ProjectID),
-					Enabled:   true,
-					Targets: []*legacy.WebhookTargetObject{
-						{
-							Type:           "http",
-							SkipCertVerify: true,
-							Address:        h.WebhookURL,
-						},
-					},
-					EventTypes: h.WebhookEventTypes,
-				}
-				err = h.Client.UpdateProjectWebhookPolicy(ctx, project, int(wp.ID), newPolicy)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error updating project %s webhook", project.Name))
-					return nil, err
-				}
-			}
-		}
-		if !exists {
-			// otherwise create the webhook if it doesn't exist
-			newPolicy := &legacy.WebhookPolicy{
-				Name:      "Lagoon Default Webhook",
-				ProjectID: int64(project.ProjectID),
-				Enabled:   true,
-				Targets: []*legacy.WebhookTargetObject{
-					{
-						Type:           "http",
-						SkipCertVerify: true,
-						Address:        h.WebhookURL,
-					},
-				},
-				EventTypes: h.WebhookEventTypes,
-			}
-			err = h.Client.AddProjectWebhookPolicy(ctx, project, newPolicy)
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error adding project %s webhook", project.Name))
-				return nil, err
-			}
-		}
-	}
-	return project, nil
+	// harbor versions are returned as `v2.1.2-abcdef`, this returns just the `2.1.2` of the version
+	// `[1:] strips the v`
+	version := strings.Split(*harborVersion.HarborVersion, "-")[0][1:]
+	return version, nil
 }
 
-// CreateOrRefreshRobot will create or refresh a robot account and return the credentials if needed.
-func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
-	cl client.Client,
-	project *model.Project,
-	robotName, namespace string,
-	expiry int64,
-) (*helpers.RegistryCredentials, error) {
-	robots, err := h.Client.ListProjectRobots(
-		ctx,
-		project,
-	)
-	if err != nil {
-		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", project.Name))
-		return nil, err
-	}
-	exists := false
-	deleted := false
-	forceRecreate := false
-	secret := &corev1.Secret{}
-	err = cl.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      "lagoon-internal-registry-secret",
-	}, secret)
-	if err != nil {
-		// the lagoon registry secret doesn't exist, force re-create the robot account
-		forceRecreate = true
-	}
-	// check if the secret contains the .dockerconfigjson data
-	if secretData, ok := secret.Data[".dockerconfigjson"]; ok {
-		auths := helpers.Auths{}
-		// unmarshal it
-		if err := json.Unmarshal(secretData, &auths); err != nil {
-			return nil, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
-		}
-		// set the force recreate robot account flag here
-		forceRecreate = true
-		// if the defined regional harbor key exists using the hostname then set the flag to false
-		// if the account is set to expire, the loop below will catch it for us
-		// just the hostname, as this is what all new robot accounts are created with
-		if _, ok := auths.Registries[h.Hostname]; ok {
-			forceRecreate = false
-		}
-	}
-	for _, robot := range robots {
-		if h.matchRobotAccount(robot, project, robotName) {
-			exists = true
-			if forceRecreate {
-				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
-				// account is required, as there isn't a way to get the credentials after
-				// robot accounts are created
-				h.Log.Info(fmt.Sprintf("Kubernetes secret doesn't exist, robot account %s needs to be re-created", robot.Name))
-				err := h.Client.DeleteProjectRobot(
-					ctx,
-					project,
-					int(robot.ID),
-				)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
-					return nil, err
-				}
-				deleted = true
-				continue
-			}
-			if robot.Disabled && h.DeleteDisabled {
-				// if accounts are disabled, and deletion of disabled accounts is enabled
-				// then this will delete the account to get re-created
-				h.Log.Info(fmt.Sprintf("Harbor robot account %s disabled, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
-					ctx,
-					project,
-					int(robot.ID),
-				)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
-					return nil, err
-				}
-				deleted = true
-				continue
-			}
-			if h.shouldRotate(robot, h.RotateInterval) {
-				// this forces a rotation after a certain period, whether its expiring or already expired.
-				h.Log.Info(fmt.Sprintf("Harbor robot account %s  should rotate, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
-					ctx,
-					project,
-					int(robot.ID),
-				)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
-					return nil, err
-				}
-				deleted = true
-				continue
-			}
-			if h.expiresSoon(robot, h.ExpiryInterval) {
-				// if the account is about to expire, then refresh the credentials
-				h.Log.Info(fmt.Sprintf("Harbor robot account %s  expires soon, deleting it", robot.Name))
-				err := h.Client.DeleteProjectRobot(
-					ctx,
-					project,
-					int(robot.ID),
-				)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
-					return nil, err
-				}
-				deleted = true
-				continue
-			}
-		}
-	}
-	if !exists || deleted {
-		// if it doesn't exist, or was deleted
-		// create a new robot account
-		token, err := h.Client.AddProjectRobot(
-			ctx,
-			project,
-			&legacy.RobotAccountCreate{
-				Name:      robotName,
-				ExpiresAt: expiry,
-				Access: []*legacy.RobotAccountAccess{
-					{Action: "push", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
-					{Action: "pull", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
-				},
-			},
-		)
-		if err != nil {
-			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, robotName))
-			return nil, err
-		}
-		// then craft and return the harbor credential secret
-		harborRegistryCredentials := makeHarborSecret(
-			robotAccountCredential{
-				Token: token,
-				Name:  h.addPrefix(robotName),
-			},
-		)
-		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
-		return &harborRegistryCredentials, nil
-	}
-	return nil, err
+func (h *Harbor) useV2Functions(version string) bool {
+	currentVersion := semver.New(version)
+	harborV2 := semver.New("2.2.0")
+	// invert the result
+	return !currentVersion.LessThan(*harborV2)
 }
 
 // RotateRobotCredentials will attempt to recreate any robot account credentials that need to be rotated.
@@ -367,22 +148,49 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		}
 		if !runningBuilds {
 			// only continue if there isn't any running builds
-			hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
+			robotCreds := &helpers.RegistryCredentials{}
+			curVer, err := h.GetHarborVersion(ctx)
 			if err != nil {
 				// @TODO: resource unknown
-				opLog.Error(err, "error getting or creating project")
+				opLog.Error(err, "error checking harbor version")
 				break
 			}
-			time.Sleep(1 * time.Second) // wait 1 seconds
-			robotCreds, err := h.CreateOrRefreshRobot(ctx,
-				cl,
-				hProject,
-				ns.Labels["lagoon.sh/environment"],
-				ns.ObjectMeta.Name,
-				time.Now().Add(h.RobotAccountExpiry).Unix())
-			if err != nil {
-				opLog.Error(err, "error getting or creating robot account")
-				break
+			if h.useV2Functions(curVer) {
+				hProject, err := h.CreateProjectV2(ctx, ns.Labels["lagoon.sh/project"])
+				if err != nil {
+					// @TODO: resource unknown
+					opLog.Error(err, "error getting or creating project")
+					break
+				}
+				time.Sleep(1 * time.Second) // wait 1 seconds
+				robotCreds, err = h.CreateOrRefreshRobotV2(ctx,
+					cl,
+					hProject,
+					ns.Labels["lagoon.sh/environment"],
+					ns.ObjectMeta.Name,
+					h.RobotAccountExpiry)
+				if err != nil {
+					opLog.Error(err, "error getting or creating robot account")
+					break
+				}
+			} else {
+				hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
+				if err != nil {
+					// @TODO: resource unknown
+					opLog.Error(err, "error getting or creating project")
+					break
+				}
+				time.Sleep(1 * time.Second) // wait 1 seconds
+				robotCreds, err = h.CreateOrRefreshRobot(ctx,
+					cl,
+					hProject,
+					ns.Labels["lagoon.sh/environment"],
+					ns.ObjectMeta.Name,
+					time.Now().Add(h.RobotAccountExpiry).Unix())
+				if err != nil {
+					opLog.Error(err, "error getting or creating robot account")
+					break
+				}
 			}
 			time.Sleep(1 * time.Second) // wait 1 seconds
 			if robotCreds != nil {
@@ -411,27 +219,31 @@ func (h *Harbor) addPrefix(str string) string {
 }
 
 // matchRobotAccount will check if the robotaccount exists or not
-func (h *Harbor) matchRobotAccount(robot *legacy.RobotAccount,
-	project *model.Project,
-	accountSuffix string,
+func (h *Harbor) matchRobotAccount(robotName string,
+	projectName string,
+	environmentName string,
 ) bool {
 	// pre global-robot-accounts (2.2.0+)
-	if robot.Name == h.addPrefix(accountSuffix) {
+	if robotName == h.addPrefix(environmentName) {
 		return true
 	}
-	// 2.2.0 introduces "global" robot accounts
-	// when using the old API they get created
-	// with a different name: robot${project-name}+{provided-name}
-	// on the GET side we map them back to robot${provided-name}
-	if robot.Name == h.addPrefix(fmt.Sprintf("%s+%s", project.Name, accountSuffix)) {
+	return false
+}
+
+// matchRobotAccountV2 will check if the robotaccount exists or not
+func (h *Harbor) matchRobotAccountV2(robotName string,
+	projectName string,
+	environmentName string,
+) bool {
+	if robotName == h.addPrefix(fmt.Sprintf("%s+%s", projectName, environmentName)) {
 		return true
 	}
 	return false
 }
 
 // already expired?
-func (h *Harbor) shouldRotate(robot *legacy.RobotAccount, interval time.Duration) bool {
-	created, err := time.Parse(time.RFC3339Nano, robot.CreationTime)
+func (h *Harbor) shouldRotate(creationTime string, interval time.Duration) bool {
+	created, err := time.Parse(time.RFC3339Nano, creationTime)
 	if err != nil {
 		h.Log.Error(err, "error parsing time")
 		return true
@@ -440,9 +252,9 @@ func (h *Harbor) shouldRotate(robot *legacy.RobotAccount, interval time.Duration
 }
 
 // expiresSoon checks if the robot account will expire soon
-func (h *Harbor) expiresSoon(robot *legacy.RobotAccount, duration time.Duration) bool {
+func (h *Harbor) expiresSoon(expiresAt int64, duration time.Duration) bool {
 	now := time.Now().UTC().Add(duration)
-	expiry := time.Unix(robot.ExpiresAt, 0)
+	expiry := time.Unix(expiresAt, 0)
 	return expiry.Before(now)
 }
 

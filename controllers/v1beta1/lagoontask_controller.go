@@ -33,9 +33,6 @@ import (
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-
-	// openshift
-	oappsv1 "github.com/openshift/api/apps/v1"
 )
 
 // LagoonTaskReconciler reconciles a LagoonTask object
@@ -43,7 +40,6 @@ type LagoonTaskReconciler struct {
 	client.Client
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
-	IsOpenshift           bool
 	ControllerNamespace   string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
@@ -127,139 +123,6 @@ func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1.LagoonTask, namespace string) error {
 	// delete any external resources if required
 	return nil
-}
-
-// get the task pod information for openshift
-func (r *LagoonTaskReconciler) getTaskPodDeploymentConfig(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
-	deployments := &oappsv1.DeploymentConfigList{}
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.ObjectMeta.Namespace),
-	})
-	err := r.List(ctx, deployments, listOption)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Unable to get deployments for project %s, environment %s: %v",
-			lagoonTask.Spec.Project.Name,
-			lagoonTask.Spec.Environment.Name,
-			err,
-		)
-	}
-	if len(deployments.Items) > 0 {
-		hasService := false
-		for _, dep := range deployments.Items {
-			// grab the deployment that contains the task service we want to use
-			if dep.ObjectMeta.Name == lagoonTask.Spec.Task.Service {
-				hasService = true
-				// grab the container
-				for idx, depCon := range dep.Spec.Template.Spec.Containers {
-					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-						Name:  "TASK_API_HOST",
-						Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
-					})
-					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-						Name:  "TASK_SSH_HOST",
-						Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
-					})
-					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-						Name:  "TASK_SSH_PORT",
-						Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
-					})
-					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-						Name:  "TASK_DATA_ID",
-						Value: lagoonTask.Spec.Task.ID,
-					})
-					// add proxy variables to builds if they are defined
-					if r.ProxyConfig.HTTPProxy != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "HTTP_PROXY",
-							Value: r.ProxyConfig.HTTPProxy,
-						})
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "http_proxy",
-							Value: r.ProxyConfig.HTTPProxy,
-						})
-					}
-					if r.ProxyConfig.HTTPSProxy != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "HTTPS_PROXY",
-							Value: r.ProxyConfig.HTTPSProxy,
-						})
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "https_proxy",
-							Value: r.ProxyConfig.HTTPSProxy,
-						})
-					}
-					if r.ProxyConfig.NoProxy != "" {
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "NO_PROXY",
-							Value: r.ProxyConfig.NoProxy,
-						})
-						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
-							Name:  "no_proxy",
-							Value: r.ProxyConfig.NoProxy,
-						})
-					}
-					for idx2, env := range depCon.Env {
-						// remove any cronjobs from the envvars
-						if env.Name == "CRONJOBS" {
-							// Shift left one index.
-							copy(dep.Spec.Template.Spec.Containers[idx].Env[idx2:], dep.Spec.Template.Spec.Containers[idx].Env[idx2+1:])
-							// Erase last element (write zero value).
-							dep.Spec.Template.Spec.Containers[idx].Env[len(dep.Spec.Template.Spec.Containers[idx].Env)-1] = corev1.EnvVar{}
-							dep.Spec.Template.Spec.Containers[idx].Env = dep.Spec.Template.Spec.Containers[idx].Env[:len(dep.Spec.Template.Spec.Containers[idx].Env)-1]
-						}
-					}
-					dep.Spec.Template.Spec.Containers[idx].Command = []string{"/sbin/tini",
-						"--",
-						"/lagoon/entrypoints.sh",
-						"/bin/sh",
-						"-c",
-						lagoonTask.Spec.Task.Command,
-					}
-					dep.Spec.Template.Spec.RestartPolicy = "Never"
-					taskPod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      lagoonTask.ObjectMeta.Name,
-							Namespace: lagoonTask.ObjectMeta.Namespace,
-							Labels: map[string]string{
-								"lagoon.sh/jobType":    "task",
-								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
-								"lagoon.sh/crdVersion": crdVersion,
-								"lagoon.sh/controller": r.ControllerNamespace,
-							},
-							OwnerReferences: []metav1.OwnerReference{
-								{
-									APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
-									Kind:       "LagoonTask",
-									Name:       lagoonTask.ObjectMeta.Name,
-									UID:        lagoonTask.UID,
-								},
-							},
-						},
-						Spec: dep.Spec.Template.Spec,
-					}
-					return taskPod, nil
-				}
-			}
-		}
-		if !hasService {
-			return nil, fmt.Errorf(
-				"No matching service %s for project %s, environment %s: %v",
-				lagoonTask.Spec.Task.Service,
-				lagoonTask.Spec.Project.Name,
-				lagoonTask.Spec.Environment.Name,
-				err,
-			)
-		}
-	}
-	// no deployments found return error
-	return nil, fmt.Errorf(
-		"No deployments %s for project %s, environment %s: %v",
-		lagoonTask.ObjectMeta.Namespace,
-		lagoonTask.Spec.Project.Name,
-		lagoonTask.Spec.Environment.Name,
-		err,
-	)
 }
 
 // get the task pod information for kubernetes
@@ -398,21 +261,12 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	newTaskPod := &corev1.Pod{}
 	var err error
-	// get the podspec from openshift or kubernetes, then get or create a new pod to run the task in
-	if r.IsOpenshift {
-		newTaskPod, err = r.getTaskPodDeploymentConfig(ctx, lagoonTask)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("%v", err))
-			//@TODO: send msg back and update task to failed?
-			return nil
-		}
-	} else {
-		newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("%v", err))
-			//@TODO: send msg back and update task to failed?
-			return nil
-		}
+
+	newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
+	if err != nil {
+		opLog.Info(fmt.Sprintf("%v", err))
+		//@TODO: send msg back and update task to failed?
+		return nil
 	}
 	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
 	// once the pod spec has been defined, check if it isn't already created

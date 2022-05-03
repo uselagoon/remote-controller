@@ -200,10 +200,12 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
 			condition = "failed"
+			tasksFailedCounter.Inc()
 		case corev1.PodRunning:
 			condition = "active"
 		case corev1.PodSucceeded:
 			condition = "succeeded"
+			tasksCompletedCounter.Inc()
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",

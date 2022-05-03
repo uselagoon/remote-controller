@@ -228,14 +228,17 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
 			condition = "failed"
+			buildsFailedCounter.Inc()
 		case corev1.PodRunning:
 			condition = "running"
 		case corev1.PodSucceeded:
 			condition = "complete"
+			buildsCompletedCounter.Inc()
 		}
 		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
 			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				condition = "cancelled"
+				buildsCancelledCounter.Inc()
 			}
 		}
 		buildStep := "running"

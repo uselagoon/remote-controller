@@ -306,6 +306,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 			//@TODO: send msg back and update task to failed?
 			return nil
 		}
+		tasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}
@@ -467,6 +468,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	if err := c.Create(ctx, newPod); err != nil {
 		return err
 	}
+	tasksStartedCounter.Inc()
 	return nil
 }
 

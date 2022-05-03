@@ -860,6 +860,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// @TODO: should update the build to failed
 			return nil
 		}
+		buildsStartedCounter.Inc()
 		// then break out of the build
 	}
 	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))

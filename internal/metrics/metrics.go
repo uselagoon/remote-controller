@@ -1,10 +1,11 @@
 package metrics
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -22,7 +23,7 @@ func NewServer(log logr.Logger, addr string) *http.Server {
 	}
 	go func() {
 		if err := s.ListenAndServe(); err != http.ErrServerClosed {
-			log.Error(fmt.Errorf("metrics server did not shut down cleanly"), err)
+			log.Error(fmt.Errorf("metrics server did not shut down cleanly"), err.Error())
 		}
 	}()
 	return &s

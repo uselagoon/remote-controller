@@ -35,10 +35,6 @@ import (
 
 	"github.com/uselagoon/remote-controller/handlers"
 
-	// Openshift
-	oappsv1 "github.com/openshift/api/apps/v1"
-	projectv1 "github.com/openshift/api/project/v1"
-
 	"gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
@@ -64,8 +60,6 @@ func init() {
 
 	_ = lagoonv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
-	_ = projectv1.AddToScheme(scheme)
-	_ = oappsv1.AddToScheme(scheme)
 }
 
 func main() {
@@ -81,7 +75,6 @@ func main() {
 	var overrideBuildDeployImage string
 	var namespacePrefix string
 	var randomPrefix bool
-	var isOpenshift bool
 	var controllerNamespace string
 	var enableDebug bool
 	var fastlyServiceID string
@@ -184,8 +177,6 @@ func main() {
 		"Enable message queue to provide updates back to Lagoon.")
 	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
 		"The build and deploy image that should be used by builds started by the controller.")
-	flag.BoolVar(&isOpenshift, "is-openshift", false,
-		"Flag to determine if the controller is running in an openshift.")
 	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
 		"The prefix that will be added to all namespaces that are generated, maximum 8 characters. (only used if random-prefix is set false)")
 	flag.BoolVar(&randomPrefix, "random-prefix", false,
@@ -657,7 +648,6 @@ func main() {
 		EnableMQ:              enableMQ,
 		BuildImage:            overrideBuildDeployImage,
 		Messaging:             messaging,
-		IsOpenshift:           isOpenshift,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		ControllerNamespace:   controllerNamespace,
@@ -723,7 +713,6 @@ func main() {
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonTask"),
 		Scheme:                mgr.GetScheme(),
-		IsOpenshift:           isOpenshift,
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,

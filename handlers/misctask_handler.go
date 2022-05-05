@@ -80,7 +80,7 @@ func (h *Messaging) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTa
 		Name:      taskName,
 		Namespace: namespace,
 	}, &jobPod); err != nil {
-		// since there was no build pod, check for the lagoon build resource
+		// since there was no task pod, check for the lagoon task resource
 		var lagoonTask lagoonv1beta1.LagoonTask
 		if err := h.Client.Get(context.Background(), types.NamespacedName{
 			Name:      taskName,
@@ -114,7 +114,7 @@ func (h *Messaging) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTa
 	if err := h.Client.Update(context.Background(), &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to update build %s to cancel it.",
+				"Unable to update task %s to cancel it.",
 				jobSpec.Misc.Name,
 			),
 		)
@@ -157,9 +157,9 @@ func (h *Messaging) updateLagoonTask(opLog logr.Logger, namespace string, jobSpe
 	if jobSpec.Task.TaskName != "" {
 		taskName = jobSpec.Task.TaskName
 	}
-	// if the build isn't found by the controller
-	// then publish a response back to controllerhandler to tell it to update the build to cancelled
-	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
+	// if the task isn't found by the controller
+	// then publish a response back to controllerhandler to tell it to update the task to cancelled
+	// this allows us to update tasks in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
 	msg := lagoonv1beta1.LagoonMessage{
 		Type:      "task",
 		Namespace: namespace,
@@ -170,7 +170,7 @@ func (h *Messaging) updateLagoonTask(opLog logr.Logger, namespace string, jobSpe
 			JobStatus:   "cancelled",
 		},
 	}
-	// if the build isn't found at all, then set the start/end time to be now
+	// if the task isn't found at all, then set the start/end time to be now
 	// to stop the duration counter in the ui
 	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")

@@ -139,6 +139,20 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 	// send any messages to lagoon message queues
 	r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod)
 	r.updateLagoonTask(opLog, &lagoonTask, &jobPod)
+	var allContainerLogs []byte
+	// grab all the logs from the containers in the task pod and just merge them all together
+	// we only have 1 container at the moment in a taskpod anyway so it doesn't matter
+	// if we do move to multi container tasks, then worry about it
+	for _, container := range jobPod.Spec.Containers {
+		cLogs, err := getContainerLogs(ctx, container.Name, req)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from task pod"))
+			// log the error, but just continue
+		}
+		allContainerLogs = append(allContainerLogs, cLogs...)
+	}
+	// send the logs to lagoon so that tasks can receive possibly more frequent logs like builds
+	r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, allContainerLogs)
 	return nil
 }
 

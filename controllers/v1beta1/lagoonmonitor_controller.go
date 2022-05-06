@@ -72,6 +72,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
+			err := r.calculateTaskMetrics(ctx)
+			if err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+			}
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
 		}
 	}
@@ -79,6 +83,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
+			err := r.calculateBuildMetrics(ctx)
+			if err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+			}
 			return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
 		}
 

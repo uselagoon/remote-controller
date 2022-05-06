@@ -541,20 +541,8 @@ func (r *LagoonMonitorReconciler) updateRunningDeploymentBuildLogs(
 	jobPod corev1.Pod,
 ) {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	var allContainerLogs []byte
-	// grab all the logs from the containers in the build pod and just merge them all together
-	// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
-	// if we do move to multi container builds, then worry about it
-	for _, container := range jobPod.Spec.Containers {
-		cLogs, err := getContainerLogs(ctx, container.Name, req)
-		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from build pod"))
-			// log the error, but just continue
-		}
-		allContainerLogs = append(allContainerLogs, cLogs...)
-	}
 	// send any messages to lagoon message queues
-	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, allContainerLogs)
+	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, r.collectLogs(ctx, req, jobPod))
 }
 
 // updateDeploymentWithLogs collects logs from the build containers and ships or stores them
@@ -591,18 +579,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 				jobPod.Status.Phase,
 			),
 		)
-		var allContainerLogs []byte
-		// grab all the logs from the containers in the build pod and just merge them all together
-		// we only have 1 container at the moment in a buildpod anyway so it doesn't matter
-		// if we do move to multi container builds, then worry about it
-		for _, container := range jobPod.Spec.Containers {
-			cLogs, err := getContainerLogs(ctx, container.Name, req)
-			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from build pod"))
-				// log the error, but just continue
-			}
-			allContainerLogs = append(allContainerLogs, cLogs...)
-		}
+		allContainerLogs := r.collectLogs(ctx, req, jobPod)
 		if cancel {
 			allContainerLogs = append(allContainerLogs, []byte(fmt.Sprintf(`
 ========================================

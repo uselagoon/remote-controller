@@ -67,6 +67,62 @@ func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 	return nil
 }
 
+// CancelTask handles cancelling tasks or handling if a tasks no longer exists.
+func (h *Messaging) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
+	var jobPod corev1.Pod
+	//@TODO: use `taskName` in the future only
+	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
+	if jobSpec.Task.TaskName != "" {
+		taskName = jobSpec.Task.TaskName
+	}
+	if err := h.Client.Get(context.Background(), types.NamespacedName{
+		Name:      taskName,
+		Namespace: namespace,
+	}, &jobPod); err != nil {
+		// since there was no task pod, check for the lagoon task resource
+		var lagoonTask lagoonv1beta1.LagoonTask
+		if err := h.Client.Get(context.Background(), types.NamespacedName{
+			Name:      taskName,
+			Namespace: namespace,
+		}, &lagoonTask); err != nil {
+			opLog.Info(fmt.Sprintf(
+				"Unable to find task %s to cancel it. Sending response to Lagoon to update the task to cancelled.",
+				taskName,
+			))
+			// if there is no pod or task, update the task in Lagoon to cancelled
+			h.updateLagoonTask(opLog, namespace, *jobSpec)
+			return nil
+		}
+		// as there is no task pod, but there is a lagoon task resource
+		// update it to cancelled so that the controller doesn't try to run it
+		lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] = string(lagoonv1beta1.TaskStatusCancelled)
+		if err := h.Client.Update(context.Background(), &lagoonTask); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to update task %s to cancel it.",
+					taskName,
+				),
+			)
+			return err
+		}
+		// and then send the response back to lagoon to say it was cancelled.
+		h.updateLagoonTask(opLog, namespace, *jobSpec)
+		return nil
+	}
+	jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
+	if err := h.Client.Update(context.Background(), &jobPod); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to update task %s to cancel it.",
+				jobSpec.Misc.Name,
+			),
+		)
+		return err
+	}
+	return nil
+}
+
 func (h *Messaging) updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
@@ -82,6 +138,39 @@ func (h *Messaging) updateLagoonBuild(opLog logr.Logger, namespace string, jobSp
 		},
 	}
 	// if the build isn't found at all, then set the start/end time to be now
+	// to stop the duration counter in the ui
+	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		opLog.Error(err, "Unable to encode message as JSON")
+	}
+	// publish the cancellation result back to lagoon
+	if err := h.Publish("lagoon-tasks:controller", msgBytes); err != nil {
+		opLog.Error(err, "Unable to publish message.")
+	}
+}
+
+func (h *Messaging) updateLagoonTask(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
+	//@TODO: use `taskName` in the future only
+	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
+	if jobSpec.Task.TaskName != "" {
+		taskName = jobSpec.Task.TaskName
+	}
+	// if the task isn't found by the controller
+	// then publish a response back to controllerhandler to tell it to update the task to cancelled
+	// this allows us to update tasks in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
+	msg := lagoonv1beta1.LagoonMessage{
+		Type:      "task",
+		Namespace: namespace,
+		Meta: &lagoonv1beta1.LagoonLogMeta{
+			Environment: jobSpec.Environment.Name,
+			Project:     jobSpec.Project.Name,
+			JobName:     taskName,
+			JobStatus:   "cancelled",
+		},
+	}
+	// if the task isn't found at all, then set the start/end time to be now
 	// to stop the duration counter in the ui
 	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")

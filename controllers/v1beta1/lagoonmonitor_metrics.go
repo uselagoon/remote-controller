@@ -38,37 +38,39 @@ func (r *LagoonMonitorReconciler) calculateBuildMetrics(ctx context.Context) err
 	for _, buildPod := range buildPods.Items {
 		if buildPod.Status.Phase == corev1.PodRunning {
 			runningBuilds = runningBuilds + 1
-			switch buildPod.ObjectMeta.Labels["lagoon.sh/buildStep"] {
-			case "initialSetup":
-				initialSetup = initialSetup + 1
-			case "configureVars":
-				configureVars = configureVars + 1
-			case "imageBuildComplete":
-				imageBuildComplete = imageBuildComplete + 1
-			case "preRolloutsCompleted":
-				preRolloutsCompleted = preRolloutsCompleted + 1
-			case "serviceConfigurationComplete":
-				serviceConfigurationComplete = serviceConfigurationComplete + 1
-			case "serviceConfiguration2Complete":
-				serviceConfiguration2Complete = serviceConfiguration2Complete + 1
-			case "routeConfigurationComplete":
-				routeConfigurationComplete = routeConfigurationComplete + 1
-			case "backupConfigurationComplete":
-				backupConfigurationComplete = backupConfigurationComplete + 1
-			case "imagePushComplete":
-				imagePushComplete = imagePushComplete + 1
-			case "deploymentTemplatingComplete":
-				deploymentTemplatingComplete = deploymentTemplatingComplete + 1
-			case "deploymentApplyComplete":
-				deploymentApplyComplete = deploymentApplyComplete + 1
-			case "cronjobCleanupComplete":
-				cronjobCleanupComplete = cronjobCleanupComplete + 1
-			case "postRolloutsCompleted":
-				postRolloutsCompleted = postRolloutsCompleted + 1
-			case "deployCompleted":
-				deployCompleted = deployCompleted + 1
-			case "insightsCompleted":
-				insightsCompleted = insightsCompleted + 1
+			if buildStep, ok := buildPod.ObjectMeta.Labels["lagoon.sh/buildStep"]; ok {
+				switch buildStep {
+				case "initialSetup":
+					initialSetup = initialSetup + 1
+				case "configureVars":
+					configureVars = configureVars + 1
+				case "imageBuildComplete":
+					imageBuildComplete = imageBuildComplete + 1
+				case "preRolloutsCompleted":
+					preRolloutsCompleted = preRolloutsCompleted + 1
+				case "serviceConfigurationComplete":
+					serviceConfigurationComplete = serviceConfigurationComplete + 1
+				case "serviceConfiguration2Complete":
+					serviceConfiguration2Complete = serviceConfiguration2Complete + 1
+				case "routeConfigurationComplete":
+					routeConfigurationComplete = routeConfigurationComplete + 1
+				case "backupConfigurationComplete":
+					backupConfigurationComplete = backupConfigurationComplete + 1
+				case "imagePushComplete":
+					imagePushComplete = imagePushComplete + 1
+				case "deploymentTemplatingComplete":
+					deploymentTemplatingComplete = deploymentTemplatingComplete + 1
+				case "deploymentApplyComplete":
+					deploymentApplyComplete = deploymentApplyComplete + 1
+				case "cronjobCleanupComplete":
+					cronjobCleanupComplete = cronjobCleanupComplete + 1
+				case "postRolloutsCompleted":
+					postRolloutsCompleted = postRolloutsCompleted + 1
+				case "deployCompleted":
+					deployCompleted = deployCompleted + 1
+				case "insightsCompleted":
+					insightsCompleted = insightsCompleted + 1
+				}
 			}
 		}
 	}

@@ -334,7 +334,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					"lagoon.sh/controller": h.ControllerNamespace,
 				},
 			)
-			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.RandString(6))
+			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.HashString(job.Spec.Task.ID)[0:6])
+			if job.Spec.Task.TaskName != "" {
+				job.ObjectMeta.Name = job.Spec.Task.TaskName
+			}
 			if err := h.Client.Create(ctx, job); err != nil {
 				opLog.Error(err,
 					fmt.Sprintf(
@@ -382,6 +385,21 @@ func (h *Messaging) Consumer(targetName string) { //error {
 					),
 				)
 				err := h.CancelBuild(namespace, jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "kubernetes:task:cancel":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received task cancellation for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						namespace,
+					),
+				)
+				err := h.CancelTask(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

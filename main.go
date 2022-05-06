@@ -735,6 +735,7 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
+	setupLog.Info("starting lagoon metrics server")
 	m := metrics.NewServer(setupLog, ":9912")
 	defer m.Shutdown(context.Background())
 

@@ -4,7 +4,9 @@ package v1beta1
 
 import (
 	"regexp"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -68,6 +70,26 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 				if value == crdVersion {
 					if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/buildName"]; okOld {
 						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildName"]; ok {
+							oldBuildStep := "running"
+							newBuildStep := "running"
+							if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildStep"]; ok {
+								newBuildStep = value
+							}
+							if value, ok := e.ObjectOld.GetLabels()["lagoon.sh/buildStep"]; ok {
+								oldBuildStep = value
+							}
+							buildStatus.With(prometheus.Labels{
+								"build_namespace": e.ObjectOld.GetNamespace(),
+								"build_name":      e.ObjectOld.GetName(),
+								"build_step":      newBuildStep,
+							}).Set(1)
+							time.AfterFunc(31*time.Second, func() {
+								buildStatus.Delete(prometheus.Labels{
+									"build_namespace": e.ObjectOld.GetNamespace(),
+									"build_name":      e.ObjectOld.GetName(),
+									"build_step":      oldBuildStep,
+								})
+							})
 							match, _ := regexp.MatchString("^lagoon-build", value)
 							return match
 						}

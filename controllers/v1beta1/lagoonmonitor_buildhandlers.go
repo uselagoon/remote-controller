@@ -245,6 +245,20 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
+		// buildStatus.With(prometheus.Labels{
+		// 	"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+		// 	"build_name":      lagoonBuild.ObjectMeta.Name,
+		// 	"build_status":    condition,
+		// 	"build_step":      buildStep,
+		// }).Set(1)
+		// if condition == "cancelled" || condition == "complete" || condition == "failed" {
+		// 	time.AfterFunc(30*time.Second, func() {
+		// 		buildStatus.Delete(prometheus.Labels{
+		// 			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+		// 			"build_name":      lagoonBuild.ObjectMeta.Name,
+		// 		})
+		// 	})
+		// }
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
 			Namespace: namespace,

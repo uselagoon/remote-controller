@@ -65,7 +65,7 @@ var (
 
 	buildRunningStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "lagoon_build_running_status",
-		Help: "The status of running Lagoon builds",
+		Help: "The duration of running Lagoon builds",
 	},
 		[]string{
 			"build_name",
@@ -74,7 +74,7 @@ var (
 	)
 	taskRunningStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "lagoon_task_running_status",
-		Help: "The status of running Lagoon tasks",
+		Help: "The duration of running Lagoon tasks",
 	},
 		[]string{
 			"task_name",

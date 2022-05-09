@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -245,20 +246,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
-		// buildStatus.With(prometheus.Labels{
-		// 	"build_namespace": lagoonBuild.ObjectMeta.Namespace,
-		// 	"build_name":      lagoonBuild.ObjectMeta.Name,
-		// 	"build_status":    condition,
-		// 	"build_step":      buildStep,
-		// }).Set(1)
-		// if condition == "cancelled" || condition == "complete" || condition == "failed" {
-		// 	time.AfterFunc(30*time.Second, func() {
-		// 		buildStatus.Delete(prometheus.Labels{
-		// 			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
-		// 			"build_name":      lagoonBuild.ObjectMeta.Name,
-		// 		})
-		// 	})
-		// }
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			time.AfterFunc(31*time.Second, func() {
+				buildRunningStatus.Delete(prometheus.Labels{
+					"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+					"build_name":      lagoonBuild.ObjectMeta.Name,
+				})
+			})
+		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
 			Namespace: namespace,

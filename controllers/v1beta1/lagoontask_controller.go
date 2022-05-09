@@ -22,6 +22,7 @@ import (
 	"regexp"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -306,6 +307,10 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 			//@TODO: send msg back and update task to failed?
 			return nil
 		}
+		taskRunningStatus.With(prometheus.Labels{
+			"task_namespace": lagoonTask.ObjectMeta.Namespace,
+			"task_name":      lagoonTask.ObjectMeta.Name,
+		}).Set(1)
 		tasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
@@ -468,6 +473,10 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	if err := c.Create(ctx, newPod); err != nil {
 		return err
 	}
+	taskRunningStatus.With(prometheus.Labels{
+		"task_namespace": lagoonTask.ObjectMeta.Namespace,
+		"task_name":      lagoonTask.ObjectMeta.Name,
+	}).Set(1)
 	tasksStartedCounter.Inc()
 	return nil
 }

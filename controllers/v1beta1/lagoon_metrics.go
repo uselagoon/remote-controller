@@ -10,6 +10,10 @@ var (
 		Name: "lagoon_builds_running_current",
 		Help: "The total number of Lagoon builds running",
 	})
+	buildsPendingGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "lagoon_builds_pending_current",
+		Help: "The total number of Lagoon builds pending",
+	})
 	buildsStartedCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "lagoon_builds_started_total",
 		Help: "The total number of Lagoon builds started",
@@ -50,12 +54,31 @@ var (
 
 	buildStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "lagoon_build_status",
-		Help: "The total number of Lagoon builds running",
+		Help: "The status of running Lagoon builds",
 	},
 		[]string{
 			"build_name",
 			"build_namespace",
 			"build_step",
+		},
+	)
+
+	buildRunningStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lagoon_build_running_status",
+		Help: "The status of running Lagoon builds",
+	},
+		[]string{
+			"build_name",
+			"build_namespace",
+		},
+	)
+	taskRunningStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lagoon_task_running_status",
+		Help: "The status of running Lagoon tasks",
+	},
+		[]string{
+			"task_name",
+			"task_namespace",
 		},
 	)
 )

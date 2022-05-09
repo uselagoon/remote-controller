@@ -78,11 +78,13 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 							if value, ok := e.ObjectOld.GetLabels()["lagoon.sh/buildStep"]; ok {
 								oldBuildStep = value
 							}
-							buildStatus.With(prometheus.Labels{
-								"build_namespace": e.ObjectOld.GetNamespace(),
-								"build_name":      e.ObjectOld.GetName(),
-								"build_step":      newBuildStep,
-							}).Set(1)
+							if newBuildStep != oldBuildStep {
+								buildStatus.With(prometheus.Labels{
+									"build_namespace": e.ObjectOld.GetNamespace(),
+									"build_name":      e.ObjectOld.GetName(),
+									"build_step":      newBuildStep,
+								}).Set(1)
+							}
 							time.AfterFunc(31*time.Second, func() {
 								buildStatus.Delete(prometheus.Labels{
 									"build_namespace": e.ObjectOld.GetNamespace(),

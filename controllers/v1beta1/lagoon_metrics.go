@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	// general counters for builds
 	buildsRunningGauge = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "lagoon_builds_running_current",
 		Help: "The total number of Lagoon builds running",
@@ -31,6 +32,7 @@ var (
 		Help: "The total number of Lagoon builds cancelled",
 	})
 
+	// general counters for tasks
 	tasksRunningGauge = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "lagoon_tasks_running_current",
 		Help: "The total number of Lagoon tasks running",
@@ -52,6 +54,9 @@ var (
 		Help: "The total number of Lagoon tasks cancelled",
 	})
 
+	// buildStatus will count the build transisiton steps
+	// when the build step changes, the count is removed and the new step metric is created
+	// this is useful to gauge how long particular steps take in a build
 	buildStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "lagoon_build_status",
 		Help: "The status of running Lagoon builds",
@@ -63,6 +68,9 @@ var (
 		},
 	)
 
+	// RunningStatus will count when a build or task is running
+	// when the build or task is complete, the count is removed
+	// this is useful to gauge how long a build or task runs for
 	buildRunningStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "lagoon_build_running_status",
 		Help: "The duration of running Lagoon builds",

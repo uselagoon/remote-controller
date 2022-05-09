@@ -65,7 +65,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 			return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 		}
-		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(runningBuilds.Items)))
+		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		sort.Slice(pendingBuilds.Items, func(i, j int) bool {

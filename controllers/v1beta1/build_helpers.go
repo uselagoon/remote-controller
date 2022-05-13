@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
@@ -860,6 +861,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// @TODO: should update the build to failed
 			return nil
 		}
+		buildRunningStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+		}).Set(1)
+		buildStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+			"build_step":      "running",
+		}).Set(1)
+		buildsStartedCounter.Inc()
 		// then break out of the build
 	}
 	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))

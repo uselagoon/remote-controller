@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -210,15 +211,26 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
 			condition = "failed"
+			tasksFailedCounter.Inc()
 		case corev1.PodRunning:
 			condition = "running"
 		case corev1.PodSucceeded:
 			condition = "complete"
+			tasksCompletedCounter.Inc()
 		}
 		if value, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok {
 			if value == string(lagoonv1beta1.TaskStatusCancelled) {
 				condition = "cancelled"
+				tasksCancelledCounter.Inc()
 			}
+		}
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			time.AfterFunc(31*time.Second, func() {
+				taskRunningStatus.Delete(prometheus.Labels{
+					"task_namespace": lagoonTask.ObjectMeta.Namespace,
+					"task_name":      lagoonTask.ObjectMeta.Name,
+				})
+			})
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",

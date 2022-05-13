@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -228,19 +229,30 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		switch jobPod.Status.Phase {
 		case corev1.PodFailed:
 			condition = "failed"
+			buildsFailedCounter.Inc()
 		case corev1.PodRunning:
 			condition = "running"
 		case corev1.PodSucceeded:
 			condition = "complete"
+			buildsCompletedCounter.Inc()
 		}
 		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
 			if value == string(lagoonv1beta1.BuildStatusCancelled) {
 				condition = "cancelled"
+				buildsCancelledCounter.Inc()
 			}
 		}
 		buildStep := "running"
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
+		}
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			time.AfterFunc(31*time.Second, func() {
+				buildRunningStatus.Delete(prometheus.Labels{
+					"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+					"build_name":      lagoonBuild.ObjectMeta.Name,
+				})
+			})
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",

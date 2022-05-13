@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	"gopkg.in/robfig/cron.v2"
 
@@ -733,6 +734,10 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	setupLog.Info("starting lagoon metrics server")
+	m := metrics.NewServer(setupLog, ":9912")
+	defer m.Shutdown(context.Background())
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

@@ -70,6 +70,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// if this is a lagoon task, then run the handle task monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
+		err := r.calculateTaskMetrics(ctx)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
@@ -77,6 +81,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	// if this is a lagoon build, then run the handle build monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
+		err := r.calculateBuildMetrics(ctx)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
@@ -86,7 +94,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// first try and clean up the pod and capture the logs and update
 		// the lagoonbuild that owns it with the status
 		var lagoonBuild lagoonv1beta1.LagoonBuild
-		err := r.Get(ctx, types.NamespacedName{
+		err = r.Get(ctx, types.NamespacedName{
 			Namespace: jobPod.ObjectMeta.Namespace,
 			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 		}, &lagoonBuild)

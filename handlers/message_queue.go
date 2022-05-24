@@ -89,9 +89,17 @@ func (h *Messaging) Consumer(targetName string) { //error {
 	defer messageQueue.Close()
 
 	go func() {
+		count := 0
 		for err := range messageQueue.Error() {
 			opLog.Info(fmt.Sprintf("Caught error from message queue: %v", err))
+			// if there are 5 errors (usually after about 60-120 seconds)
+			// fatalf and restart the controller
+			if count == 4 {
+				log.Fatalf("Terminating controller due to error with message queue: %v", err)
+			}
+			count++
 		}
+		count = 0
 	}()
 
 	forever := make(chan bool)
@@ -136,7 +144,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
+		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
 	}
 
 	// Handle any tasks that go to the `remove` queue
@@ -297,7 +305,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
 	}
 
 	// Handle any tasks that go to the `jobs` queue
@@ -354,7 +362,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
+		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
 	}
 
 	// Handle any tasks that go to the `misc` queue
@@ -471,7 +479,7 @@ func (h *Messaging) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
+		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
 	}
 	<-forever
 }

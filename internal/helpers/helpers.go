@@ -236,13 +236,13 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
-	opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
-	// if we have any pending builds, then grab the latest one and make it running
-	// if there are any other pending builds, cancel them so only the latest one runs
-	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-		return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
-	})
 	if len(pendingBuilds.Items) > 0 {
+		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+		// if we have any pending builds, then grab the latest one and make it running
+		// if there are any other pending builds, cancel them so only the latest one runs
+		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+		})
 		for idx, pBuild := range pendingBuilds.Items {
 			pendingBuild := pBuild.DeepCopy()
 			if idx == 0 {

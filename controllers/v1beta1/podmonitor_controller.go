@@ -100,7 +100,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}, &lagoonBuild)
 		if err != nil {
 			opLog.Info(fmt.Sprintf("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required."))
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
+			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 			if err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
 			}
@@ -108,7 +108,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
 			// this will update the deployment back to lagoon if it can do so
 			// and should only update if the LagoonBuild is Pending or Running
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
+			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 			if err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
 			}
@@ -178,8 +178,7 @@ func getContainerLogs(ctx context.Context, containerName string, request ctrl.Re
 	return buf.Bytes(), nil
 }
 
-func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile.Request, jobPod corev1.Pod) []byte {
-	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
+func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile.Request, jobPod corev1.Pod) ([]byte, error) {
 	var allContainerLogs []byte
 	// grab all the logs from the containers in the task pod and just merge them all together
 	// we only have 1 container at the moment in a taskpod anyway so it doesn't matter
@@ -187,10 +186,9 @@ func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile
 	for _, container := range jobPod.Spec.Containers {
 		cLogs, err := getContainerLogs(ctx, container.Name, req)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to retrieve logs from task pod"))
-			// log the error, but just continue
+			return nil, fmt.Errorf("Unable to retrieve logs from pod: %v", err)
 		}
 		allContainerLogs = append(allContainerLogs, cLogs...)
 	}
-	return allContainerLogs
+	return allContainerLogs, nil
 }

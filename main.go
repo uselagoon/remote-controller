@@ -17,8 +17,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -54,6 +56,7 @@ var (
 	lagoonAPIHost    string
 	lagoonSSHHost    string
 	lagoonSSHPort    string
+	tlsSkipVerify    bool
 )
 
 func init() {
@@ -253,6 +256,8 @@ func main() {
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
+
+	flag.BoolVar(&tlsSkipVerify, "skip-tls-verify", false, "Flag to skip tls verification for http clients (harbor).")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
 
@@ -771,4 +776,10 @@ func getEnvBool(key string, fallback bool) bool {
 		return rVal
 	}
 	return fallback
+}
+
+func init() {
+	if tlsSkipVerify {
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 }

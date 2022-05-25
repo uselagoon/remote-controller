@@ -41,6 +41,7 @@ func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 		// as there is no build pod, but there is a lagoon build resource
 		// update it to cancelled so that the controller doesn't try to run it
 		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
 		if err := h.Client.Update(context.Background(), &lagoonBuild); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(

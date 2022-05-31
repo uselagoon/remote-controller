@@ -169,7 +169,7 @@ func main() {
 		"The retry interval for rabbitmq.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
-	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
+	flag.StringVar(&pendingMessageCron, "pending-message-cron", "15,45 * * * *",
 		"The cron definition for pending messages.")
 	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
 		"The number of startup attempts before exiting.")

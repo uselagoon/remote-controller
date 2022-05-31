@@ -242,7 +242,7 @@ func main() {
 	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the build pod cleanup.")
 	flag.BoolVar(&buildsCleanUpEnable, "enable-lagoonbuilds-cleanup", true, "Flag to enable lagoonbuild resources cleanup.")
-	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "0 * * * *",
+	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the lagoonbuild resources cleanup.")
 	flag.IntVar(&buildsToKeep, "num-builds-to-keep", 1, "The number of lagoonbuild resources to keep per namespace.")
 	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")

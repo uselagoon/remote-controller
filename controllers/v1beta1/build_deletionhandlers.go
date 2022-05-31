@@ -36,7 +36,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		Name:      lagoonBuild.ObjectMeta.Name,
 	}, &lagoonBuildPod)
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Unable to find a build pod associated to this build, continuing to process build deletion"))
+		opLog.Info(fmt.Sprintf("Unable to find a build pod for %s, continuing to process build deletion", lagoonBuild.ObjectMeta.Name))
 		// handle updating lagoon for a deleted build with no running pod
 		// only do it if the build status is Pending or Running though
 		err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
@@ -44,12 +44,12 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			opLog.Error(err, fmt.Sprintf("Unable to update the lagoon with LagoonBuild result"))
 		}
 	} else {
-		opLog.Info(fmt.Sprintf("Found build pod, deleting it"))
+		opLog.Info(fmt.Sprintf("Found build pod for %s, deleting it", lagoonBuild.ObjectMeta.Name))
 		// handle updating lagoon for a deleted build with a running pod
 		// only do it if the build status is Pending or Running though
 		// delete the pod, let the pod deletion handler deal with the cleanup there
 		if err := r.Delete(ctx, &lagoonBuildPod); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to delete the the LagoonBuild pod"))
+			opLog.Error(err, fmt.Sprintf("Unable to delete the the LagoonBuild pod %s", lagoonBuild.ObjectMeta.Name))
 		}
 		// check that the pod is deleted before continuing, this allows the pod deletion to happen
 		// and the pod deletion process in the LagoonMonitor controller to be able to send what it needs back to lagoon
@@ -67,12 +67,12 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			if err != nil {
 				// the pod doesn't exist anymore, so exit the retry
 				podErr = nil
-				opLog.Info(fmt.Sprintf("Pod deleted"))
+				opLog.Info(fmt.Sprintf("Pod %s deleted", lagoonBuild.ObjectMeta.Name))
 			} else {
 				// if the pod still exists wait 5 seconds before trying again
 				time.Sleep(5 * time.Second)
-				podErr = fmt.Errorf("pod still exists")
-				opLog.Info(fmt.Sprintf("Pod still exists"))
+				podErr = fmt.Errorf("pod %s still exists", lagoonBuild.ObjectMeta.Name)
+				opLog.Info(fmt.Sprintf("Pod %s still exists", lagoonBuild.ObjectMeta.Name))
 			}
 			return attempt < 12, podErr
 		})
@@ -160,15 +160,12 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 ) error {
 	opLog := r.Log.WithValues("lagoonbuild", req.NamespacedName)
 	// if the build status is Pending or Running,
-	// then the jobCondition will be set to cancelled when we tell lagoon
+	// then the buildCondition will be set to cancelled when we tell lagoon
 	// this is because we are deleting it, so we are basically cancelling it
 	// if it was already Failed or Completed, lagoon probably already knows
 	// so we don't have to do anything else.
 	if helpers.ContainsString(
-		[]string{
-			string(lagoonv1beta1.BuildStatusPending),
-			string(lagoonv1beta1.BuildStatusRunning),
-		},
+		helpers.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
 		opLog.Info(
@@ -186,13 +183,13 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 ========================================
 Build cancelled
 ========================================`))
-		var jobCondition lagoonv1beta1.BuildStatusType
-		jobCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+		var buildCondition lagoonv1beta1.BuildStatusType
+		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(jobCondition),
+					"lagoon.sh/buildStatus": string(buildCondition),
 				},
 			},
 		})

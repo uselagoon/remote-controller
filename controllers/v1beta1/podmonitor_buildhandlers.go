@@ -40,12 +40,12 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	if cancelBuild, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"]; ok {
 		cancel, _ := strconv.ParseBool(cancelBuild)
 		if cancel {
+			opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.ObjectMeta.Name))
 			return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
 		}
 	}
 	// check if the build pod is in pending, a container in the pod could be failed in this state
 	if jobPod.Status.Phase == corev1.PodPending {
-		// opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
 		// check each container in the pod
 		for _, container := range jobPod.Status.ContainerStatuses {
 			// if the container is a lagoon-build container
@@ -119,7 +119,6 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 			return err
 		}
 	}
-	// opLog.Info(fmt.Sprintf("Build %s is %v", jobPod.ObjectMeta.Labels["lagoon.sh/buildName"], jobPod.Status.Phase))
 	// send any messages to lagoon message queues
 	return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, false)
 }
@@ -130,23 +129,10 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
+	condition string,
 	logs []byte,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "complete"
-		}
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if value == string(lagoonv1beta1.BuildStatusCancelled) {
-				condition = "cancelled"
-			}
-		}
 		buildStep := "running"
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
@@ -185,6 +171,15 @@ Logs on pod %s
 			// r.updateBuildLogMessage(ctx, lagoonBuild, msg)
 			return true, msg
 		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published event %s for %s to lagoon-logs exchange",
+					fmt.Sprintf("build-logs:builddeploy-kubernetes:%s", lagoonBuild.ObjectMeta.Name),
+					lagoonBuild.ObjectMeta.Name,
+				),
+			)
+		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
@@ -198,6 +193,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
+	condition string,
 ) (bool, lagoonv1beta1.LagoonMessage) {
 	namespace := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -208,23 +204,6 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		r.RandomNamespacePrefix,
 	)
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-			buildsFailedCounter.Inc()
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "complete"
-			buildsCompletedCounter.Inc()
-		}
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if value == string(lagoonv1beta1.BuildStatusCancelled) {
-				condition = "cancelled"
-				buildsCancelledCounter.Inc()
-			}
-		}
 		buildStep := "running"
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
@@ -320,6 +299,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			// r.updateEnvironmentMessage(ctx, lagoonBuild, msg)
 			return true, msg
 		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published build update message for %s to lagoon-tasks:controller queue",
+					lagoonBuild.ObjectMeta.Name,
+				),
+			)
+		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
@@ -332,22 +319,9 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
+	condition string,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "complete"
-		}
-		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
-			if value == string(lagoonv1beta1.BuildStatusCancelled) {
-				condition = "cancelled"
-			}
-		}
 		buildStep := "running"
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
@@ -406,6 +380,15 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 			// really matter if we don't smootly transition in what we send back to lagoon
 			return true, msg
 		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published event %s for %s to lagoon-logs exchange",
+					fmt.Sprintf("task:builddeploy-kubernetes:%s", condition),
+					lagoonBuild.ObjectMeta.Name,
+				),
+			)
+		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
@@ -440,19 +423,24 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 			collectLogs = false
 		}
 	}
+	buildStep := "running"
+	if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
+		buildStep = value
+	}
 	// if the build status is Pending or Running
-	// then the jobCondition is Failed, Complete, or Cancelled
+	// then the buildCondition is Failed, Complete, or Cancelled
 	// then update the build to reflect the current pod status
 	// we do this so we don't update the status of the build again
 	if helpers.ContainsString(
-		helpers.RunningPendingStatus,
+		helpers.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) || cancel {
 		opLog.Info(
 			fmt.Sprintf(
-				"Updating build status for %s to %v",
+				"Updating build status for %s to %v/%v",
 				jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
-				jobPod.Status.Phase,
+				buildCondition,
+				buildStep,
 			),
 		)
 		var allContainerLogs []byte
@@ -514,14 +502,14 @@ Build %s
 		}
 
 		// do any message publishing here, and update any pending messages if needed
-		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv)
-		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv)
+		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, strings.ToLower(string(buildCondition)))
+		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, strings.ToLower(string(buildCondition)))
 		var pendingBuildLog bool
 		var pendingBuildLogMessage lagoonv1beta1.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, allContainerLogs)
+			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, strings.ToLower(string(buildCondition)), allContainerLogs)
 		}
 		if pendingStatus || pendingEnvironment || pendingBuildLog {
 			mergeMap["metadata"].(map[string]interface{})["labels"].(map[string]interface{})["lagoon.sh/pendingMessages"] = "true"
@@ -547,6 +535,9 @@ Build %s
 		// maybe if we move away from using BASH for the kubectl-build-deploy-dind scripts we could handle cancellations better
 		if cancel {
 			if err := r.Get(ctx, req.NamespacedName, &jobPod); err == nil {
+				if r.EnableDebug {
+					opLog.Info(fmt.Sprintf("Build pod exists %s", jobPod.ObjectMeta.Name))
+				}
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}

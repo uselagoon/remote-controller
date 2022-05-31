@@ -101,24 +101,10 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
+	condition string,
 	logs []byte,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "completed"
-		}
-		if value, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok {
-			if value == string(lagoonv1beta1.TaskStatusCancelled) {
-				// condition = "cancelled"
-				condition = "cancelled"
-			}
-		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
@@ -158,6 +144,7 @@ Logs on pod %s
 func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
+	condition string,
 ) (bool, lagoonv1beta1.LagoonMessage) {
 	namespace := helpers.GenerateNamespaceName(
 		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -168,23 +155,6 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		r.RandomNamespacePrefix,
 	)
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-			tasksFailedCounter.Inc()
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "complete"
-			tasksCompletedCounter.Inc()
-		}
-		if value, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok {
-			if value == string(lagoonv1beta1.TaskStatusCancelled) {
-				condition = "cancelled"
-				tasksCancelledCounter.Inc()
-			}
-		}
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				taskRunningStatus.Delete(prometheus.Labels{
@@ -245,22 +215,9 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
+	condition string,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
-		condition := "pending"
-		switch jobPod.Status.Phase {
-		case corev1.PodFailed:
-			condition = "failed"
-		case corev1.PodRunning:
-			condition = "running"
-		case corev1.PodSucceeded:
-			condition = "complete"
-		}
-		if value, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok {
-			if value == string(lagoonv1beta1.TaskStatusCancelled) {
-				condition = "cancelled"
-			}
-		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
@@ -310,23 +267,23 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 	cancel bool,
 ) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	var jobCondition lagoonv1beta1.TaskStatusType
+	var taskCondition lagoonv1beta1.TaskStatusType
 	switch jobPod.Status.Phase {
 	case corev1.PodFailed:
-		jobCondition = lagoonv1beta1.TaskStatusFailed
+		taskCondition = lagoonv1beta1.TaskStatusFailed
 	case corev1.PodSucceeded:
-		jobCondition = lagoonv1beta1.TaskStatusComplete
+		taskCondition = lagoonv1beta1.TaskStatusComplete
 	case corev1.PodPending:
-		jobCondition = lagoonv1beta1.TaskStatusPending
+		taskCondition = lagoonv1beta1.TaskStatusPending
 	case corev1.PodRunning:
-		jobCondition = lagoonv1beta1.TaskStatusRunning
+		taskCondition = lagoonv1beta1.TaskStatusRunning
 	}
 	collectLogs := true
 	if cancel {
-		jobCondition = lagoonv1beta1.TaskStatusCancelled
+		taskCondition = lagoonv1beta1.TaskStatusCancelled
 	}
 	// if the task status is Pending or Running
-	// then the jobCondition is Failed, Complete, or Cancelled
+	// then the taskCondition is Failed, Complete, or Cancelled
 	// then update the task to reflect the current pod status
 	// we do this so we don't update the status of the task again
 	if helpers.ContainsString(
@@ -337,7 +294,7 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 			fmt.Sprintf(
 				"Updating task status for %s to %v",
 				jobPod.ObjectMeta.Name,
-				jobCondition,
+				taskCondition,
 			),
 		)
 		// grab all the logs from the containers in the task pod and just merge them all together
@@ -359,7 +316,7 @@ Task cancelled
 					allContainerLogs = []byte(fmt.Sprintf(`
 ========================================
 Task %s
-========================================`, jobCondition))
+========================================`, taskCondition))
 				}
 			}
 		} else {
@@ -369,13 +326,13 @@ Task %s
 		mergeMap := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/taskStatus": string(jobCondition),
+					"lagoon.sh/taskStatus": string(taskCondition),
 				},
 			},
 		}
 
 		condition := lagoonv1beta1.LagoonTaskConditions{
-			Type:               jobCondition,
+			Type:               taskCondition,
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: time.Now().UTC().Format(time.RFC3339),
 		}
@@ -389,14 +346,14 @@ Task %s
 
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod)
-		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(opLog, &lagoonTask, &jobPod)
+		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
+		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
 		var pendingTaskLog bool
 		var pendingTaskLogMessage lagoonv1beta1.LagoonLog
-		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
+		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingTaskLog, pendingTaskLogMessage = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, allContainerLogs)
+			pendingTaskLog, pendingTaskLogMessage = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)), allContainerLogs)
 		}
 
 		if pendingStatus || pendingEnvironment || pendingTaskLog {
@@ -421,8 +378,13 @@ Task %s
 		}
 		// just delete the pod
 		if cancel {
-			if err := r.Delete(ctx, &jobPod); err != nil {
-				return err
+			if err := r.Get(ctx, req.NamespacedName, &jobPod); err == nil {
+				if r.EnableDebug {
+					opLog.Info(fmt.Sprintf("Task pod exists %s", jobPod.ObjectMeta.Name))
+				}
+				if err := r.Delete(ctx, &jobPod); err != nil {
+					return err
+				}
 			}
 		}
 	}

@@ -105,12 +105,17 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
 			}
 		} else {
-			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
-			// this will update the deployment back to lagoon if it can do so
-			// and should only update if the LagoonBuild is Pending or Running
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
-			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+			if helpers.ContainsString(
+				helpers.BuildRunningPendingStatus,
+				lagoonBuild.Labels["lagoon.sh/buildStatus"],
+			) {
+				opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
+				// this will update the deployment back to lagoon if it can do so
+				// and should only update if the LagoonBuild is Pending or Running
+				err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
+				if err != nil {
+					opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+				}
 			}
 		}
 		// if the update is successful or not, it will just continue on to check for pending builds

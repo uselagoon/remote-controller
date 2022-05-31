@@ -210,20 +210,26 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild) (ctrl.Result, error) {
 
 	namespace := &corev1.Namespace{}
-	opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild, opLog)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// create the `lagoon-deployer` ServiceAccount
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// ServiceAccount RoleBinding creation
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
 	if err != nil {

@@ -42,17 +42,6 @@ var (
 		string(lagoonv1beta1.TaskStatusComplete),
 		string(lagoonv1beta1.TaskStatusCancelled),
 	}
-	// RunningPendingStatus .
-	RunningPendingStatus = []string{
-		string(lagoonv1beta1.BuildStatusPending),
-		string(lagoonv1beta1.BuildStatusRunning),
-	}
-	// CompletedCancelledFailedStatus .
-	CompletedCancelledFailedStatus = []string{
-		string(lagoonv1beta1.BuildStatusFailed),
-		string(lagoonv1beta1.BuildStatusComplete),
-		string(lagoonv1beta1.BuildStatusCancelled),
-	}
 )
 
 const (

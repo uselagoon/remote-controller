@@ -364,17 +364,21 @@ func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Cont
 // processBuild will actually process the build.
 func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagoonv1beta1.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
-	opLog.Info(fmt.Sprintf("Starting work on build: %s", lagoonBuild.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Checking and preparing namespace and associated resources for build: %s", lagoonBuild.ObjectMeta.Name))
 	// create the lagoon-sshkey secret
 	sshKey := &corev1.Secret{}
-	opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}
 
 	// create the `lagoon-deployer` ServiceAccount
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
@@ -382,14 +386,18 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 
 	// ServiceAccount RoleBinding creation
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}
 
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	var serviceaccountTokenSecret string
 	for _, secret := range serviceAccount.Secrets {
 		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
@@ -846,7 +854,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		}
 	}
 
-	opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	// once the pod spec has been defined, check if it isn't already created
 	err = r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonBuild.ObjectMeta.Namespace,
@@ -894,13 +904,13 @@ func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 Build cancelled
 ========================================
 %s`, message))
-		var jobCondition lagoonv1beta1.BuildStatusType
-		jobCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+		var buildCondition lagoonv1beta1.BuildStatusType
+		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(jobCondition),
+					"lagoon.sh/buildStatus": string(buildCondition),
 				},
 			},
 		})

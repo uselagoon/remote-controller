@@ -65,19 +65,22 @@ type LagoonTaskSpec struct {
 
 // LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.
 type LagoonTaskInfo struct {
-	ID      string `json:"id"` // should be int, but the api sends it as a string :\
-	Name    string `json:"name,omitempty"`
-	Service string `json:"service,omitempty"`
-	Command string `json:"command,omitempty"`
-	SSHHost string `json:"sshHost,omitempty"`
-	SSHPort string `json:"sshPort,omitempty"`
-	APIHost string `json:"apiHost,omitempty"`
+	ID       string `json:"id"` // should be int, but the api sends it as a string :\
+	Name     string `json:"name,omitempty"`
+	TaskName string `json:"taskName,omitempty"`
+	Service  string `json:"service,omitempty"`
+	Command  string `json:"command,omitempty"`
+	SSHHost  string `json:"sshHost,omitempty"`
+	SSHPort  string `json:"sshPort,omitempty"`
+	APIHost  string `json:"apiHost,omitempty"`
 }
 
 // LagoonAdvancedTaskInfo defines what an advanced task can use for the creation of the pod.
 type LagoonAdvancedTaskInfo struct {
-	RunnerImage string `json:"runnerImage,omitempty"`
-	JSONPayload string `json:"JSONPayload,omitempty"`
+	RunnerImage   string `json:"runnerImage,omitempty"`
+	JSONPayload   string `json:"JSONPayload,omitempty"`
+	DeployerToken bool   `json:"deployerToken,omitempty"`
+	SSHKey        bool   `json:"sshKey,omitempty"`
 }
 
 // LagoonMiscInfo defines the resource or backup information for a misc task.
@@ -97,17 +100,17 @@ type LagoonMiscBackupInfo struct {
 
 // LagoonTaskProject defines the lagoon project information.
 type LagoonTaskProject struct {
-	ID   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name string `json:"name"`
+	ID               string `json:"id"` // should be int, but the api sends it as a string :\
+	Name             string `json:"name"`
+	NamespacePattern string `json:"namespacePattern,omitempty"`
 }
 
 // LagoonTaskEnvironment defines the lagoon environment information.
 type LagoonTaskEnvironment struct {
-	ID                   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name                 string `json:"name"`
-	Project              string `json:"project"` // should be int, but the api sends it as a string :\
-	EnvironmentType      string `json:"environmentType"`
-	OpenshiftProjectName string `json:"openshiftProjectName"`
+	ID              string `json:"id"` // should be int, but the api sends it as a string :\
+	Name            string `json:"name"`
+	Project         string `json:"project"` // should be int, but the api sends it as a string :\
+	EnvironmentType string `json:"environmentType"`
 }
 
 // LagoonTaskStatus defines the observed state of LagoonTask

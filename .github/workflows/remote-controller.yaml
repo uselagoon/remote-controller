@@ -11,6 +11,9 @@ on:
 
 jobs:
   test-suite:
+    strategy:
+      matrix:
+        harbor: ["1.5.6", "1.6.4","1.7.5" ,"1.8.2","1.9.0"]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -22,7 +25,7 @@ jobs:
     - name: Setup correct Go version
       uses: actions/setup-go@v2
       with:
-        go-version: '1.16'
+        go-version: '1.17'
     - name: Install kustomize, kubebuilder, helm, docker-compose, kind
       run: |
         #kustomize
@@ -53,5 +56,6 @@ jobs:
         export PATH=$PATH:/usr/local/kubebuilder/bin
         export PATH=$PATH:/usr/local/go/bin
         export GOPATH=$HOME/go
+        export HARBOR_VERSION=${{matrix.harbor}}
         # export GO111MODULE=on
         make controller-test

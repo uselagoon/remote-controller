@@ -2,8 +2,6 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/lagoon.amazee.io_lagoonbuilds.yaml
-- bases/lagoon.amazee.io_lagoontasks.yaml
 - bases/crd.lagoon.sh_lagoonbuilds.yaml
 - bases/crd.lagoon.sh_lagoontasks.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
@@ -16,18 +14,6 @@ patchesStrategicMerge:
 # +kubebuilder:scaffold:crdkustomizewebhookpatch
 
 patchesJson6902:
-- target:
-    group: apiextensions.k8s.io
-    version: v1
-    kind: CustomResourceDefinition
-    name: lagoonbuilds.lagoon.amazee.io
-  path: patches/deprecation_lagoon.amazee.io_lagoonbuilds.yaml
-- target:
-    group: apiextensions.k8s.io
-    version: v1
-    kind: CustomResourceDefinition
-    name: lagoontasks.lagoon.amazee.io
-  path: patches/deprecation_lagoon.amazee.io_lagoontasks.yaml
 # - patches/deprecation_lagoon.amazee.io_lagoontasks.yaml
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.

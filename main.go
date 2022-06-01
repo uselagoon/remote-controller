@@ -58,6 +58,7 @@ var (
 	lagoonSSHPort               string
 	tlsSkipVerify               bool
 	advancedTaskSSHKeyInjection bool
+	advancedTaskDeployToken     bool
 )
 
 func init() {
@@ -263,6 +264,8 @@ func main() {
 	// default the sshkey injection to true for now, eventually Lagoon should handle this for tasks that require it
 	flag.BoolVar(&advancedTaskSSHKeyInjection, "advanced-task-sshkey-injection", true,
 		"Flag to specify injecting the sshkey for the environment into any advanced tasks.")
+	flag.BoolVar(&advancedTaskDeployToken, "advanced-task-deploytoken-injection", false,
+		"Flag to specify injecting the deploy token for the environment into any advanced tasks.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
 
@@ -548,6 +551,7 @@ func main() {
 		namespacePrefix,
 		randomPrefix,
 		advancedTaskSSHKeyInjection,
+		advancedTaskDeployToken,
 		enableDebug,
 	)
 	c := cron.New()

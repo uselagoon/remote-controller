@@ -37,15 +37,16 @@ type messaging interface {
 
 // Messaging is used for the config and client information for the messaging queue.
 type Messaging struct {
-	Config                      mq.Config
-	Client                      client.Client
-	ConnectionAttempts          int
-	ConnectionRetryInterval     int
-	ControllerNamespace         string
-	NamespacePrefix             string
-	RandomNamespacePrefix       bool
-	AdvancedTaskSSHKeyInjection bool
-	EnableDebug                 bool
+	Config                           mq.Config
+	Client                           client.Client
+	ConnectionAttempts               int
+	ConnectionRetryInterval          int
+	ControllerNamespace              string
+	NamespacePrefix                  string
+	RandomNamespacePrefix            bool
+	AdvancedTaskSSHKeyInjection      bool
+	AdvancedTaskDeployTokenInjection bool
+	EnableDebug                      bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
@@ -57,18 +58,20 @@ func NewMessaging(config mq.Config,
 	namespacePrefix string,
 	randomNamespacePrefix,
 	advancedTaskSSHKeyInjection bool,
+	advancedTaskDeployTokenInjection bool,
 	enableDebug bool,
 ) *Messaging {
 	return &Messaging{
-		Config:                      config,
-		Client:                      client,
-		ConnectionAttempts:          startupAttempts,
-		ConnectionRetryInterval:     startupInterval,
-		ControllerNamespace:         controllerNamespace,
-		NamespacePrefix:             namespacePrefix,
-		RandomNamespacePrefix:       randomNamespacePrefix,
-		AdvancedTaskSSHKeyInjection: advancedTaskSSHKeyInjection,
-		EnableDebug:                 enableDebug,
+		Config:                           config,
+		Client:                           client,
+		ConnectionAttempts:               startupAttempts,
+		ConnectionRetryInterval:          startupInterval,
+		ControllerNamespace:              controllerNamespace,
+		NamespacePrefix:                  namespacePrefix,
+		RandomNamespacePrefix:            randomNamespacePrefix,
+		AdvancedTaskSSHKeyInjection:      advancedTaskSSHKeyInjection,
+		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
+		EnableDebug:                      enableDebug,
 	}
 }
 

@@ -230,6 +230,9 @@ func (h *Messaging) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.Lagoon
 	if h.AdvancedTaskSSHKeyInjection {
 		jobSpec.AdvancedTask.SSHKey = true
 	}
+	if h.AdvancedTaskDeployTokenInjection {
+		jobSpec.AdvancedTask.DeployerToken = true
+	}
 	return createAdvancedTask(namespace, jobSpec, h)
 }
 

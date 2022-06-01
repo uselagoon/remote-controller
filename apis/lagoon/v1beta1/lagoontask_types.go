@@ -77,8 +77,10 @@ type LagoonTaskInfo struct {
 
 // LagoonAdvancedTaskInfo defines what an advanced task can use for the creation of the pod.
 type LagoonAdvancedTaskInfo struct {
-	RunnerImage string `json:"runnerImage,omitempty"`
-	JSONPayload string `json:"JSONPayload,omitempty"`
+	RunnerImage   string `json:"runnerImage,omitempty"`
+	JSONPayload   string `json:"JSONPayload,omitempty"`
+	DeployerToken bool   `json:"deployerToken,omitempty"`
+	SSHKey        bool   `json:"sshKey,omitempty"`
 }
 
 // LagoonMiscInfo defines the resource or backup information for a misc task.

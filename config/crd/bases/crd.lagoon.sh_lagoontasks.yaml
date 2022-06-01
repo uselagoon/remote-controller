@@ -42,8 +42,12 @@ spec:
                 properties:
                   JSONPayload:
                     type: string
+                  deployerToken:
+                    type: boolean
                   runnerImage:
                     type: string
+                  sshKey:
+                    type: boolean
                 type: object
               environment:
                 description: LagoonTaskEnvironment defines the lagoon environment

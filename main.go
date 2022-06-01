@@ -17,8 +17,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -33,30 +35,32 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/uselagoon/remote-controller/handlers"
-
-	// Openshift
-	oappsv1 "github.com/openshift/api/apps/v1"
-	projectv1 "github.com/openshift/api/project/v1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	"gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/controllers/messenger"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme           = runtime.NewScheme()
-	setupLog         = ctrl.Log.WithName("setup")
-	lagoonAppID      string
-	lagoonTargetName string
-	mqUser           string
-	mqPass           string
-	mqHost           string
-	lagoonAPIHost    string
-	lagoonSSHHost    string
-	lagoonSSHPort    string
+	scheme                          = runtime.NewScheme()
+	setupLog                        = ctrl.Log.WithName("setup")
+	lagoonAppID                     string
+	lagoonTargetName                string
+	mqUser                          string
+	mqPass                          string
+	mqHost                          string
+	lagoonAPIHost                   string
+	lagoonSSHHost                   string
+	lagoonSSHPort                   string
+	tlsSkipVerify                   bool
+	advancedTaskSSHKeyInjection     bool
+	advancedTaskDeployToken         bool
+	cleanupHarborRepositoryOnDelete bool
 )
 
 func init() {
@@ -64,8 +68,6 @@ func init() {
 
 	_ = lagoonv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
-	_ = projectv1.AddToScheme(scheme)
-	_ = oappsv1.AddToScheme(scheme)
 }
 
 func main() {
@@ -81,7 +83,6 @@ func main() {
 	var overrideBuildDeployImage string
 	var namespacePrefix string
 	var randomPrefix bool
-	var isOpenshift bool
 	var controllerNamespace string
 	var enableDebug bool
 	var fastlyServiceID string
@@ -94,6 +95,12 @@ func main() {
 	var backupDefaultWeeklyRetention int
 	var backupDefaultMonthlyRetention int
 	var backupDefaultSchedule string
+
+	var backupDefaultDevelopmentSchedule string
+	var backupDefaultPullrequestSchedule string
+	var backupDefaultDevelopmentRetention string
+	var backupDefaultPullrequestRetention string
+
 	// Lagoon Feature Flags options control features in Lagoon. Default options
 	// set a default cluster policy, while Force options enforce a cluster policy
 	// and cannot be overridden.
@@ -166,7 +173,7 @@ func main() {
 		"The retry interval for rabbitmq.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
-	flag.StringVar(&pendingMessageCron, "pending-message-cron", "*/5 * * * *",
+	flag.StringVar(&pendingMessageCron, "pending-message-cron", "15,45 * * * *",
 		"The cron definition for pending messages.")
 	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
 		"The number of startup attempts before exiting.")
@@ -178,8 +185,6 @@ func main() {
 		"Enable message queue to provide updates back to Lagoon.")
 	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
 		"The build and deploy image that should be used by builds started by the controller.")
-	flag.BoolVar(&isOpenshift, "is-openshift", false,
-		"Flag to determine if the controller is running in an openshift.")
 	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
 		"The prefix that will be added to all namespaces that are generated, maximum 8 characters. (only used if random-prefix is set false)")
 	flag.BoolVar(&randomPrefix, "random-prefix", false,
@@ -204,6 +209,14 @@ func main() {
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
 	flag.StringVar(&backupDefaultSchedule, "backup-default-schedule", "M H(22-2) * * *",
 		"The default backup schedule for all projects on this cluster.")
+	flag.StringVar(&backupDefaultDevelopmentSchedule, "backup-default-dev-schedule", "",
+		"The default backup schedule for all devlopment environments on this cluster.")
+	flag.StringVar(&backupDefaultPullrequestSchedule, "backup-default-pr-schedule", "",
+		"The default backup schedule for all pullrequest environments on this cluster.")
+	flag.StringVar(&backupDefaultDevelopmentRetention, "backup-default-dev-retention", "",
+		"The default backup retention for all devlopment environments on this cluster (H:D:W:M).")
+	flag.StringVar(&backupDefaultPullrequestRetention, "backup-default-pr-retention", "",
+		"The default backup retention for all pullrequest environments on this cluster (H:D:W:M).")
 	flag.IntVar(&backupDefaultMonthlyRetention, "backup-default-monthly-retention", 1,
 		"The number of monthly backups k8up should retain after a prune operation.")
 	flag.IntVar(&backupDefaultWeeklyRetention, "backup-default-weekly-retention", 6,
@@ -233,7 +246,7 @@ func main() {
 	flag.StringVar(&buildPodCleanUpCron, "build-pod-cleanup-cron", "0 * * * *",
 		"The cron definition for how often to run the build pod cleanup.")
 	flag.BoolVar(&buildsCleanUpEnable, "enable-lagoonbuilds-cleanup", true, "Flag to enable lagoonbuild resources cleanup.")
-	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "0 * * * *",
+	flag.StringVar(&buildsCleanUpCron, "lagoonbuilds-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the lagoonbuild resources cleanup.")
 	flag.IntVar(&buildsToKeep, "num-builds-to-keep", 1, "The number of lagoonbuild resources to keep per namespace.")
 	flag.IntVar(&buildPodsToKeep, "num-build-pods-to-keep", 1, "The number of build pods to keep per namespace.")
@@ -247,6 +260,17 @@ func main() {
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
+
+	flag.BoolVar(&tlsSkipVerify, "skip-tls-verify", false, "Flag to skip tls verification for http clients (harbor).")
+
+	// default the sshkey injection to true for now, eventually Lagoon should handle this for tasks that require it
+	flag.BoolVar(&advancedTaskSSHKeyInjection, "advanced-task-sshkey-injection", true,
+		"Flag to specify injecting the sshkey for the environment into any advanced tasks.")
+	flag.BoolVar(&advancedTaskDeployToken, "advanced-task-deploytoken-injection", false,
+		"Flag to specify injecting the deploy token for the environment into any advanced tasks.")
+
+	flag.BoolVar(&cleanupHarborRepositoryOnDelete, "cleanup-harbor-repository-on-delete", false,
+		"Flag to specify if when deleting an environment, the associated harbor repository/images should be removed too.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
 
@@ -524,35 +548,13 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config,
-		mgr.GetClient(),
-		startupConnectionAttempts,
-		startupConnectionInterval,
-		controllerNamespace,
-		namespacePrefix,
-		randomPrefix,
-		enableDebug,
-	)
-	c := cron.New()
-	// if we are running with MQ support, then start the consumer handler
-	if enableMQ {
-		setupLog.Info("starting messaging handler")
-		go messaging.Consumer(lagoonTargetName)
-
-		// use cron to run a pending message task
-		// this will check any `LagoonBuild` resources for the pendingMessages label
-		// and attempt to re-publish them
-		c.AddFunc(pendingMessageCron, func() {
-			messaging.GetPendingMessages()
-		})
-	}
 
 	harborURLParsed, _ := url.Parse(harborURL)
 	harborHostname := harborURLParsed.Host
 	if harborURLParsed.Host == "" {
 		harborHostname = harborURL
 	}
-	harborConfig := lagoonv1beta1ctrl.Harbor{
+	harborConfig := harbor.Harbor{
 		URL:                   harborURL,
 		Hostname:              harborHostname,
 		API:                   harborAPI,
@@ -571,12 +573,39 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
+	messaging := messenger.NewMessaging(config,
+		mgr.GetClient(),
+		startupConnectionAttempts,
+		startupConnectionInterval,
+		controllerNamespace,
+		namespacePrefix,
+		randomPrefix,
+		advancedTaskSSHKeyInjection,
+		advancedTaskDeployToken,
+		harborConfig,
+		cleanupHarborRepositoryOnDelete,
+		enableDebug,
+	)
+	c := cron.New()
+	// if we are running with MQ support, then start the consumer handler
+	if enableMQ {
+		setupLog.Info("starting messaging handler")
+		go messaging.Consumer(lagoonTargetName)
+
+		// use cron to run a pending message task
+		// this will check any `LagoonBuild` resources for the pendingMessages label
+		// and attempt to re-publish them
+		c.AddFunc(pendingMessageCron, func() {
+			messaging.GetPendingMessages()
+		})
+	}
+
 	buildQoSConfig := lagoonv1beta1ctrl.BuildQoS{
 		MaxBuilds:    qosMaxBuilds,
 		DefaultValue: qosDefaultValue,
 	}
 
-	resourceCleanup := handlers.NewCleanup(mgr.GetClient(),
+	resourceCleanup := messenger.NewCleanup(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
@@ -628,7 +657,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := lagoonv1beta1ctrl.NewHarbor(harborConfig)
+			lagoonHarbor, _ := harbor.NewHarbor(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
@@ -637,27 +666,32 @@ func main() {
 	setupLog.Info("starting controllers")
 
 	if err = (&lagoonv1beta1ctrl.LagoonBuildReconciler{
-		Client:                        mgr.GetClient(),
-		Log:                           ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),
-		Scheme:                        mgr.GetScheme(),
-		EnableMQ:                      enableMQ,
-		BuildImage:                    overrideBuildDeployImage,
-		Messaging:                     messaging,
-		IsOpenshift:                   isOpenshift,
-		NamespacePrefix:               namespacePrefix,
-		RandomNamespacePrefix:         randomPrefix,
-		ControllerNamespace:           controllerNamespace,
-		EnableDebug:                   enableDebug,
-		FastlyServiceID:               fastlyServiceID,
-		FastlyWatchStatus:             fastlyWatchStatus,
-		BuildPodRunAsUser:             int64(buildPodRunAsUser),
-		BuildPodRunAsGroup:            int64(buildPodRunAsGroup),
-		BuildPodFSGroup:               int64(buildPodFSGroup),
-		BackupDefaultSchedule:         backupDefaultSchedule,
-		BackupDefaultMonthlyRetention: backupDefaultMonthlyRetention,
-		BackupDefaultWeeklyRetention:  backupDefaultWeeklyRetention,
-		BackupDefaultDailyRetention:   backupDefaultDailyRetention,
-		BackupDefaultHourlyRetention:  backupDefaultHourlyRetention,
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonBuild"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		BuildImage:            overrideBuildDeployImage,
+		Messaging:             messaging,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		ControllerNamespace:   controllerNamespace,
+		EnableDebug:           enableDebug,
+		FastlyServiceID:       fastlyServiceID,
+		FastlyWatchStatus:     fastlyWatchStatus,
+		BuildPodRunAsUser:     int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
+		BuildPodFSGroup:       int64(buildPodFSGroup),
+		BackupConfig: lagoonv1beta1ctrl.BackupConfig{
+			BackupDefaultSchedule:             backupDefaultSchedule,
+			BackupDefaultDevelopmentSchedule:  backupDefaultDevelopmentSchedule,
+			BackupDefaultPullrequestSchedule:  backupDefaultPullrequestSchedule,
+			BackupDefaultDevelopmentRetention: backupDefaultDevelopmentRetention,
+			BackupDefaultPullrequestRetention: backupDefaultPullrequestRetention,
+			BackupDefaultMonthlyRetention:     backupDefaultMonthlyRetention,
+			BackupDefaultWeeklyRetention:      backupDefaultWeeklyRetention,
+			BackupDefaultDailyRetention:       backupDefaultDailyRetention,
+			BackupDefaultHourlyRetention:      backupDefaultHourlyRetention,
+		},
 		// Lagoon feature flags
 		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
 		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
@@ -703,7 +737,6 @@ func main() {
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("v1beta1").WithName("LagoonTask"),
 		Scheme:                mgr.GetScheme(),
-		IsOpenshift:           isOpenshift,
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
@@ -724,6 +757,10 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	setupLog.Info("starting lagoon metrics server")
+	m := metrics.NewServer(setupLog, ":9912")
+	defer m.Shutdown(context.Background())
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
@@ -757,4 +794,10 @@ func getEnvBool(key string, fallback bool) bool {
 		return rVal
 	}
 	return fallback
+}
+
+func init() {
+	if tlsSkipVerify {
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 }

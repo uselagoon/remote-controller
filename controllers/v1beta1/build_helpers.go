@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,11 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-
-	// Openshift
-	projectv1 "github.com/openshift/api/project/v1"
 )
 
 var (
@@ -104,7 +102,6 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 // getOrCreateNamespace will create the namespace if it doesn't exist.
 func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagoonv1beta1.LagoonBuild, opLog logr.Logger) error {
 	// parse the project/env through the project pattern, or use the default
-	var err error
 	ns := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		lagoonBuild.Spec.Project.Environment,
@@ -132,7 +129,6 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if lagoonBuild.Spec.Project.ProjectIdling != nil {
 		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
 	}
-	// if it isn't an openshift build, then just create a normal namespace
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{
 		Name:   ns,
@@ -167,36 +163,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 	}
 
-	// this is an openshift build, then we need to create a projectrequest
-	// we use projectrequest so that we ensure any openshift specific things can happen.
-	if r.IsOpenshift {
-		projectRequest := &projectv1.ProjectRequest{}
-		projectRequest.ObjectMeta.Name = ns
-		projectRequest.DisplayName = fmt.Sprintf(`[%s] %s`, lagoonBuild.Spec.Project.Name, lagoonBuild.Spec.Project.Environment)
-		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-			if err := r.Create(ctx, projectRequest); err != nil {
-				return err
-			}
-		}
-		// once the projectrequest is created, we should wait for the namespace to get created
-		// this should happen pretty quickly, but if it hasn't happened in a minute it probably failed
-		// this namespace check will also run to patch existing namespaces with labels when they are re-deployed
-		err = try.Do(func(attempt int) (bool, error) {
-			var err error
-			if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-				time.Sleep(10 * time.Second) // wait 10 seconds
-			}
-			return attempt < 6, err
-		})
-		if err != nil {
+	// if kubernetes, just create it if it doesn't exist
+	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		if err := r.Create(ctx, namespace); err != nil {
 			return err
-		}
-	} else {
-		// if kubernetes, just create it if it doesn't exist
-		if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-			if err := r.Create(ctx, namespace); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -215,31 +185,53 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		return err
 	}
 
-	// if local/regional harbor is enabled, and this is not an openshift 3 cluster
-	if r.LFFHarborEnabled && !r.IsOpenshift {
+	// if local/regional harbor is enabled
+	if r.LFFHarborEnabled {
 		// create the harbor client
-		lagoonHarbor, err := NewHarbor(r.Harbor)
+		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
 		if err != nil {
 			return err
 		}
 		// create the project in harbor
-		hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
+		robotCreds := &helpers.RegistryCredentials{}
+		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
 		if err != nil {
 			return err
 		}
-		// create or refresh the robot credentials
-		robotCreds, err := lagoonHarbor.CreateOrRefreshRobot(ctx,
-			r.Client,
-			hProject,
-			lagoonBuild.Spec.Project.Environment,
-			ns,
-			time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
-		if err != nil {
-			return err
+		if lagoonHarbor.UseV2Functions(curVer) {
+			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
+			if err != nil {
+				return err
+			}
+			// create or refresh the robot credentials
+			robotCreds, err = lagoonHarbor.CreateOrRefreshRobotV2(ctx,
+				r.Client,
+				hProject,
+				lagoonBuild.Spec.Project.Environment,
+				ns,
+				lagoonHarbor.RobotAccountExpiry)
+			if err != nil {
+				return err
+			}
+		} else {
+			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
+			if err != nil {
+				return err
+			}
+			// create or refresh the robot credentials
+			robotCreds, err = lagoonHarbor.CreateOrRefreshRobot(ctx,
+				r.Client,
+				hProject,
+				lagoonBuild.Spec.Project.Environment,
+				ns,
+				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
+			if err != nil {
+				return err
+			}
 		}
 		if robotCreds != nil {
 			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx,
+			if err := harbor.UpsertHarborSecret(ctx,
 				r.Client,
 				ns,
 				"lagoon-internal-registry-secret",
@@ -287,6 +279,7 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 }
 
 // getOrCreatePromoteSARoleBinding will create the rolebinding for openshift promotions to be used by the lagoon-deployer service account.
+// @TODO: this role binding can be used as a basis for active/standby tasks allowing one ns to work in another ns
 func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Context, sourcens string, ns string) error {
 	viewRoleBinding := &rbacv1.RoleBinding{}
 	viewRoleBinding.ObjectMeta = metav1.ObjectMeta{
@@ -372,17 +365,21 @@ func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Cont
 // processBuild will actually process the build.
 func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagoonv1beta1.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
-	opLog.Info(fmt.Sprintf("Starting work on build: %s", lagoonBuild.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Checking and preparing namespace and associated resources for build: %s", lagoonBuild.ObjectMeta.Name))
 	// create the lagoon-sshkey secret
 	sshKey := &corev1.Secret{}
-	opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}
 
 	// create the `lagoon-deployer` ServiceAccount
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
@@ -390,21 +387,18 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 
 	// ServiceAccount RoleBinding creation
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}
 
-	if r.IsOpenshift && lagoonBuild.Spec.Build.Type == "promote" {
-		err := r.getOrCreatePromoteSARoleBinding(ctx, lagoonBuild.Spec.Promote.SourceProject, lagoonBuild.ObjectMeta.Namespace)
-		if err != nil {
-			return err
-		}
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
 	}
-
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
 	var serviceaccountTokenSecret string
 	for _, secret := range serviceAccount.Secrets {
 		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
@@ -415,31 +409,6 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 	if serviceaccountTokenSecret == "" {
 		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
-	}
-
-	// openshift uses a builder service account to be able to push images to the openshift registry
-	// lets load this in exactly the same way an openshift build would
-	var builderServiceaccountTokenSecret string
-	if r.IsOpenshift {
-		builderAccount := &corev1.ServiceAccount{}
-		err := r.Get(ctx, types.NamespacedName{
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
-			Name:      "builder",
-		}, builderAccount)
-		if err != nil {
-			return fmt.Errorf("Could not find ServiceAccount builder")
-		}
-		opLog.Info(fmt.Sprintf("Checking `builder` Token exists: %s", lagoonBuild.ObjectMeta.Name))
-		for _, secret := range builderAccount.Secrets {
-			match, _ := regexp.MatchString("^builder-token", secret.Name)
-			if match {
-				builderServiceaccountTokenSecret = secret.Name
-				break
-			}
-		}
-		if builderServiceaccountTokenSecret == "" {
-			return fmt.Errorf("Could not find token secret for ServiceAccount builder")
-		}
 	}
 
 	// create the Pod that will do the work
@@ -486,23 +455,39 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		},
 		{
 			Name:  "DEFAULT_BACKUP_SCHEDULE",
-			Value: r.BackupDefaultSchedule,
+			Value: r.BackupConfig.BackupDefaultSchedule,
 		},
 		{
 			Name:  "MONTHLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultMonthlyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultMonthlyRetention),
 		},
 		{
 			Name:  "WEEKLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultWeeklyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultWeeklyRetention),
 		},
 		{
 			Name:  "DAILY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultDailyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultDailyRetention),
 		},
 		{
 			Name:  "HOURLY_BACKUP_DEFAULT_RETENTION",
-			Value: strconv.Itoa(r.BackupDefaultHourlyRetention),
+			Value: strconv.Itoa(r.BackupConfig.BackupDefaultHourlyRetention),
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_DEV_SCHEDULE",
+			Value: r.BackupConfig.BackupDefaultDevelopmentSchedule,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_PR_SCHEDULE",
+			Value: r.BackupConfig.BackupDefaultPullrequestSchedule,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_DEV_RETENTION",
+			Value: r.BackupConfig.BackupDefaultDevelopmentRetention,
+		},
+		{
+			Name:  "LAGOON_FEATURE_BACKUP_PR_RETENTION",
+			Value: r.BackupConfig.BackupDefaultPullrequestRetention,
 		},
 		{
 			Name:  "K8UP_WEEKLY_RANDOM_FEATURE_FLAG",
@@ -544,99 +529,58 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.ProxyConfig.NoProxy,
 		})
 	}
-	if r.IsOpenshift {
-		// openshift builds have different names for some things, and also additional values to add
+	podEnvs = append(podEnvs, corev1.EnvVar{
+		Name:  "BUILD_TYPE",
+		Value: lagoonBuild.Spec.Build.Type,
+	})
+	podEnvs = append(podEnvs, corev1.EnvVar{
+		Name:  "ENVIRONMENT",
+		Value: lagoonBuild.Spec.Project.Environment,
+	})
+	podEnvs = append(podEnvs, corev1.EnvVar{
+		Name:  "KUBERNETES",
+		Value: lagoonBuild.Spec.Project.DeployTarget,
+	})
+	podEnvs = append(podEnvs, corev1.EnvVar{
+		Name:  "REGISTRY",
+		Value: lagoonBuild.Spec.Project.Registry,
+	})
+	// this is enabled by default for now
+	// eventually will be disabled by default because support for the generation/modification of this will
+	// be handled by lagoon or the builds themselves
+	if r.LFFRouterURL {
 		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "TYPE",
-			Value: lagoonBuild.Spec.Build.Type,
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "SAFE_BRANCH",
-			Value: lagoonBuild.Spec.Project.Environment,
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "SAFE_PROJECT",
-			Value: helpers.MakeSafe(lagoonBuild.Spec.Project.Name),
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "OPENSHIFT_NAME",
-			Value: lagoonBuild.Spec.Project.DeployTarget,
-		})
-		// this is enabled by default for now
-		// eventually will be disabled by default because support for the generation/modification of this will
-		// be handled by lagoon or the builds themselves
-		if r.LFFRouterURL {
-			podEnvs = append(podEnvs, corev1.EnvVar{
-				Name: "ROUTER_URL",
-				Value: strings.ToLower(
+			Name: "ROUTER_URL",
+			Value: strings.ToLower(
+				strings.Replace(
 					strings.Replace(
-						strings.Replace(
-							lagoonBuild.Spec.Project.RouterPattern,
-							"${branch}",
-							lagoonBuild.Spec.Project.Environment,
-							-1,
-						),
-						"${project}",
-						lagoonBuild.Spec.Project.Name,
+						lagoonBuild.Spec.Project.RouterPattern,
+						"${environment}",
+						lagoonBuild.Spec.Project.Environment,
 						-1,
 					),
+					"${project}",
+					lagoonBuild.Spec.Project.Name,
+					-1,
 				),
-			})
-		}
-	} else {
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "BUILD_TYPE",
-			Value: lagoonBuild.Spec.Build.Type,
+			),
 		})
 		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "ENVIRONMENT",
-			Value: lagoonBuild.Spec.Project.Environment,
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "KUBERNETES",
-			Value: lagoonBuild.Spec.Project.DeployTarget,
-		})
-		podEnvs = append(podEnvs, corev1.EnvVar{
-			Name:  "REGISTRY",
-			Value: lagoonBuild.Spec.Project.Registry,
-		})
-		// this is enabled by default for now
-		// eventually will be disabled by default because support for the generation/modification of this will
-		// be handled by lagoon or the builds themselves
-		if r.LFFRouterURL {
-			podEnvs = append(podEnvs, corev1.EnvVar{
-				Name: "ROUTER_URL",
-				Value: strings.ToLower(
+			Name: "SHORT_ROUTER_URL",
+			Value: strings.ToLower(
+				strings.Replace(
 					strings.Replace(
-						strings.Replace(
-							lagoonBuild.Spec.Project.RouterPattern,
-							"${environment}",
-							lagoonBuild.Spec.Project.Environment,
-							-1,
-						),
-						"${project}",
-						lagoonBuild.Spec.Project.Name,
+						lagoonBuild.Spec.Project.RouterPattern,
+						"${environment}",
+						helpers.ShortName(lagoonBuild.Spec.Project.Environment),
 						-1,
 					),
+					"${project}",
+					helpers.ShortName(lagoonBuild.Spec.Project.Name),
+					-1,
 				),
-			})
-			podEnvs = append(podEnvs, corev1.EnvVar{
-				Name: "SHORT_ROUTER_URL",
-				Value: strings.ToLower(
-					strings.Replace(
-						strings.Replace(
-							lagoonBuild.Spec.Project.RouterPattern,
-							"${environment}",
-							helpers.ShortName(lagoonBuild.Spec.Project.Environment),
-							-1,
-						),
-						"${project}",
-						helpers.ShortName(lagoonBuild.Spec.Project.Name),
-						-1,
-					),
-				),
-			})
-		}
+			),
+		})
 	}
 	if lagoonBuild.Spec.Build.CI != "" {
 		podEnvs = append(podEnvs, corev1.EnvVar{
@@ -665,29 +609,19 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "PR_TITLE",
 			Value: lagoonBuild.Spec.Pullrequest.Title,
 		})
-		if !r.IsOpenshift {
-			// we don't use PR_NUMBER in openshift builds
-			podEnvs = append(podEnvs, corev1.EnvVar{
-				Name:  "PR_NUMBER",
-				Value: string(lagoonBuild.Spec.Pullrequest.Number),
-			})
-		}
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "PR_NUMBER",
+			Value: string(lagoonBuild.Spec.Pullrequest.Number),
+		})
 	}
 	if lagoonBuild.Spec.Build.Type == "promote" {
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name:  "PROMOTION_SOURCE_ENVIRONMENT",
 			Value: lagoonBuild.Spec.Promote.SourceEnvironment,
 		})
-		if r.IsOpenshift {
-			// openshift does promotions differently
-			podEnvs = append(podEnvs, corev1.EnvVar{
-				Name:  "PROMOTION_SOURCE_OPENSHIFT_PROJECT",
-				Value: lagoonBuild.Spec.Promote.SourceProject,
-			})
-		}
 	}
-	// if local/regional harbor is enabled, and this is not an openshift 3 cluster
-	if r.LFFHarborEnabled && !r.IsOpenshift {
+	// if local/regional harbor is enabled
+	if r.LFFHarborEnabled {
 		// unmarshal the project variables
 		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
@@ -921,28 +855,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		}
 	}
 
-	// openshift uses a builder service account to be able to push images to the openshift registry
-	// load that into the podspec here
-	if r.IsOpenshift {
-		newPod.Spec.ServiceAccountName = "builder"
-		builderToken := corev1.VolumeMount{
-			Name:      builderServiceaccountTokenSecret,
-			ReadOnly:  true,
-			MountPath: "/var/run/secrets/kubernetes.io/serviceaccount",
-		}
-		builderVolume := corev1.Volume{
-			Name: builderServiceaccountTokenSecret,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  builderServiceaccountTokenSecret,
-					DefaultMode: helpers.IntPtr(420),
-				},
-			},
-		}
-		newPod.Spec.Volumes = append(newPod.Spec.Volumes, builderVolume)
-		newPod.Spec.Containers[0].VolumeMounts = append(newPod.Spec.Containers[0].VolumeMounts, builderToken)
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
 	}
-	opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
 	// once the pod spec has been defined, check if it isn't already created
 	err = r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonBuild.ObjectMeta.Namespace,
@@ -957,6 +872,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// @TODO: should update the build to failed
 			return nil
 		}
+		buildRunningStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+		}).Set(1)
+		buildStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+			"build_step":      "running",
+		}).Set(1)
+		buildsStartedCounter.Inc()
 		// then break out of the build
 	}
 	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))
@@ -980,13 +905,13 @@ func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 Build cancelled
 ========================================
 %s`, message))
-		var jobCondition lagoonv1beta1.BuildStatusType
-		jobCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(jobCondition)
+		var buildCondition lagoonv1beta1.BuildStatusType
+		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(jobCondition),
+					"lagoon.sh/buildStatus": string(buildCondition),
 				},
 			},
 		})
@@ -1005,7 +930,9 @@ Build cancelled
 	if err != nil {
 		// if there isn't a configmap, just info it and move on
 		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-		opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+		}
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status
@@ -1030,13 +957,13 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
-	opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
-	// if we have any pending builds, then grab the latest one and make it running
-	// if there are any other pending builds, cancel them so only the latest one runs
-	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-		return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
-	})
 	if len(pendingBuilds.Items) > 0 {
+		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+		// if we have any pending builds, then grab the latest one and make it running
+		// if there are any other pending builds, cancel them so only the latest one runs
+		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+		})
 		for idx, pBuild := range pendingBuilds.Items {
 			pendingBuild := pBuild.DeepCopy()
 			if idx == 0 {

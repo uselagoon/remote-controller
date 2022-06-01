@@ -23,7 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/controllers/messenger"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // LagoonMonitorReconciler reconciles a LagoonBuild object
@@ -40,7 +41,7 @@ type LagoonMonitorReconciler struct {
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
-	Messaging             *handlers.Messaging
+	Messaging             *messenger.Messaging
 	ControllerNamespace   string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
@@ -69,6 +70,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// if this is a lagoon task, then run the handle task monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
+		err := r.calculateTaskMetrics(ctx)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
@@ -76,6 +81,10 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	// if this is a lagoon build, then run the handle build monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
+		err := r.calculateBuildMetrics(ctx)
+		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
@@ -85,23 +94,28 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// first try and clean up the pod and capture the logs and update
 		// the lagoonbuild that owns it with the status
 		var lagoonBuild lagoonv1beta1.LagoonBuild
-		err := r.Get(ctx, types.NamespacedName{
+		err = r.Get(ctx, types.NamespacedName{
 			Namespace: jobPod.ObjectMeta.Namespace,
 			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 		}, &lagoonBuild)
 		if err != nil {
 			opLog.Info(fmt.Sprintf("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required."))
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
+			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 			if err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
 			}
 		} else {
-			opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
-			// this will update the deployment back to lagoon if it can do so
-			// and should only update if the LagoonBuild is Pending or Running
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, true)
-			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+			if helpers.ContainsString(
+				helpers.BuildRunningPendingStatus,
+				lagoonBuild.Labels["lagoon.sh/buildStatus"],
+			) {
+				opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
+				// this will update the deployment back to lagoon if it can do so
+				// and should only update if the LagoonBuild is Pending or Running
+				err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
+				if err != nil {
+					opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+				}
 			}
 		}
 		// if the update is successful or not, it will just continue on to check for pending builds
@@ -167,4 +181,19 @@ func getContainerLogs(ctx context.Context, containerName string, request ctrl.Re
 		return nil, fmt.Errorf("error in copy information from podLogs to buffer: %v", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile.Request, jobPod corev1.Pod) ([]byte, error) {
+	var allContainerLogs []byte
+	// grab all the logs from the containers in the task pod and just merge them all together
+	// we only have 1 container at the moment in a taskpod anyway so it doesn't matter
+	// if we do move to multi container tasks, then worry about it
+	for _, container := range jobPod.Spec.Containers {
+		cLogs, err := getContainerLogs(ctx, container.Name, req)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to retrieve logs from pod: %v", err)
+		}
+		allContainerLogs = append(allContainerLogs, cLogs...)
+	}
+	return allContainerLogs, nil
 }

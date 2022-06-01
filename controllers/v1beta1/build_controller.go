@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/controllers/messenger"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	// Openshift
 )
 
 // LagoonBuildReconciler reconciles a LagoonBuild object
@@ -40,9 +40,8 @@ type LagoonBuildReconciler struct {
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
-	Messaging             *handlers.Messaging
+	Messaging             *messenger.Messaging
 	BuildImage            string
-	IsOpenshift           bool
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
 	ControllerNamespace   string
@@ -64,20 +63,30 @@ type LagoonBuildReconciler struct {
 	LFFDefaultInsights               string
 	LFFForceRWX2RWO                  string
 	LFFDefaultRWX2RWO                string
-	BackupDefaultSchedule            string
-	BackupDefaultMonthlyRetention    int
-	BackupDefaultWeeklyRetention     int
-	BackupDefaultDailyRetention      int
-	BackupDefaultHourlyRetention     int
 	LFFBackupWeeklyRandom            bool
 	LFFRouterURL                     bool
 	LFFHarborEnabled                 bool
-	Harbor                           Harbor
+	BackupConfig                     BackupConfig
+	Harbor                           harbor.Harbor
 	LFFQoSEnabled                    bool
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int
 	LagoonTargetName                 string
 	ProxyConfig                      ProxyConfig
+}
+
+// BackupConfig holds all the backup configuration settings
+type BackupConfig struct {
+	BackupDefaultSchedule         string
+	BackupDefaultMonthlyRetention int
+	BackupDefaultWeeklyRetention  int
+	BackupDefaultDailyRetention   int
+	BackupDefaultHourlyRetention  int
+
+	BackupDefaultDevelopmentSchedule  string
+	BackupDefaultPullrequestSchedule  string
+	BackupDefaultDevelopmentRetention string
+	BackupDefaultPullrequestRetention string
 }
 
 // ProxyConfig is used for proxy configuration.
@@ -113,11 +122,12 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// then clean up the undeployable build
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
 			if value == string(lagoonv1beta1.BuildStatusCancelled) {
-				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
 				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok {
 					if value == "true" {
+						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
 						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
 					} else {
+						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
 						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
 					}
 				}
@@ -142,8 +152,10 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				// if the running build is the one from this request then process it
 				if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
 					// actually process the build here
-					if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
-						return ctrl.Result{}, err
+					if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStarted"]; !ok {
+						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+							return ctrl.Result{}, err
+						}
 					}
 				} // end check if running build is current LagoonBuild
 			} // end loop for running builds
@@ -199,31 +211,30 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild) (ctrl.Result, error) {
 
 	namespace := &corev1.Namespace{}
-	opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild, opLog)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// create the `lagoon-deployer` ServiceAccount
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// ServiceAccount RoleBinding creation
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
 	if err != nil {
 		return ctrl.Result{}, err
-	}
-	// create the service account role binding for openshift to allow promotions in the openshift 3.11 clusters
-	if r.IsOpenshift && lagoonBuild.Spec.Build.Type == "promote" {
-		err := r.getOrCreatePromoteSARoleBinding(ctx, lagoonBuild.Spec.Promote.SourceProject, namespace.ObjectMeta.Name)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	// copy the build resource into a new resource and set the status to pending

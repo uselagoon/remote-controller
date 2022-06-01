@@ -55,5 +55,6 @@ type LagoonMessage struct {
 type LagoonStatusMessages struct {
 	StatusMessage      *LagoonLog     `json:"statusMessage,omitempty"`
 	BuildLogMessage    *LagoonLog     `json:"buildLogMessage,omitempty"`
+	TaskLogMessage     *LagoonLog     `json:"taskLogMessage,omitempty"`
 	EnvironmentMessage *LagoonMessage `json:"environmentMessage,omitempty"`
 }

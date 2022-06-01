@@ -46,14 +46,13 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 	}
-	opLog.Info(fmt.Sprintf("There are %v Running builds", len(runningBuilds.Items)))
 	if len(runningBuilds.Items) >= r.BuildQoS.MaxBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
 		return nil
 	}
 	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
 	if buildsToStart > 0 {
-		opLog.Info(fmt.Sprintf("There is room for %v builds to be started", buildsToStart))
+		opLog.Info(fmt.Sprintf("Currently %v running builds, room for %v builds to be started", len(runningBuilds.Items), buildsToStart))
 		// if there are any free slots to start a build, do that here
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
@@ -65,28 +64,28 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 			return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 		}
-		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(runningBuilds.Items)))
-		// if we have any pending builds, then grab the latest one and make it running
-		// if there are any other pending builds, cancel them so only the latest one runs
-		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-			// sort by priority, then creation timestamp
-			iPriority := r.BuildQoS.DefaultValue
-			jPriority := r.BuildQoS.DefaultValue
-			if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
-				iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
-			}
-			if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
-				jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
-			}
-			if iPriority < jPriority {
-				return false
-			}
-			if iPriority > jPriority {
-				return true
-			}
-			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
-		})
 		if len(pendingBuilds.Items) > 0 {
+			opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
+			// if we have any pending builds, then grab the latest one and make it running
+			// if there are any other pending builds, cancel them so only the latest one runs
+			sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+				// sort by priority, then creation timestamp
+				iPriority := r.BuildQoS.DefaultValue
+				jPriority := r.BuildQoS.DefaultValue
+				if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
+					iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
+				}
+				if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
+					jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
+				}
+				if iPriority < jPriority {
+					return false
+				}
+				if iPriority > jPriority {
+					return true
+				}
+				return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
+			})
 			for idx, pBuild := range pendingBuilds.Items {
 				if idx <= buildsToStart {
 					// if we do have a `lagoon.sh/buildStatus` set, then process as normal

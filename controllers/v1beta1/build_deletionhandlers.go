@@ -207,7 +207,9 @@ Build cancelled
 		if err != nil {
 			// if there isn't a configmap, just info it and move on
 			// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+			}
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status

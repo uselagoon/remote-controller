@@ -82,7 +82,9 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					if err != nil {
 						// if there isn't a configmap, just info it and move on
 						// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-						opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+						if r.EnableDebug {
+							opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+						}
 					}
 					// send any messages to lagoon message queues
 					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
@@ -498,7 +500,9 @@ Build %s
 		); err != nil {
 			// if there isn't a configmap, just info it and move on
 			// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
+			}
 		}
 
 		// do any message publishing here, and update any pending messages if needed
@@ -528,8 +532,10 @@ Build %s
 			mergeMap["statusMessages"] = nil
 		}
 		mergePatch, _ := json.Marshal(mergeMap)
-		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+		if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err == nil {
+			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+			}
 		}
 		// just delete the pod
 		// maybe if we move away from using BASH for the kubectl-build-deploy-dind scripts we could handle cancellations better

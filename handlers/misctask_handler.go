@@ -24,6 +24,10 @@ func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 		Name:      jobSpec.Misc.Name,
 		Namespace: namespace,
 	}, &jobPod); err != nil {
+		opLog.Info(fmt.Sprintf(
+			"Unable to find build pod %s to cancel it. Checking to see if LagoonBuild exists.",
+			jobSpec.Misc.Name,
+		))
 		// since there was no build pod, check for the lagoon build resource
 		var lagoonBuild lagoonv1beta1.LagoonBuild
 		if err := h.Client.Get(context.Background(), types.NamespacedName{
@@ -41,6 +45,7 @@ func (h *Messaging) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 		// as there is no build pod, but there is a lagoon build resource
 		// update it to cancelled so that the controller doesn't try to run it
 		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
 		if err := h.Client.Update(context.Background(), &lagoonBuild); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(

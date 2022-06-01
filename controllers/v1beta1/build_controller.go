@@ -121,11 +121,12 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// then clean up the undeployable build
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
 			if value == string(lagoonv1beta1.BuildStatusCancelled) {
-				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
 				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok {
 					if value == "true" {
+						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
 						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
 					} else {
+						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
 						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
 					}
 				}
@@ -150,8 +151,10 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				// if the running build is the one from this request then process it
 				if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
 					// actually process the build here
-					if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
-						return ctrl.Result{}, err
+					if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStarted"]; !ok {
+						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+							return ctrl.Result{}, err
+						}
 					}
 				} // end check if running build is current LagoonBuild
 			} // end loop for running builds
@@ -207,20 +210,26 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild) (ctrl.Result, error) {
 
 	namespace := &corev1.Namespace{}
-	opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild, opLog)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// create the `lagoon-deployer` ServiceAccount
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// ServiceAccount RoleBinding creation
-	opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
 	if err != nil {

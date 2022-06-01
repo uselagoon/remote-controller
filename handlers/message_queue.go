@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cheshir/go-mq"
+	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
@@ -508,7 +509,13 @@ func (h *Messaging) Publish(queue string, message []byte) error {
 func (h *Messaging) GetPendingMessages() {
 	opLog := ctrl.Log.WithName("handlers").WithName("PendingMessages")
 	ctx := context.Background()
-	opLog.Info(fmt.Sprintf("Checking pending messages across all namespaces"))
+	opLog.Info(fmt.Sprintf("Checking pending build messages across all namespaces"))
+	h.pendingBuildLogMessages(ctx, opLog)
+	opLog.Info(fmt.Sprintf("Checking pending task messages across all namespaces"))
+	h.pendingTaskLogMessages(ctx, opLog)
+}
+
+func (h *Messaging) pendingBuildLogMessages(ctx context.Context, opLog logr.Logger) {
 	pendingMsgs := &lagoonv1beta1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
@@ -530,24 +537,24 @@ func (h *Messaging) GetPendingMessages() {
 			break
 		}
 		opLog.Info(fmt.Sprintf("LagoonBuild %s has pending messages, attempting to re-send", build.ObjectMeta.Name))
-		statusBytes, _ := json.Marshal(build.StatusMessages.StatusMessage)
-		logBytes, _ := json.Marshal(build.StatusMessages.BuildLogMessage)
-		envBytes, _ := json.Marshal(build.StatusMessages.EnvironmentMessage)
 
 		// try to re-publish message or break and try the next build with pending message
 		if build.StatusMessages.StatusMessage != nil {
+			statusBytes, _ := json.Marshal(build.StatusMessages.StatusMessage)
 			if err := h.Publish("lagoon-logs", statusBytes); err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
 			}
 		}
 		if build.StatusMessages.BuildLogMessage != nil {
+			logBytes, _ := json.Marshal(build.StatusMessages.BuildLogMessage)
 			if err := h.Publish("lagoon-logs", logBytes); err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
 			}
 		}
 		if build.StatusMessages.EnvironmentMessage != nil {
+			envBytes, _ := json.Marshal(build.StatusMessages.EnvironmentMessage)
 			if err := h.Publish("lagoon-tasks:controller", envBytes); err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
 				break
@@ -565,6 +572,70 @@ func (h *Messaging) GetPendingMessages() {
 			"statusMessages": nil,
 		})
 		if err := h.Client.Patch(ctx, &build, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+			break
+		}
+	}
+	return
+}
+
+func (h *Messaging) pendingTaskLogMessages(ctx context.Context, opLog logr.Logger) {
+	pendingMsgs := &lagoonv1beta1.LagoonTaskList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/pendingMessages": "true",
+			"lagoon.sh/controller":      h.ControllerNamespace,
+		}),
+	})
+	if err := h.Client.List(ctx, pendingMsgs, listOption); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuilds, there may be none or something went wrong"))
+		return
+	}
+	for _, task := range pendingMsgs.Items {
+		// get the latest resource in case it has been updated since the loop started
+		if err := h.Client.Get(ctx, types.NamespacedName{
+			Name:      task.ObjectMeta.Name,
+			Namespace: task.ObjectMeta.Namespace,
+		}, &task); err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to get LagoonBuild, something went wrong"))
+			break
+		}
+		opLog.Info(fmt.Sprintf("LagoonTasl %s has pending messages, attempting to re-send", task.ObjectMeta.Name))
+
+		// try to re-publish message or break and try the next build with pending message
+		if task.StatusMessages.StatusMessage != nil {
+			statusBytes, _ := json.Marshal(task.StatusMessages.StatusMessage)
+			if err := h.Publish("lagoon-logs", statusBytes); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
+				break
+			}
+		}
+		if task.StatusMessages.TaskLogMessage != nil {
+			taskLogBytes, _ := json.Marshal(task.StatusMessages.TaskLogMessage)
+			if err := h.Publish("lagoon-logs", taskLogBytes); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
+				break
+			}
+		}
+		if task.StatusMessages.EnvironmentMessage != nil {
+			envBytes, _ := json.Marshal(task.StatusMessages.EnvironmentMessage)
+			if err := h.Publish("lagoon-tasks:controller", envBytes); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to publush message"))
+				break
+			}
+		}
+		// if we managed to send all the pending messages, then update the resource to remove the pending state
+		// so we don't send the same message multiple times
+		opLog.Info(fmt.Sprintf("Sent pending messages for LagoonTask %s", task.ObjectMeta.Name))
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]interface{}{
+					"lagoon.sh/pendingMessages": "false",
+				},
+			},
+			"statusMessages": nil,
+		})
+		if err := h.Client.Patch(ctx, &task, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
 			break
 		}

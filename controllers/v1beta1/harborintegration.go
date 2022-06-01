@@ -140,7 +140,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		// could break the build
 		if len(lagoonBuilds.Items) > 0 {
 			if helpers.ContainsString(
-				helpers.RunningPendingStatus,
+				helpers.BuildRunningPendingStatus,
 				lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"],
 			) {
 				runningBuilds = true

@@ -42,8 +42,10 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 		// if the running build is the one from this request then process it
 		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
 			// actually process the build here
-			if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
-				return ctrl.Result{}, err
+			if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStarted"]; !ok {
+				if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		} // end check if running build is current LagoonBuild
 	} // end loop for running builds

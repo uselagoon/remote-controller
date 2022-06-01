@@ -336,6 +336,11 @@ func (in *LagoonStatusMessages) DeepCopyInto(out *LagoonStatusMessages) {
 		*out = new(LagoonLog)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.TaskLogMessage != nil {
+		in, out := &in.TaskLogMessage, &out.TaskLogMessage
+		*out = new(LagoonLog)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.EnvironmentMessage != nil {
 		in, out := &in.EnvironmentMessage, &out.EnvironmentMessage
 		*out = new(LagoonMessage)

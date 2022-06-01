@@ -11,6 +11,7 @@ import (
 	"github.com/cheshir/go-mq"
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,6 +47,8 @@ type Messaging struct {
 	RandomNamespacePrefix            bool
 	AdvancedTaskSSHKeyInjection      bool
 	AdvancedTaskDeployTokenInjection bool
+	Harbor                           harbor.Harbor
+	CleanupHarborRepositoryOnDelete  bool
 	EnableDebug                      bool
 }
 
@@ -59,6 +62,8 @@ func NewMessaging(config mq.Config,
 	randomNamespacePrefix,
 	advancedTaskSSHKeyInjection bool,
 	advancedTaskDeployTokenInjection bool,
+	harborConfig harbor.Harbor,
+	cleanupHarborOnDelete bool,
 	enableDebug bool,
 ) *Messaging {
 	return &Messaging{
@@ -71,6 +76,8 @@ func NewMessaging(config mq.Config,
 		RandomNamespacePrefix:            randomNamespacePrefix,
 		AdvancedTaskSSHKeyInjection:      advancedTaskSSHKeyInjection,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
+		Harbor:                           harborConfig,
+		CleanupHarborRepositoryOnDelete:  cleanupHarborOnDelete,
 		EnableDebug:                      enableDebug,
 	}
 }
@@ -241,6 +248,21 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						get any deployments/statefulsets/daemonsets
 						then delete them
 					*/
+					if h.CleanupHarborRepositoryOnDelete {
+						lagoonHarbor, err := harbor.NewHarbor(h.Harbor)
+						if err != nil {
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+						curVer, err := lagoonHarbor.GetHarborVersion(ctx)
+						if err != nil {
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+						if lagoonHarbor.UseV2Functions(curVer) {
+							lagoonHarbor.DeleteRepository(ctx, project, branch)
+						}
+					}
 					if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
 						message.Ack(false) // ack to remove from queue
 						return

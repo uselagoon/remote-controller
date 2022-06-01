@@ -1,4 +1,4 @@
-package v1beta1
+package harbor
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	harborclientv3 "github.com/mittwald/goharbor-client/v3/apiv2"
 
 	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
+	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
@@ -28,6 +29,12 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 )
+
+type robotAccountCredential struct {
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+	Token     string `json:"token"`
+}
 
 // Harbor defines a harbor struct
 type Harbor struct {
@@ -50,12 +57,7 @@ type Harbor struct {
 	RandomNamespacePrefix bool
 	WebhookURL            string
 	WebhookEventTypes     []string
-}
-
-type robotAccountCredential struct {
-	Name      string `json:"name"`
-	CreatedAt int64  `json:"created_at"`
-	Token     string `json:"token"`
+	Config                *config.Options
 }
 
 // NewHarbor create a new harbor connection.
@@ -66,7 +68,8 @@ func NewHarbor(harbor Harbor) (*Harbor, error) {
 		return nil, err
 	}
 	harbor.ClientV3 = c
-	c2, err := harborclientv5.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, nil)
+	harbor.Config = &config.Options{}
+	c2, err := harborclientv5.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, harbor.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +89,8 @@ func (h *Harbor) GetHarborVersion(ctx context.Context) (string, error) {
 	return version, nil
 }
 
-func (h *Harbor) useV2Functions(version string) bool {
+// UseV2Functions .
+func (h *Harbor) UseV2Functions(version string) bool {
 	currentVersion := semver.New(version)
 	harborV2 := semver.New("2.2.0")
 	// invert the result
@@ -155,7 +159,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 				opLog.Error(err, "error checking harbor version")
 				break
 			}
-			if h.useV2Functions(curVer) {
+			if h.UseV2Functions(curVer) {
 				hProject, err := h.CreateProjectV2(ctx, ns.Labels["lagoon.sh/project"])
 				if err != nil {
 					// @TODO: resource unknown
@@ -195,7 +199,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			time.Sleep(1 * time.Second) // wait 1 seconds
 			if robotCreds != nil {
 				// if we have robotcredentials to create, do that here
-				if err := upsertHarborSecret(ctx,
+				if err := UpsertHarborSecret(ctx,
 					cl,
 					ns.ObjectMeta.Name,
 					"lagoon-internal-registry-secret", //secret name in kubernetes
@@ -270,8 +274,8 @@ func makeHarborSecret(credentials robotAccountCredential) helpers.RegistryCreden
 		)}
 }
 
-// upsertHarborSecret will create or update the secret in kubernetes.
-func upsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, registryCreds *helpers.RegistryCredentials) error {
+// UpsertHarborSecret will create or update the secret in kubernetes.
+func UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, registryCreds *helpers.RegistryCredentials) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,

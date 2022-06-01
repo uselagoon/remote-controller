@@ -35,13 +35,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/uselagoon/remote-controller/handlers"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	"gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/controllers/messenger"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -573,7 +573,7 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	messaging := handlers.NewMessaging(config,
+	messaging := messenger.NewMessaging(config,
 		mgr.GetClient(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
@@ -605,7 +605,7 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
-	resourceCleanup := handlers.NewCleanup(mgr.GetClient(),
+	resourceCleanup := messenger.NewCleanup(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,

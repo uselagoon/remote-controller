@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/controllers/messenger"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
@@ -40,7 +40,7 @@ type LagoonBuildReconciler struct {
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
-	Messaging             *handlers.Messaging
+	Messaging             *messenger.Messaging
 	BuildImage            string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool

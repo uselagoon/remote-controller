@@ -353,6 +353,45 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	if serviceaccountTokenSecret == "" {
 		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
 	}
+	// handle the volumes for sshkey and deployer tokens
+	deployerTokenVolume := corev1.Volume{
+		Name: serviceaccountTokenSecret,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  serviceaccountTokenSecret,
+				DefaultMode: helpers.IntPtr(420),
+			},
+		},
+	}
+	sshKeyVolume := corev1.Volume{
+		Name: "lagoon-sshkey",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  "lagoon-sshkey",
+				DefaultMode: helpers.IntPtr(420),
+			},
+		},
+	}
+	deployerTokenVolumeMount := corev1.VolumeMount{
+		Name:      serviceaccountTokenSecret,
+		ReadOnly:  true,
+		MountPath: "/var/run/secrets/lagoon/deployer",
+	}
+	sshKeyVolumeMount := corev1.VolumeMount{
+		Name:      "lagoon-sshkey",
+		ReadOnly:  true,
+		MountPath: "/var/run/secrets/lagoon/ssh",
+	}
+	volumes := []corev1.Volume{}
+	volumeMounts := []corev1.VolumeMount{}
+	if lagoonTask.Spec.AdvancedTask.DeployerToken {
+		volumes = append(volumes, deployerTokenVolume)
+		volumeMounts = append(volumeMounts, deployerTokenVolumeMount)
+	}
+	if lagoonTask.Spec.AdvancedTask.SSHKey {
+		volumes = append(volumes, sshKeyVolume)
+		volumeMounts = append(volumeMounts, sshKeyVolumeMount)
+	}
 	newPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lagoonTask.ObjectMeta.Name,
@@ -374,26 +413,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: "Never",
-			Volumes: []corev1.Volume{
-				{
-					Name: serviceaccountTokenSecret,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: helpers.IntPtr(420),
-						},
-					},
-				},
-				{
-					Name: "lagoon-sshkey",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  "lagoon-sshkey",
-							DefaultMode: helpers.IntPtr(420),
-						},
-					},
-				},
-			},
+			Volumes:       volumes,
 			Containers: []corev1.Container{
 				{
 					Name:            "lagoon-task",
@@ -437,18 +457,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 							Value: lagoonTask.Spec.Task.ID,
 						},
 					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      serviceaccountTokenSecret,
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/deployer",
-						},
-						{
-							Name:      "lagoon-sshkey",
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/ssh",
-						},
-					},
+					VolumeMounts: volumeMounts,
 				},
 			},
 		},

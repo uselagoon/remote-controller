@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	"gopkg.in/robfig/cron.v2"
@@ -46,19 +47,20 @@ import (
 )
 
 var (
-	scheme                      = runtime.NewScheme()
-	setupLog                    = ctrl.Log.WithName("setup")
-	lagoonAppID                 string
-	lagoonTargetName            string
-	mqUser                      string
-	mqPass                      string
-	mqHost                      string
-	lagoonAPIHost               string
-	lagoonSSHHost               string
-	lagoonSSHPort               string
-	tlsSkipVerify               bool
-	advancedTaskSSHKeyInjection bool
-	advancedTaskDeployToken     bool
+	scheme                          = runtime.NewScheme()
+	setupLog                        = ctrl.Log.WithName("setup")
+	lagoonAppID                     string
+	lagoonTargetName                string
+	mqUser                          string
+	mqPass                          string
+	mqHost                          string
+	lagoonAPIHost                   string
+	lagoonSSHHost                   string
+	lagoonSSHPort                   string
+	tlsSkipVerify                   bool
+	advancedTaskSSHKeyInjection     bool
+	advancedTaskDeployToken         bool
+	cleanupHarborRepositoryOnDelete bool
 )
 
 func init() {
@@ -266,6 +268,9 @@ func main() {
 		"Flag to specify injecting the sshkey for the environment into any advanced tasks.")
 	flag.BoolVar(&advancedTaskDeployToken, "advanced-task-deploytoken-injection", false,
 		"Flag to specify injecting the deploy token for the environment into any advanced tasks.")
+
+	flag.BoolVar(&cleanupHarborRepositoryOnDelete, "cleanup-harbor-repository-on-delete", false,
+		"Flag to specify if when deleting an environment, the associated harbor repository/images should be removed too.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
 
@@ -543,37 +548,13 @@ func main() {
 		},
 		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
-	messaging := handlers.NewMessaging(config,
-		mgr.GetClient(),
-		startupConnectionAttempts,
-		startupConnectionInterval,
-		controllerNamespace,
-		namespacePrefix,
-		randomPrefix,
-		advancedTaskSSHKeyInjection,
-		advancedTaskDeployToken,
-		enableDebug,
-	)
-	c := cron.New()
-	// if we are running with MQ support, then start the consumer handler
-	if enableMQ {
-		setupLog.Info("starting messaging handler")
-		go messaging.Consumer(lagoonTargetName)
-
-		// use cron to run a pending message task
-		// this will check any `LagoonBuild` resources for the pendingMessages label
-		// and attempt to re-publish them
-		c.AddFunc(pendingMessageCron, func() {
-			messaging.GetPendingMessages()
-		})
-	}
 
 	harborURLParsed, _ := url.Parse(harborURL)
 	harborHostname := harborURLParsed.Host
 	if harborURLParsed.Host == "" {
 		harborHostname = harborURL
 	}
-	harborConfig := lagoonv1beta1ctrl.Harbor{
+	harborConfig := harbor.Harbor{
 		URL:                   harborURL,
 		Hostname:              harborHostname,
 		API:                   harborAPI,
@@ -590,6 +571,33 @@ func main() {
 		RandomNamespacePrefix: randomPrefix,
 		WebhookURL:            harborLagoonWebhook,
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
+	}
+
+	messaging := handlers.NewMessaging(config,
+		mgr.GetClient(),
+		startupConnectionAttempts,
+		startupConnectionInterval,
+		controllerNamespace,
+		namespacePrefix,
+		randomPrefix,
+		advancedTaskSSHKeyInjection,
+		advancedTaskDeployToken,
+		harborConfig,
+		cleanupHarborRepositoryOnDelete,
+		enableDebug,
+	)
+	c := cron.New()
+	// if we are running with MQ support, then start the consumer handler
+	if enableMQ {
+		setupLog.Info("starting messaging handler")
+		go messaging.Consumer(lagoonTargetName)
+
+		// use cron to run a pending message task
+		// this will check any `LagoonBuild` resources for the pendingMessages label
+		// and attempt to re-publish them
+		c.AddFunc(pendingMessageCron, func() {
+			messaging.GetPendingMessages()
+		})
 	}
 
 	buildQoSConfig := lagoonv1beta1ctrl.BuildQoS{
@@ -649,7 +657,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := lagoonv1beta1ctrl.NewHarbor(harborConfig)
+			lagoonHarbor, _ := harbor.NewHarbor(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}

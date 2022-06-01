@@ -30,6 +30,7 @@ import (
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/handlers"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
@@ -66,7 +67,7 @@ type LagoonBuildReconciler struct {
 	LFFRouterURL                     bool
 	LFFHarborEnabled                 bool
 	BackupConfig                     BackupConfig
-	Harbor                           Harbor
+	Harbor                           harbor.Harbor
 	LFFQoSEnabled                    bool
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int

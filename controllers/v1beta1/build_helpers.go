@@ -20,6 +20,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
@@ -187,7 +188,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
 		// create the harbor client
-		lagoonHarbor, err := NewHarbor(r.Harbor)
+		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
 		if err != nil {
 			return err
 		}
@@ -197,7 +198,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		if err != nil {
 			return err
 		}
-		if lagoonHarbor.useV2Functions(curVer) {
+		if lagoonHarbor.UseV2Functions(curVer) {
 			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
 				return err
@@ -230,7 +231,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 		if robotCreds != nil {
 			// if we have robotcredentials to create, do that here
-			if err := upsertHarborSecret(ctx,
+			if err := harbor.UpsertHarborSecret(ctx,
 				r.Client,
 				ns,
 				"lagoon-internal-registry-secret",

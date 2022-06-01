@@ -1,10 +1,11 @@
-package v1beta1
+package harbor
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
@@ -301,4 +302,47 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		return &harborRegistryCredentials, nil
 	}
 	return nil, err
+}
+
+// DeleteRepository will delete repositories related to an environment
+func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch string) {
+	environmentName := helpers.ShortenEnvironment(projectName, helpers.MakeSafe(branch))
+	h.Config.PageSize = 100
+	pageCount := int64(1)
+	listRepositories := h.ListRepositories(ctx, projectName, pageCount)
+	for _, repo := range listRepositories {
+		if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
+			repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
+			err := h.ClientV5.DeleteRepository(ctx, projectName, repoName)
+			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
+			}
+		}
+	}
+	if len(listRepositories) > 100 {
+		// h.Log.Info(fmt.Sprintf("more than pagesize repositories returned"))
+		pageCount = int64(len(listRepositories) / 100)
+		var page int64
+		for page = 2; page <= pageCount; page++ {
+			listRepositories := h.ListRepositories(ctx, projectName, page)
+			for _, repo := range listRepositories {
+				if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
+					repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
+					err := h.ClientV5.DeleteRepository(ctx, projectName, repoName)
+					if err != nil {
+						h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
+					}
+				}
+			}
+		}
+	}
+}
+
+// ListRepositories .
+func (h *Harbor) ListRepositories(ctx context.Context, projectName string, pageNumber int64) []*harborclientv5model.Repository {
+	listRepositories, err := h.ClientV5.ListRepositories(ctx, projectName)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error listing harbor repositories for project %s", projectName))
+	}
+	return listRepositories
 }

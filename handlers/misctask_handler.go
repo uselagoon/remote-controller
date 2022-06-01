@@ -219,6 +219,7 @@ func (h *Messaging) ResticRestore(namespace string, jobSpec *lagoonv1beta1.Lagoo
 
 // IngressRouteMigration handles running the ingress migrations.
 func (h *Messaging) IngressRouteMigration(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+	// always set these to true for ingress migration tasks
 	jobSpec.AdvancedTask.DeployerToken = true
 	jobSpec.AdvancedTask.SSHKey = true
 	return createAdvancedTask(namespace, jobSpec, h)
@@ -226,7 +227,9 @@ func (h *Messaging) IngressRouteMigration(namespace string, jobSpec *lagoonv1bet
 
 // AdvancedTask handles running the ingress migrations.
 func (h *Messaging) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	jobSpec.AdvancedTask.SSHKey = true
+	if h.AdvancedTaskSSHKeyInjection {
+		jobSpec.AdvancedTask.SSHKey = true
+	}
 	return createAdvancedTask(namespace, jobSpec, h)
 }
 

@@ -46,17 +46,18 @@ import (
 )
 
 var (
-	scheme           = runtime.NewScheme()
-	setupLog         = ctrl.Log.WithName("setup")
-	lagoonAppID      string
-	lagoonTargetName string
-	mqUser           string
-	mqPass           string
-	mqHost           string
-	lagoonAPIHost    string
-	lagoonSSHHost    string
-	lagoonSSHPort    string
-	tlsSkipVerify    bool
+	scheme                      = runtime.NewScheme()
+	setupLog                    = ctrl.Log.WithName("setup")
+	lagoonAppID                 string
+	lagoonTargetName            string
+	mqUser                      string
+	mqPass                      string
+	mqHost                      string
+	lagoonAPIHost               string
+	lagoonSSHHost               string
+	lagoonSSHPort               string
+	tlsSkipVerify               bool
+	advancedTaskSSHKeyInjection bool
 )
 
 func init() {
@@ -258,6 +259,10 @@ func main() {
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
 
 	flag.BoolVar(&tlsSkipVerify, "skip-tls-verify", false, "Flag to skip tls verification for http clients (harbor).")
+
+	// default the sshkey injection to true for now, eventually Lagoon should handle this for tasks that require it
+	flag.BoolVar(&advancedTaskSSHKeyInjection, "advanced-task-sshkey-injection", true,
+		"Flag to specify injecting the sshkey for the environment into any advanced tasks.")
 
 	flag.IntVar(&nativeCronPodMinFrequency, "native-cron-pod-min-frequency", 15, "The number of lagoontask resources to keep per namespace.")
 
@@ -542,6 +547,7 @@ func main() {
 		controllerNamespace,
 		namespacePrefix,
 		randomPrefix,
+		advancedTaskSSHKeyInjection,
 		enableDebug,
 	)
 	c := cron.New()

@@ -37,27 +37,38 @@ type messaging interface {
 
 // Messaging is used for the config and client information for the messaging queue.
 type Messaging struct {
-	Config                  mq.Config
-	Client                  client.Client
-	ConnectionAttempts      int
-	ConnectionRetryInterval int
-	ControllerNamespace     string
-	NamespacePrefix         string
-	RandomNamespacePrefix   bool
-	EnableDebug             bool
+	Config                      mq.Config
+	Client                      client.Client
+	ConnectionAttempts          int
+	ConnectionRetryInterval     int
+	ControllerNamespace         string
+	NamespacePrefix             string
+	RandomNamespacePrefix       bool
+	AdvancedTaskSSHKeyInjection bool
+	EnableDebug                 bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
-func NewMessaging(config mq.Config, client client.Client, startupAttempts int, startupInterval int, controllerNamespace, namespacePrefix string, randomNamespacePrefix, enableDebug bool) *Messaging {
+func NewMessaging(config mq.Config,
+	client client.Client,
+	startupAttempts int,
+	startupInterval int,
+	controllerNamespace,
+	namespacePrefix string,
+	randomNamespacePrefix,
+	advancedTaskSSHKeyInjection bool,
+	enableDebug bool,
+) *Messaging {
 	return &Messaging{
-		Config:                  config,
-		Client:                  client,
-		ConnectionAttempts:      startupAttempts,
-		ConnectionRetryInterval: startupInterval,
-		ControllerNamespace:     controllerNamespace,
-		NamespacePrefix:         namespacePrefix,
-		RandomNamespacePrefix:   randomNamespacePrefix,
-		EnableDebug:             enableDebug,
+		Config:                      config,
+		Client:                      client,
+		ConnectionAttempts:          startupAttempts,
+		ConnectionRetryInterval:     startupInterval,
+		ControllerNamespace:         controllerNamespace,
+		NamespacePrefix:             namespacePrefix,
+		RandomNamespacePrefix:       randomNamespacePrefix,
+		AdvancedTaskSSHKeyInjection: advancedTaskSSHKeyInjection,
+		EnableDebug:                 enableDebug,
 	}
 }
 

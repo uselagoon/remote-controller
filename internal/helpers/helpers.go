@@ -226,7 +226,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	if len(pendingBuilds.Items) > 0 {
-		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		sort.Slice(pendingBuilds.Items, func(i, j int) bool {

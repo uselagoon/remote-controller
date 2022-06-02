@@ -28,6 +28,19 @@ var (
 	crdVersion string = "v1beta1"
 )
 
+const (
+	// NotOwnedByControllerMessage is used to describe an error where the controller was unable to start the build because
+	// the `lagoon.sh/controller` label does not match this controllers name
+	NotOwnedByControllerMessage = `Build was cancelled due to an issue with the build controller.
+This issue is related to the deployment system, not the repository or code base changes.
+Contact your Lagoon support team for help`
+	// MissingLabelsMessage is used to describe an error where the controller was unable to start the build because
+	// the `lagoon.sh/controller` label is missing
+	MissingLabelsMessage = `"Build was cancelled due to namespace configuration issue. A label or labels are missing on the namespace.
+This issue is related to the deployment system, not the repository or code base changes.
+Contact your Lagoon support team for help`
+)
+
 // updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
 func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
@@ -152,13 +165,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			if value != r.ControllerNamespace {
 				// if the namespace is deployed by a different controller, fail the build
 				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.ObjectMeta.Name))
-				r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Build was cancelled due to unexpected issue - contact your Lagoon support team for help", opLog, true)
+				r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
 				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
 			}
 		} else {
 			// if the label doesn't exist at all, fail the build
 			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Build was cancelled due to unexpected issue - contact your Lagoon support team for help", opLog, true)
+			r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
 			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
 		}
 	}
@@ -958,7 +971,9 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	if len(pendingBuilds.Items) > 0 {
-		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
+		}
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		sort.Slice(pendingBuilds.Items, func(i, j int) bool {

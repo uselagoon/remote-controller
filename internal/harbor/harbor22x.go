@@ -169,7 +169,6 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	}
 	tempRobots := robots[:0]
 	for _, robot := range robots {
-		h.Log.Info(fmt.Sprintf("Checking harbor robot account %s (matchv1: %v, editable: %v)", robot.Name, h.matchRobotAccount(robot.Name, project.Name, environmentName), robot.Editable))
 		if h.matchRobotAccount(robot.Name, project.Name, environmentName) && !robot.Editable {
 			// this is an old (legacy) robot account, get rid of it
 			// if accounts are disabled, and deletion of disabled accounts is enabled
@@ -191,7 +190,6 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	}
 	robots = tempRobots
 	for _, robot := range robots {
-		h.Log.Info(fmt.Sprintf("Checking harbor robot account %s (matchv2: %v, editable: %v)", robot.Name, h.matchRobotAccountV2(robot.Name, project.Name, environmentName), robot.Editable))
 		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
 			// if it is a new robot account, follow through here
 			exists = true

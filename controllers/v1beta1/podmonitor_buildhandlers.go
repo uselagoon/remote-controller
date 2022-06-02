@@ -532,7 +532,9 @@ Build %s
 			mergeMap["statusMessages"] = nil
 		}
 		mergePatch, _ := json.Marshal(mergeMap)
+		// check if the build exists
 		if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err == nil {
+			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
 			}

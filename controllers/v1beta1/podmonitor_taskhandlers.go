@@ -373,8 +373,12 @@ Task %s
 			mergeMap["statusMessages"] = nil
 		}
 		mergePatch, _ := json.Marshal(mergeMap)
-		if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+		// check if the task exists
+		if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err == nil {
+			// if it does, try to patch it
+			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+			}
 		}
 		// just delete the pod
 		if cancel {

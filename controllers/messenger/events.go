@@ -27,7 +27,7 @@ const (
 	lagoonRemval = "lagoon:removal"
 )
 
-func (h *Messaging) handleLagoonEvent(ctx context.Context, opLog logr.Logger, body []byte, event LagoonEvent) error {
+func (h *Messaging) handleLagoonEvent(ctx context.Context, opLog logr.Logger, body []byte) error {
 	// unmarshal the body of the message into a lagoonevent
 	lEvent := &LagoonEvent{}
 	err := json.Unmarshal(body, lEvent)

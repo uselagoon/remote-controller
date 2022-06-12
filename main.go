@@ -436,6 +436,16 @@ func main() {
 					"content_type":  "",
 				},
 			},
+			{
+				Name: "lagoon-controller",
+				Type: "direct",
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
+			},
 		},
 		Consumers: mq.Consumers{
 			{
@@ -557,17 +567,6 @@ func main() {
 			{
 				Name:       "lagoon-tasks:controller",
 				Exchange:   "lagoon-tasks",
-				RoutingKey: "controller",
-				Options: mq.Options{
-					"app_id":        lagoonAppID,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-			{
-				Name:       "lagoon-controller:controller",
-				Exchange:   "lagoon-controller",
 				RoutingKey: "controller",
 				Options: mq.Options{
 					"app_id":        lagoonAppID,

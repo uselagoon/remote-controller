@@ -439,6 +439,16 @@ func main() {
 		},
 		Consumers: mq.Consumers{
 			{
+				Name:    "controller-queue",
+				Queue:   fmt.Sprintf("lagoon-controller:%s", lagoonTargetName),
+				Workers: mqWorkers,
+				Options: mq.Options{
+					"durable":       true,
+					"delivery_mode": "2",
+					"headers":       "",
+					"content_type":  "",
+				},
+			}, {
 				Name:    "remove-queue",
 				Queue:   fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
 				Workers: mqWorkers,

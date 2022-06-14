@@ -47,6 +47,7 @@ type Messaging struct {
 	Harbor                           harbor.Harbor
 	CleanupHarborRepositoryOnDelete  bool
 	EnableDebug                      bool
+	EnableSingleQueue                bool
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
@@ -61,6 +62,7 @@ func NewMessaging(config mq.Config,
 	advancedTaskDeployTokenInjection bool,
 	harborConfig harbor.Harbor,
 	cleanupHarborOnDelete bool,
+	enableSingleQueue bool,
 	enableDebug bool,
 ) *Messaging {
 	return &Messaging{
@@ -75,6 +77,7 @@ func NewMessaging(config mq.Config,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		Harbor:                           harborConfig,
 		CleanupHarborRepositoryOnDelete:  cleanupHarborOnDelete,
+		EnableSingleQueue:                enableSingleQueue,
 		EnableDebug:                      enableDebug,
 	}
 }
@@ -123,22 +126,24 @@ func (h *Messaging) Consumer(targetName string) { //error {
 
 	forever := make(chan bool)
 
-	// Handle any tasks that go to the `builddeploy` queue
-	opLog.Info(fmt.Sprintf("Listening for lagoon-controller:%s", targetName))
-	err = messageQueue.SetConsumerHandler("controller-queue", func(message mq.Message) {
-		if err == nil {
-			if err := h.handleLagoonEvent(ctx, opLog, message.Body()); err != nil {
-				//@TODO: send msg back to lagoon and update task to failed?
-				message.Ack(false) // ack to remove from queue
-				return
+	// if this controller is set up for single queue only, then only start the single queue listener
+	if h.EnableSingleQueue {
+		// Handle any tasks that go to the `lagoon-controller` queue
+		opLog.Info(fmt.Sprintf("Listening for lagoon-controller:%s", targetName))
+		err = messageQueue.SetConsumerHandler("controller-queue", func(message mq.Message) {
+			if err == nil {
+				if err := h.handleLagoonEvent(ctx, opLog, message.Body()); err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			}
+			message.Ack(false) // ack to remove from queue
+		})
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
 		}
-		message.Ack(false) // ack to remove from queue
-	})
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
 	}
-
 	// Handle any tasks that go to the `builddeploy` queue
 	opLog.Info(fmt.Sprintf("Listening for lagoon-tasks:%s:builddeploy", targetName))
 	err = messageQueue.SetConsumerHandler("builddeploy-queue", func(message mq.Message) {

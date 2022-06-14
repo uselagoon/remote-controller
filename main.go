@@ -78,6 +78,7 @@ func main() {
 	var pendingMessageCron string
 	var mqWorkers int
 	var rabbitRetryInterval int
+	var enableSingleQueue bool
 	var startupConnectionAttempts int
 	var startupConnectionInterval int
 	var overrideBuildDeployImage string
@@ -171,6 +172,7 @@ func main() {
 		"The number of workers to start with.")
 	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
 		"The retry interval for rabbitmq.")
+	flag.BoolVar(&enableSingleQueue, "enable-single-queue", false, "Flag to have this controller use the single queue option.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
 	flag.StringVar(&pendingMessageCron, "pending-message-cron", "15,45 * * * *",
@@ -423,160 +425,169 @@ func main() {
 		os.Exit(1)
 	}
 
+	exchanges := mq.Exchanges{
+		{
+			Name: "lagoon-tasks",
+			Type: "direct",
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		},
+	}
+	consumers := mq.Consumers{
+		{
+			Name:    "remove-queue",
+			Queue:   fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
+			Workers: mqWorkers,
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:    "builddeploy-queue",
+			Queue:   fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
+			Workers: mqWorkers,
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:    "jobs-queue",
+			Queue:   fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
+			Workers: mqWorkers,
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:    "misc-queue",
+			Queue:   fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
+			Workers: mqWorkers,
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		},
+	}
+	queues := mq.Queues{
+		{
+			Name:       fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
+			Exchange:   "lagoon-tasks",
+			RoutingKey: fmt.Sprintf("%s:builddeploy", lagoonTargetName),
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:       fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
+			Exchange:   "lagoon-tasks",
+			RoutingKey: fmt.Sprintf("%s:remove", lagoonTargetName),
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:       fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
+			Exchange:   "lagoon-tasks",
+			RoutingKey: fmt.Sprintf("%s:jobs", lagoonTargetName),
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		}, {
+			Name:       fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
+			Exchange:   "lagoon-tasks",
+			RoutingKey: fmt.Sprintf("%s:misc", lagoonTargetName),
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		},
+	}
+	producers := mq.Producers{
+		{
+			Name:     "lagoon-logs",
+			Exchange: "lagoon-logs",
+			Options: mq.Options{
+				"app_id":        lagoonAppID,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		},
+		{
+			Name:       "lagoon-tasks:controller",
+			Exchange:   "lagoon-tasks",
+			RoutingKey: "controller",
+			Options: mq.Options{
+				"app_id":        lagoonAppID,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		},
+	}
+	if enableSingleQueue {
+		// if this controller is set up for single queue only, then add the configuration for the single queue
+		exchanges = append(exchanges, mq.ExchangeConfig{
+			Name: "lagoon-controller",
+			Type: "direct",
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		})
+		consumers = append(consumers, mq.ConsumerConfig{
+			Name:    "controller-queue",
+			Queue:   fmt.Sprintf("lagoon-controller:%s", lagoonTargetName),
+			Workers: mqWorkers,
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		})
+		queues = append(queues, mq.QueueConfig{
+			Name:       fmt.Sprintf("lagoon-controller:%s", lagoonTargetName),
+			Exchange:   "lagoon-controller",
+			RoutingKey: fmt.Sprintf("controller:%s", lagoonTargetName),
+			Options: mq.Options{
+				"durable":       true,
+				"delivery_mode": "2",
+				"headers":       "",
+				"content_type":  "",
+			},
+		})
+	}
 	config := mq.Config{
 		ReconnectDelay: time.Duration(rabbitRetryInterval) * time.Second,
-		Exchanges: mq.Exchanges{
-			{
-				Name: "lagoon-tasks",
-				Type: "direct",
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-			{
-				Name: "lagoon-controller",
-				Type: "direct",
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-		},
-		Consumers: mq.Consumers{
-			{
-				Name:    "controller-queue",
-				Queue:   fmt.Sprintf("lagoon-controller:%s", lagoonTargetName),
-				Workers: mqWorkers,
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:    "remove-queue",
-				Queue:   fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
-				Workers: mqWorkers,
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:    "builddeploy-queue",
-				Queue:   fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
-				Workers: mqWorkers,
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:    "jobs-queue",
-				Queue:   fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
-				Workers: mqWorkers,
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:    "misc-queue",
-				Queue:   fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
-				Workers: mqWorkers,
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-		},
-		Queues: mq.Queues{
-			{
-				Name:       fmt.Sprintf("lagoon-controller:%s", lagoonTargetName),
-				Exchange:   "lagoon-controller",
-				RoutingKey: fmt.Sprintf("controller:%s", lagoonTargetName),
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:       fmt.Sprintf("lagoon-tasks:%s:builddeploy", lagoonTargetName),
-				Exchange:   "lagoon-tasks",
-				RoutingKey: fmt.Sprintf("%s:builddeploy", lagoonTargetName),
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:       fmt.Sprintf("lagoon-tasks:%s:remove", lagoonTargetName),
-				Exchange:   "lagoon-tasks",
-				RoutingKey: fmt.Sprintf("%s:remove", lagoonTargetName),
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:       fmt.Sprintf("lagoon-tasks:%s:jobs", lagoonTargetName),
-				Exchange:   "lagoon-tasks",
-				RoutingKey: fmt.Sprintf("%s:jobs", lagoonTargetName),
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			}, {
-				Name:       fmt.Sprintf("lagoon-tasks:%s:misc", lagoonTargetName),
-				Exchange:   "lagoon-tasks",
-				RoutingKey: fmt.Sprintf("%s:misc", lagoonTargetName),
-				Options: mq.Options{
-					"durable":       true,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-		},
-		Producers: mq.Producers{
-			{
-				Name:     "lagoon-logs",
-				Exchange: "lagoon-logs",
-				Options: mq.Options{
-					"app_id":        lagoonAppID,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-			{
-				Name:       "lagoon-tasks:controller",
-				Exchange:   "lagoon-tasks",
-				RoutingKey: "controller",
-				Options: mq.Options{
-					"app_id":        lagoonAppID,
-					"delivery_mode": "2",
-					"headers":       "",
-					"content_type":  "",
-				},
-			},
-		},
-		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
+		Exchanges:      exchanges,
+		Consumers:      consumers,
+		Queues:         queues,
+		Producers:      producers,
+		DSN:            fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
 	}
 
 	harborURLParsed, _ := url.Parse(harborURL)
@@ -614,6 +625,7 @@ func main() {
 		advancedTaskDeployToken,
 		harborConfig,
 		cleanupHarborRepositoryOnDelete,
+		enableSingleQueue,
 		enableDebug,
 	)
 	c := cron.New()

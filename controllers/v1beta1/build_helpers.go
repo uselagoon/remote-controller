@@ -76,7 +76,7 @@ func (r *LagoonBuildReconciler) getOrCreateServiceAccount(ctx context.Context, s
 	}, serviceAccount)
 	if err != nil {
 		if err := r.Create(ctx, serviceAccount); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the lagoon-deployer servicea account. Error was: %v", err)
 		}
 	}
 	return nil
@@ -106,7 +106,7 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 	}, saRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, saRoleBinding); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the lagoon-deployer-admin role binding. Error was: %v", err)
 		}
 	}
 	return nil
@@ -150,7 +150,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 		if helpers.IgnoreNotFound(err) != nil {
-			return err
+			return fmt.Errorf("There was an error getting the namespace. Error was: %v", err)
 		}
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
@@ -179,7 +179,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if kubernetes, just create it if it doesn't exist
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 		if err := r.Create(ctx, namespace); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the namespace. Error was: %v", err)
 		}
 	}
 
@@ -192,10 +192,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		},
 	})
 	if err := r.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return err
+		return fmt.Errorf("There was an error patching the namespace. Error was: %v", err)
 	}
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		return err
+		return fmt.Errorf("There was an error getting the namespace. Error was: %v", err)
 	}
 
 	// if local/regional harbor is enabled
@@ -203,18 +203,18 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		// create the harbor client
 		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
 		if err != nil {
-			return err
+			return fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
 		// create the project in harbor
 		robotCreds := &helpers.RegistryCredentials{}
 		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("Error getting harbor version, check your harbor configuration. Error was: %v", err)
 		}
 		if lagoonHarbor.UseV2Functions(curVer) {
 			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error creating harbor project: %v", err)
 			}
 			// create or refresh the robot credentials
 			robotCreds, err = lagoonHarbor.CreateOrRefreshRobotV2(ctx,
@@ -224,12 +224,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				ns,
 				lagoonHarbor.RobotAccountExpiry)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error creating harbor robot account: %v", err)
 			}
 		} else {
 			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error creating harbor project: %v", err)
 			}
 			// create or refresh the robot credentials
 			robotCreds, err = lagoonHarbor.CreateOrRefreshRobot(ctx,
@@ -239,7 +239,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				ns,
 				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
 			if err != nil {
-				return err
+				return fmt.Errorf("Error creating harbor robot account: %v", err)
 			}
 		}
 		if robotCreds != nil {
@@ -250,7 +250,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				"lagoon-internal-registry-secret",
 				lagoonHarbor.Hostname,
 				robotCreds); err != nil {
-				return err
+				return fmt.Errorf("Error upserting harbor robot account secret: %v", err)
 			}
 		}
 	}
@@ -276,7 +276,7 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	}, sshKey)
 	if err != nil {
 		if err := r.Create(ctx, sshKey); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the lagoon-sshkey. Error was: %v", err)
 		}
 	}
 	// if the keys are different, then load in the new key from the spec
@@ -285,7 +285,7 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 			"ssh-privatekey": spec.Project.Key,
 		}
 		if err := r.Update(ctx, sshKey); err != nil {
-			return err
+			return fmt.Errorf("There was an error updating the lagoon-sshkey. Error was: %v", err)
 		}
 	}
 	return nil
@@ -317,7 +317,7 @@ func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Cont
 	}, viewRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, viewRoleBinding); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the deployer view role binding. Error was: %v", err)
 		}
 	}
 	imagePullRoleBinding := &rbacv1.RoleBinding{}
@@ -343,7 +343,7 @@ func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Cont
 	}, imagePullRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, imagePullRoleBinding); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the image puller role binding. Error was: %v", err)
 		}
 	}
 	defaultImagePullRoleBinding := &rbacv1.RoleBinding{}
@@ -369,7 +369,7 @@ func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Cont
 	}, defaultImagePullRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, defaultImagePullRoleBinding); err != nil {
-			return err
+			return fmt.Errorf("There was an error creating the image puller role binding. Error was: %v", err)
 		}
 	}
 	return nil
@@ -957,7 +957,7 @@ Build cancelled
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
 	if err != nil {
-		return err
+		return fmt.Errorf("There was an error deleting the lagoon build. Error was: %v", err)
 	}
 	return nil
 }
@@ -989,7 +989,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
-				return err
+				return fmt.Errorf("There was an error updating the pending build. Error was: %v", err)
 			}
 			var lagoonBuild lagoonv1beta1.LagoonBuild
 			if err := r.Get(ctx, types.NamespacedName{

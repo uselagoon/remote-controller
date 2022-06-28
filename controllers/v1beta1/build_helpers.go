@@ -765,6 +765,13 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.LFFDefaultRWX2RWO,
 		})
 	}
+	// add any LAGOON_FEATURE_FLAG_ variables in the controller into the build pods
+	for fName, fValue := range r.LagoonFeatureFlags {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  fName,
+			Value: fValue,
+		})
+	}
 	// Use the build image in the controller definition
 	buildImage := r.BuildImage
 	if lagoonBuild.Spec.Build.Image != "" {

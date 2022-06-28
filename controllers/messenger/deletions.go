@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"gopkg.in/matryer/try.v1"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -220,6 +221,49 @@ func (h *Messaging) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted daemonset %s in  %s for project %s, branch %s",
+				ds.ObjectMeta.Name,
+				ns,
+				project,
+				branch,
+			),
+		)
+	}
+	return true
+}
+
+// DeleteJobs will delete any jobs from the namespace.
+func (h *Messaging) DeleteJobs(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
+	jobs := &batchv1.JobList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+	})
+	if err := h.Client.List(ctx, jobs, listOption); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to list jobs in namespace %s for project %s, branch %s",
+				ns,
+				project,
+				branch,
+			),
+		)
+		return false
+	}
+	for _, ds := range jobs.Items {
+		if err := h.Client.Delete(ctx, &ds); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to delete jobs %s in %s for project %s, branch %s",
+					ds.ObjectMeta.Name,
+					ns,
+					project,
+					branch,
+				),
+			)
+			return false
+		}
+		opLog.Info(
+			fmt.Sprintf(
+				"Deleted jobs %s in  %s for project %s, branch %s",
 				ds.ObjectMeta.Name,
 				ns,
 				project,

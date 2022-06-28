@@ -283,6 +283,10 @@ func (h *Messaging) Consumer(targetName string) { //error {
 						message.Ack(false) // ack to remove from queue
 						return
 					}
+					if del := h.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), ns, project, branch); del == false {
+						message.Ack(false) // ack to remove from queue
+						return
+					}
 					if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
 						message.Ack(false) // ack to remove from queue
 						return

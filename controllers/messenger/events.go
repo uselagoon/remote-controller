@@ -325,6 +325,9 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 			if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
 				return nil
 			}
+			if del := h.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), ns, project, branch); del == false {
+				return nil
+			}
 			if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
 				return nil
 			}

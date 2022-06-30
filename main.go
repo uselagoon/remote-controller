@@ -710,6 +710,11 @@ func main() {
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
 		LagoonFeatureFlags:               helpers.GetLagoonFeatureFlags(),
+		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
+			APIHost: lagoonAPIHost,
+			SSHHost: lagoonSSHHost,
+			SSHPort: lagoonSSHPort,
+		},
 		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
 			HTTPProxy:  httpProxy,
 			HTTPSProxy: httpsProxy,
@@ -741,7 +746,7 @@ func main() {
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
-		TaskSettings: lagoonv1beta1ctrl.LagoonTaskSettings{
+		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
 			APIHost: lagoonAPIHost,
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,

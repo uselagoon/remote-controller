@@ -73,6 +73,7 @@ type LagoonBuildReconciler struct {
 	NativeCronPodMinFrequency        int
 	LagoonTargetName                 string
 	LagoonFeatureFlags               map[string]string
+	LagoonAPIConfiguration           LagoonAPIConfiguration
 	ProxyConfig                      ProxyConfig
 }
 

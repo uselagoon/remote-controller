@@ -240,11 +240,11 @@ func (h *Messaging) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1
 	if err != nil {
 		return fmt.Errorf("Unable to unmarshal json payload: %v", err)
 	}
-	ctx := context.Background()
-	if err := h.createActiveStandbyRole(ctx, asPayload.SourceNamespace, asPayload.DestinationNamespace); err != nil {
-		return err
-	}
-	return h.createAdvancedTask(namespace, jobSpec, map[string]string{"lagoon.sh/activeStandby": "true"})
+	return h.createAdvancedTask(namespace, jobSpec, map[string]string{
+		"lagoon.sh/activeStandby":                     "true",
+		"lagoon.sh/activeStandbyDestinationNamespace": asPayload.DestinationNamespace,
+		"lagoon.sh/activeStandbySourceNamespace":      asPayload.SourceNamespace,
+	})
 }
 
 // AdvancedTask handles running the ingress migrations.

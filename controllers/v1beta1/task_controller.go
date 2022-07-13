@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
@@ -89,7 +90,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// The object is being deleted
 		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&lagoonTask, req.NamespacedName.Namespace); err != nil {
+			if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err
@@ -121,7 +122,7 @@ func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonTaskReconciler) deleteExternalResources(lagoonTask *lagoonv1beta1.LagoonTask, namespace string) error {
+func (r *LagoonTaskReconciler) deleteExternalResources(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, namespace string) error {
 	// delete any external resources if required
 	return nil
 }
@@ -353,6 +354,29 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 // see notes in the docs for infomration about advanced tasks
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
 	serviceAccount := &corev1.ServiceAccount{}
+
+	additionalLabels := map[string]string{}
+	// check if this is an activestandby task, if it is, create the activestandby role
+	if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandby"]; ok {
+		isActiveStandby, _ := strconv.ParseBool(value)
+		if isActiveStandby {
+			var sourceNamespace, destinationNamespace string
+			if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandbySourceNamespace"]; ok {
+				sourceNamespace = value
+			}
+			if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
+				destinationNamespace = value
+			}
+			err := r.createActiveStandbyRole(ctx, sourceNamespace, destinationNamespace)
+			if err != nil {
+				return err
+			}
+			additionalLabels["lagoon.sh/activeStandby"] = "true"
+			additionalLabels["lagoon.sh/activeStandbySourceNamespace"] = sourceNamespace
+			additionalLabels["lagoon.sh/activeStandbyDestinationNamespace"] = destinationNamespace
+		}
+	}
+
 	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
 	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
 	if err != nil {
@@ -477,6 +501,10 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 				},
 			},
 		},
+	}
+	// add additional labels if required
+	for key, value := range additionalLabels {
+		newPod.ObjectMeta.Labels[key] = value
 	}
 	token, err := r.getDeployerToken(ctx, lagoonTask)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/uselagoon/remote-controller/internal/helpers"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,23 +36,6 @@ func (h *Messaging) createActiveStandbyRole(ctx context.Context, sourceNamespace
 		if err := h.Client.Create(ctx, activeStandbyRoleBinding); err != nil {
 			return fmt.Errorf("There was an error creating the lagoon-deployer-activestandby role binding. Error was: %v", err)
 		}
-	}
-	return nil
-}
-
-// deleteActiveStandbyRole
-func (h *Messaging) deleteActiveStandbyRole(ctx context.Context, sourceNamespace string) error {
-	activeStandbyRoleBinding := &rbacv1.RoleBinding{}
-	err := h.Client.Get(ctx, types.NamespacedName{
-		Namespace: sourceNamespace,
-		Name:      "lagoon-deployer-activestandby",
-	}, activeStandbyRoleBinding)
-	if err != nil {
-		helpers.IgnoreNotFound(err)
-	}
-	err = h.Client.Delete(ctx, activeStandbyRoleBinding)
-	if err != nil {
-		return fmt.Errorf("Unable to delete lagoon-deployer-activestandby role binding")
 	}
 	return nil
 }

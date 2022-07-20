@@ -57,6 +57,7 @@ type Harbor struct {
 	RandomNamespacePrefix bool
 	WebhookURL            string
 	WebhookEventTypes     []string
+	LagoonTargetName      string
 	Config                *config.Options
 }
 
@@ -228,7 +229,7 @@ func (h *Harbor) matchRobotAccount(robotName string,
 	environmentName string,
 ) bool {
 	// pre global-robot-accounts (2.2.0+)
-	if robotName == h.addPrefix(environmentName) {
+	if robotName == h.addPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])) {
 		return true
 	}
 	return false
@@ -239,7 +240,7 @@ func (h *Harbor) matchRobotAccountV2(robotName string,
 	projectName string,
 	environmentName string,
 ) bool {
-	if robotName == h.addPrefix(fmt.Sprintf("%s+%s", projectName, environmentName)) {
+	if robotName == h.addPrefixV2(projectName, environmentName) {
 		return true
 	}
 	return false

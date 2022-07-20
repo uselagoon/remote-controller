@@ -24,7 +24,7 @@ spec:
             contact: '1234'
             statuspageID: '1234'
         variables:
-            project: W10=
+            project: W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==
             environment: W10=
         registry: 172.17.0.1:5000
     branch:

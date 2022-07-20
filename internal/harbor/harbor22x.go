@@ -18,7 +18,7 @@ import (
 // addPrefix adds the robot account prefix to robot accounts
 // @TODO: Harbor 2.2.0 changes this behavior, see note below in `matchRobotAccount`
 func (h *Harbor) addPrefixV2(projectName, environmentName string) string {
-	return fmt.Sprintf("%s%s+%s", h.RobotPrefix, projectName, environmentName)
+	return fmt.Sprintf("%s%s+%s-%s", h.RobotPrefix, projectName, environmentName, helpers.HashString(h.LagoonTargetName)[0:8])
 }
 
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
@@ -130,6 +130,10 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	environmentName, namespace string,
 	expiry time.Duration,
 ) (*helpers.RegistryCredentials, error) {
+
+	// create a cluster specific robot account name
+	robotName := fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])
+
 	expiryDays := int64(math.Ceil(expiry.Hours() / 24))
 	robots, err := h.ClientV5.ListProjectRobotsV1(
 		ctx,
@@ -263,7 +267,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		// create a new robot account
 		robotf := harborclientv5model.RobotCreate{
 			Level:    "project",
-			Name:     environmentName,
+			Name:     robotName,
 			Duration: expiryDays,
 			Permissions: []*harborclientv5model.RobotPermission{
 				{
@@ -282,7 +286,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				},
 			},
 			Disable:     false,
-			Description: "222",
+			Description: fmt.Sprintf("Robot account created in %s", h.LagoonTargetName),
 		}
 		token, err := h.ClientV5.NewRobotAccount(ctx, &robotf)
 		if err != nil {

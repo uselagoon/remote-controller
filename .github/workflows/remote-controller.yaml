@@ -20,6 +20,11 @@ jobs:
         harbor: ["1.5.6", "1.9.0"]
         lagoon_build_image: ["uselagoon/kubectl-build-deploy-dind:latest"]
         experimental: [false]
+        include:
+          - kindest_node_version: v1.24.0
+            harbor: "1.9.0"
+            lagoon_build_image: "uselagoon/kubectl-build-deploy-dind:latest"
+            experimental: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2

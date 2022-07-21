@@ -1,0 +1,7 @@
+apiVersion: lagoon.amazee.io/v1alpha1
+kind: LagoonBuild
+metadata:
+  name: lagoonbuild-sample
+spec:
+  # Add fields here
+  foo: bar

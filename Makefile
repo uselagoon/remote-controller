@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
+CRD_OPTIONS ?= "crd:trivialVersions=false"
 
 CONTROLLER_NAMESPACE ?= lagoon-builddeploy
 
@@ -30,6 +30,9 @@ run: generate fmt vet manifests
 # Install CRDs into a cluster
 install: manifests
 	kustomize build config/crd | kubectl apply -f -
+
+outputcrds: manifests
+	kustomize build config/crd
 
 # Uninstall CRDs from a cluster
 uninstall: manifests

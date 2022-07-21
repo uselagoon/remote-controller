@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/lagoon.amazee.io_lagoonbuilds.yaml
-- bases/lagoon.amazee.io_lagoontasks.yaml
+- bases/crd.lagoon.sh_lagoonbuilds.yaml
+- bases/crd.lagoon.sh_lagoontasks.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
@@ -12,6 +12,9 @@ patchesStrategicMerge:
 #- patches/webhook_in_lagoonbuilds.yaml
 #- patches/webhook_in_lagoontasks.yaml
 # +kubebuilder:scaffold:crdkustomizewebhookpatch
+
+patchesJson6902:
+# - patches/deprecation_lagoon.amazee.io_lagoontasks.yaml
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD

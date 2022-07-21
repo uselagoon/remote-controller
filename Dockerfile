@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.16-alpine3.13 as builder
+FROM golang:1.17-alpine3.15 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -11,9 +11,9 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
-COPY api/ api/
+COPY apis/ apis/
 COPY controllers/ controllers/
-COPY handlers/ handlers/
+COPY internal/ internal/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go

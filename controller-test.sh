@@ -156,7 +156,7 @@ helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
-    --set dockerHost.registry=harbor.172.17.0.1.nip.io:32080 \
+    --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
     --set dockerHost.storage.size=50Gi \
     --set dioscuri.enabled=false \
     --set dbaas-operator.enabled=false

@@ -169,6 +169,8 @@ else
     # kubectl -n lagoon get pods
     # kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
     # kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
+    kubectl describe pods --namespace=lagoon --selector=app.kubernetes.io/name=lagoon-remote
+    kubectl logs --tail=80 --namespace=lagoon --prefix --timestamps --all-containers --selector=app.kubernetes.io/name=lagoon-remote
     check_controller_log
     tear_down
     echo "================ END ================"

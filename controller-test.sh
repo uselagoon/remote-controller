@@ -80,8 +80,8 @@ install_path_provisioner () {
 
 build_deploy_controller () {
     echo "==> Build and deploy controller"
-    make test
-    make docker-build IMG=${CONTROLLER_IMAGE}
+    # make test
+    # make docker-build IMG=${CONTROLLER_IMAGE}
     make install
 
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
@@ -149,7 +149,7 @@ echo "==> Install helm-git plugin"
 helm plugin install https://github.com/aslafy-z/helm-git 
 
 echo "==> Install lagoon-remote docker-host"
-helm repo add lagoon-remote git+https://github.com/uselagoon/lagoon-charts@charts/lagoon-remote?ref=k8s_122
+helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
@@ -234,7 +234,6 @@ echo '
         \"spec\": {
             \"build\": {
                 \"ci\": \"true\",
-                \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
                 \"type\": \"branch\"
             },
             \"gitReference\": \"origin\/main\",

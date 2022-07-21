@@ -11,19 +11,15 @@ on:
 
 jobs:
   test-suite:
-    strategy:
-      matrix:
-        harbor: ["1.5.6", "1.6.4","1.7.5" ,"1.8.2","1.9.0"]
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         kindest_node_version: [v1.21.1, v1.22.0]
+        harbor: ["1.5.6", "1.9.0"]
+        lagoon_build_image: ["uselagoon/kubectl-build-deploy-dind:latest"]
         experimental: [false]
-        include:
-          - kindest_node_version: v1.23.0
-            experimental: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -35,22 +31,15 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: '1.17'
-    - name: Install kustomize, kubebuilder, helm, docker-compose, kind
+    - name: Install kubebuilder
       run: |
-        #kustomize
-        curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
-        sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
         curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
         sudo mkdir -p /usr/local/kubebuilder/bin
         sudo mv /tmp/kubebuilder_2.3.2_linux_amd64/bin/* /usr/local/kubebuilder/bin
         chmod +x /usr/local/kubebuilder/bin/*
         echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
-        #helm
-        curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
-        sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
-        chmod +x /usr/local/bin/helm
-    - name: Check go, kustomize, kubebuilder, helm, docker-compose, kind versions
+    - name: Check go, kustomize, kubebuilder, helm, kind versions
       run: |
         go version
         kustomize version
@@ -75,6 +64,7 @@ jobs:
         export PATH=$PATH:/usr/local/kubebuilder/bin
         export PATH=$PATH:/usr/local/go/bin
         export GOPATH=$HOME/go
+        export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}"
         export HARBOR_VERSION=${{matrix.harbor}}
         # export GO111MODULE=on
         make controller-test

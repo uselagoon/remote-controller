@@ -123,9 +123,13 @@ func (h *Harbor) CreateProject(ctx context.Context, projectName string) (*harbor
 func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	k8s client.Client,
 	project *harborclientv3model.Project,
-	robotName, namespace string,
+	environmentName, namespace string,
 	expiry int64,
 ) (*helpers.RegistryCredentials, error) {
+
+	// create a cluster specific robot account name
+	robotName := fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])
+
 	robots, err := h.ClientV3.ListProjectRobots(
 		ctx,
 		project,
@@ -163,7 +167,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 		}
 	}
 	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, project.Name, robotName) {
+		if h.matchRobotAccount(robot.Name, project.Name, environmentName) {
 			exists = true
 			if forceRecreate {
 				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
@@ -237,8 +241,9 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 			ctx,
 			project,
 			&harborclientv3legacy.RobotAccountCreate{
-				Name:      robotName,
-				ExpiresAt: expiry,
+				Name:        robotName,
+				Description: fmt.Sprintf("Robot account created in %s", h.LagoonTargetName),
+				ExpiresAt:   expiry,
 				Access: []*harborclientv3legacy.RobotAccountAccess{
 					{Action: "push", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},
 					{Action: "pull", Resource: fmt.Sprintf("/project/%d/repository", project.ProjectID)},

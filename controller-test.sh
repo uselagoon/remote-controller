@@ -38,7 +38,7 @@ tear_down () {
     kubectl get ingress --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
-    echo "==> Get remote logs"
+    echo "==> Get remote logs (docker-host)"
     kubectl describe pods --namespace=lagoon --selector=app.kubernetes.io/name=lagoon-remote
     kubectl logs --tail=80 --namespace=lagoon --prefix --timestamps --all-containers --selector=app.kubernetes.io/name=lagoon-remote
     echo "==> Remove cluster"
@@ -52,8 +52,6 @@ start_docker_compose_services () {
     echo "==> Bring up local provider"
     docker-compose up -d
     CHECK_COUNTER=1
-    # echo "==> Ensure mariadb database provider is running"
-    # mariadb_start_check
 }
 
 mariadb_start_check () {
@@ -82,9 +80,7 @@ install_path_provisioner () {
 }
 
 build_deploy_controller () {
-    echo "==> Build and deploy controller"
-    # make test
-    # make docker-build IMG=${CONTROLLER_IMAGE}
+    echo "==> Install CRDs and deploy controller"
     make install
 
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
@@ -172,9 +168,6 @@ if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     sleep 5
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
-    # kubectl -n lagoon get pods
-    # kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
-    # kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
     check_controller_log
     tear_down
     echo "================ END ================"

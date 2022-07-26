@@ -4,3 +4,6 @@ controller:
     nodePorts:
       http: 32080
       https: 32443
+  watchIngressWithoutClass: true
+  ingressClassResource:
+    default: true

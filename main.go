@@ -570,6 +570,7 @@ func main() {
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		WebhookURL:            harborLagoonWebhook,
+		LagoonTargetName:      lagoonTargetName,
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 

@@ -147,6 +147,7 @@ install_path_provisioner
 echo "==> Install helm-git plugin"
 helm plugin install https://github.com/aslafy-z/helm-git 
 
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
 
 echo "===> Install Ingress-Nginx"
 kubectl create namespace ingress-nginx
@@ -166,16 +167,19 @@ fi
 echo "===> Install Harbor"
 kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}" \
+    --set externalURL=http://harbor.${NODE_IP}.nip.io:32080 \
+    --set expose.ingress.hosts.core=harbor.${NODE_IP}.nip.io
 
 sleep 90
 
 echo "==> Install lagoon-remote docker-host"
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
+
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
-    --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
+    --set dockerHost.registry=http://harbor.${NODE_IP}.nip.io:32080 \
     --set dockerHost.storage.size=5Gi \
     --set dioscuri.enabled=false \
     --set dbaas-operator.enabled=false

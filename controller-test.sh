@@ -168,6 +168,8 @@ kubectl create namespace harbor
 helm repo add harbor https://helm.goharbor.io
 helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
 
+sleep 90
+
 echo "==> Install lagoon-remote docker-host"
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry

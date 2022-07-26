@@ -510,6 +510,20 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "NATIVE_CRON_POD_MINIMUM_FREQUENCY",
 			Value: strconv.Itoa(r.NativeCronPodMinFrequency),
 		},
+		// add the API and SSH endpoint configuration to environments
+		{
+			Name:  "LAGOON_CONFIG_API_HOST",
+			Value: r.LagoonAPIConfiguration.APIHost,
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_HOST",
+			Value: r.LagoonAPIConfiguration.SSHHost,
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_PORT",
+			Value: r.LagoonAPIConfiguration.SSHPort,
+		},
+		// in the future, the SSH_HOST and SSH_PORT could also have regional variants
 	}
 	// add proxy variables to builds if they are defined
 	if r.ProxyConfig.HTTPProxy != "" {
@@ -763,6 +777,13 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name:  "LAGOON_FEATURE_FLAG_DEFAULT_RWX_TO_RWO",
 			Value: r.LFFDefaultRWX2RWO,
+		})
+	}
+	// add any LAGOON_FEATURE_FLAG_ variables in the controller into the build pods
+	for fName, fValue := range r.LagoonFeatureFlags {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  fName,
+			Value: fValue,
 		})
 	}
 	// Use the build image in the controller definition

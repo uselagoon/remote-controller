@@ -38,6 +38,9 @@ tear_down () {
     kubectl get ingress --all-namespaces
     echo "==> Get pods"
     kubectl get pods --all-namespaces
+    echo "==> Get remote logs (docker-host)"
+    kubectl describe pods --namespace=lagoon --selector=app.kubernetes.io/name=lagoon-remote
+    kubectl logs --tail=80 --namespace=lagoon --prefix --timestamps --all-containers --selector=app.kubernetes.io/name=lagoon-remote
     echo "==> Remove cluster"
     kind delete cluster --name ${KIND_NAME}
     echo "==> Remove services"
@@ -49,8 +52,6 @@ start_docker_compose_services () {
     echo "==> Bring up local provider"
     docker-compose up -d
     CHECK_COUNTER=1
-    # echo "==> Ensure mariadb database provider is running"
-    # mariadb_start_check
 }
 
 mariadb_start_check () {
@@ -79,9 +80,7 @@ install_path_provisioner () {
 }
 
 build_deploy_controller () {
-    echo "==> Build and deploy controller"
-    make test
-    make docker-build IMG=${CONTROLLER_IMAGE}
+    echo "==> Install CRDs and deploy controller"
     make install
 
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
@@ -145,13 +144,20 @@ check_lagoon_build () {
 start_docker_compose_services
 install_path_provisioner
 
+echo "==> Install helm-git plugin"
+helm plugin install https://github.com/aslafy-z/helm-git 
+
 echo "==> Install lagoon-remote docker-host"
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
-    --set dioscuri.enabled=false
+    --set dockerHost.storage.size=10Gi \
+    --set dockerHost.extraEnvs[0].name=DOCKER_TLS_VERIFY \
+    --set dockerHost.extraEnvs[0].value=1 \
+    --set dioscuri.enabled=false \
+    --set dbaas-operator.enabled=false
 CHECK_COUNTER=1
 echo "===> Ensure docker-host is running"
 until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') --no-headers | grep -q "Running")
@@ -162,9 +168,6 @@ if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     sleep 5
 else
     echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
-    # kubectl -n lagoon get pods
-    # kubectl -n lagoon logs -f $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}')
-    # kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') -o yaml
     check_controller_log
     tear_down
     echo "================ END ================"
@@ -177,11 +180,11 @@ echo "===> Docker-host is running"
 echo "===> Install Ingress-Nginx"
 kubectl create namespace ingress-nginx
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
 NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
 if [ $NUM_PODS -ne 1 ]; then
     echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 3.31.0
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
     kubectl get pods --all-namespaces
     echo "Wait for ingress-nginx to become ready"
     sleep 120
@@ -230,7 +233,6 @@ echo '
         \"spec\": {
             \"build\": {
                 \"ci\": \"true\",
-                \"image\": \"uselagoon\/kubectl-build-deploy-dind:latest\",
                 \"type\": \"branch\"
             },
             \"gitReference\": \"origin\/main\",
@@ -251,7 +253,7 @@ echo '
                 \"statuspageID\": \"1234\"
             },
             \"variables\": {
-                \"project\": \"W10=\",
+                \"project\": \"W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==\",
                 \"environment\": \"W10=\"
             },
             \"registry\": \"172.17.0.1:5000\"

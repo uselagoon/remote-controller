@@ -21,3 +21,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: overrides
+                  key: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE

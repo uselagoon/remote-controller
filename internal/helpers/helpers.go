@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math/rand"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -226,7 +227,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	if len(pendingBuilds.Items) > 0 {
-		opLog.Info(fmt.Sprintf("There are %v Pending builds", len(pendingBuilds.Items)))
+		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
@@ -295,4 +296,47 @@ func ShortenEnvironment(project, environment string) string {
 		environment = fmt.Sprintf("%s-%s", environment[0:overlength-5], HashString(environment)[0:4])
 	}
 	return environment
+}
+
+// GetLagoonFeatureFlags pull all the environment variables and check if there are any with the flag prefix
+func GetLagoonFeatureFlags() map[string]string {
+	flags := make(map[string]string)
+	for _, envVar := range os.Environ() {
+		envVarSplit := strings.SplitN(envVar, "=", 2)
+		// if the variable name contains the flag prefix, add it to the map
+		if strings.Contains(envVarSplit[0], "LAGOON_FEATURE_FLAG_") {
+			flags[envVarSplit[0]] = envVarSplit[1]
+		}
+	}
+	return flags
+}
+
+// GetEnv get environment variable
+func GetEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
+// GetEnvInt get environment variable as int
+func GetEnvInt(key string, fallback int) int {
+	if value, ok := os.LookupEnv(key); ok {
+		valueInt, e := strconv.Atoi(value)
+		if e == nil {
+			return valueInt
+		}
+	}
+	return fallback
+}
+
+// GetEnvBool get environment variable as bool
+// accepts fallback values 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False
+// anything else is false.
+func GetEnvBool(key string, fallback bool) bool {
+	if value, ok := os.LookupEnv(key); ok {
+		rVal, _ := strconv.ParseBool(value)
+		return rVal
+	}
+	return fallback
 }

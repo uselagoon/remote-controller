@@ -41,19 +41,19 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log                   logr.Logger
-	Scheme                *runtime.Scheme
-	ControllerNamespace   string
-	NamespacePrefix       string
-	RandomNamespacePrefix bool
-	TaskSettings          LagoonTaskSettings
-	EnableDebug           bool
-	LagoonTargetName      string
-	ProxyConfig           ProxyConfig
+	Log                    logr.Logger
+	Scheme                 *runtime.Scheme
+	ControllerNamespace    string
+	NamespacePrefix        string
+	RandomNamespacePrefix  bool
+	LagoonAPIConfiguration LagoonAPIConfiguration
+	EnableDebug            bool
+	LagoonTargetName       string
+	ProxyConfig            ProxyConfig
 }
 
-// LagoonTaskSettings is for the settings for task API/SSH host/ports
-type LagoonTaskSettings struct {
+// LagoonAPIConfiguration is for the settings for task API/SSH host/ports
+type LagoonAPIConfiguration struct {
 	APIHost string
 	SSHHost string
 	SSHPort string
@@ -151,6 +151,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				hasService = true
 				// grab the container
 				for idx, depCon := range dep.Spec.Template.Spec.Containers {
+					// --- deprecate these at some point in favor of the `LAGOON_CONFIG_X` variants
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_API_HOST",
 						Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
@@ -163,6 +164,21 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						Name:  "TASK_SSH_PORT",
 						Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
 					})
+					// ^^ ---
+					// add the API and SSH endpoint configuration to environments
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "LAGOON_CONFIG_API_HOST",
+						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_API_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "LAGOON_CONFIG_SSH_HOST",
+						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_SSH_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "LAGOON_CONFIG_SSH_PORT",
+						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_SSH_PORT"),
+					})
+					// in the future, the SSH_HOST and SSH_PORT could also have regional variants
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
@@ -521,17 +537,32 @@ func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1beta1.LagoonTask
 	switch value {
 	case "TASK_API_HOST":
 		if lagoonTask.Spec.Task.APIHost == "" {
-			return r.TaskSettings.APIHost
+			return r.LagoonAPIConfiguration.APIHost
 		}
 		return lagoonTask.Spec.Task.APIHost
 	case "TASK_SSH_HOST":
 		if lagoonTask.Spec.Task.SSHHost == "" {
-			return r.TaskSettings.SSHHost
+			return r.LagoonAPIConfiguration.SSHHost
 		}
 		return lagoonTask.Spec.Task.SSHHost
 	case "TASK_SSH_PORT":
 		if lagoonTask.Spec.Task.SSHPort == "" {
-			return r.TaskSettings.SSHPort
+			return r.LagoonAPIConfiguration.SSHPort
+		}
+		return lagoonTask.Spec.Task.SSHPort
+	case "LAGOON_CONFIG_API_HOST":
+		if lagoonTask.Spec.Task.APIHost == "" {
+			return r.LagoonAPIConfiguration.APIHost
+		}
+		return lagoonTask.Spec.Task.APIHost
+	case "LAGOON_CONFIG_SSH_HOST":
+		if lagoonTask.Spec.Task.SSHHost == "" {
+			return r.LagoonAPIConfiguration.SSHHost
+		}
+		return lagoonTask.Spec.Task.SSHHost
+	case "LAGOON_CONFIG_SSH_PORT":
+		if lagoonTask.Spec.Task.SSHPort == "" {
+			return r.LagoonAPIConfiguration.SSHPort
 		}
 		return lagoonTask.Spec.Task.SSHPort
 	}

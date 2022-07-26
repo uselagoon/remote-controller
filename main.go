@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/uselagoon/remote-controller/internal/harbor"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	"gopkg.in/robfig/cron.v2"
@@ -326,14 +326,14 @@ func main() {
 	flag.Parse()
 
 	// get overrides from environment variables
-	mqUser = getEnv("RABBITMQ_USERNAME", mqUser)
-	mqPass = getEnv("RABBITMQ_PASSWORD", mqPass)
-	mqHost = getEnv("RABBITMQ_HOSTNAME", mqHost)
-	lagoonTargetName = getEnv("LAGOON_TARGET_NAME", lagoonTargetName)
-	lagoonAppID = getEnv("LAGOON_APP_ID", lagoonAppID)
-	pendingMessageCron = getEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
-	overrideBuildDeployImage = getEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
-	namespacePrefix = getEnv("NAMESPACE_PREFIX", namespacePrefix)
+	mqUser = helpers.GetEnv("RABBITMQ_USERNAME", mqUser)
+	mqPass = helpers.GetEnv("RABBITMQ_PASSWORD", mqPass)
+	mqHost = helpers.GetEnv("RABBITMQ_HOSTNAME", mqHost)
+	lagoonTargetName = helpers.GetEnv("LAGOON_TARGET_NAME", lagoonTargetName)
+	lagoonAppID = helpers.GetEnv("LAGOON_APP_ID", lagoonAppID)
+	pendingMessageCron = helpers.GetEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
+	overrideBuildDeployImage = helpers.GetEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
+	namespacePrefix = helpers.GetEnv("NAMESPACE_PREFIX", namespacePrefix)
 	if len(namespacePrefix) > 8 {
 		// truncate the namespace prefix to 8 characters so that a really long prefix
 		// does not become a problem, and namespaces are still somewhat identifiable.
@@ -345,30 +345,30 @@ func main() {
 	// this is also used by the controller as the namespace that resources will be created in initially when received by the queue
 	// this can be defined using `valueFrom.fieldRef.fieldPath: metadata.namespace` in any deployments to get the
 	// namespace from where the controller is running
-	controllerNamespace = getEnv("CONTROLLER_NAMESPACE", controllerNamespace)
+	controllerNamespace = helpers.GetEnv("CONTROLLER_NAMESPACE", controllerNamespace)
 	if controllerNamespace == "" {
 		setupLog.Error(fmt.Errorf("controller-namespace is empty"), "unable to start manager")
 		os.Exit(1)
 	}
-	lagoonAPIHost = getEnv("TASK_API_HOST", lagoonAPIHost)
-	lagoonSSHHost = getEnv("TASK_SSH_HOST", lagoonSSHHost)
-	lagoonSSHPort = getEnv("TASK_SSH_PORT", lagoonSSHPort)
+	lagoonAPIHost = helpers.GetEnv("TASK_API_HOST", lagoonAPIHost)
+	lagoonSSHHost = helpers.GetEnv("TASK_SSH_HOST", lagoonSSHHost)
+	lagoonSSHPort = helpers.GetEnv("TASK_SSH_PORT", lagoonSSHPort)
 
-	nativeCronPodMinFrequency = getEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
+	nativeCronPodMinFrequency = helpers.GetEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
 
 	// harbor envvars
-	harborURL = getEnv("HARBOR_URL", harborURL)
-	harborAPI = getEnv("HARBOR_API", harborAPI)
-	harborUsername = getEnv("HARBOR_USERNAME", harborUsername)
-	harborPassword = getEnv("HARBOR_PASSWORD", harborPassword)
-	harborRobotPrefix = getEnv("HARBOR_ROBOT_PREFIX", harborRobotPrefix)
-	harborWebhookAdditionEnabled = getEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
-	harborLagoonWebhook = getEnv("HARBOR_LAGOON_WEBHOOK", harborLagoonWebhook)
-	harborWebhookEventTypes = getEnv("HARBOR_WEBHOOK_EVENTTYPES", harborWebhookEventTypes)
-	harborRobotDeleteDisabled = getEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
-	harborExpiryInterval = getEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
-	harborRotateInterval = getEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
-	harborRobotAccountExpiry = getEnv("HARBOR_ROTATE_ACCOUNT_EXPIRY", harborRobotAccountExpiry)
+	harborURL = helpers.GetEnv("HARBOR_URL", harborURL)
+	harborAPI = helpers.GetEnv("HARBOR_API", harborAPI)
+	harborUsername = helpers.GetEnv("HARBOR_USERNAME", harborUsername)
+	harborPassword = helpers.GetEnv("HARBOR_PASSWORD", harborPassword)
+	harborRobotPrefix = helpers.GetEnv("HARBOR_ROBOT_PREFIX", harborRobotPrefix)
+	harborWebhookAdditionEnabled = helpers.GetEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
+	harborLagoonWebhook = helpers.GetEnv("HARBOR_LAGOON_WEBHOOK", harborLagoonWebhook)
+	harborWebhookEventTypes = helpers.GetEnv("HARBOR_WEBHOOK_EVENTTYPES", harborWebhookEventTypes)
+	harborRobotDeleteDisabled = helpers.GetEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
+	harborExpiryInterval = helpers.GetEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
+	harborRotateInterval = helpers.GetEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
+	harborRobotAccountExpiry = helpers.GetEnv("HARBOR_ROTATE_ACCOUNT_EXPIRY", harborRobotAccountExpiry)
 	harborExpiryIntervalDuration := 2 * 24 * time.Hour
 	harborRotateIntervalDuration := 30 * 24 * time.Hour
 	harborRobotAccountExpiryDuration := 30 * 24 * time.Hour
@@ -393,18 +393,18 @@ func main() {
 
 	// Fastly configuration options
 	// the service id should be that for the cluster which will be used as the default no-cache passthrough
-	fastlyServiceID = getEnv("FASTLY_SERVICE_ID", fastlyServiceID)
+	fastlyServiceID = helpers.GetEnv("FASTLY_SERVICE_ID", fastlyServiceID)
 	// this is used to control setting the service id into build pods
-	fastlyWatchStatus = getEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
+	fastlyWatchStatus = helpers.GetEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
 
 	if enablePodProxy {
-		httpProxy = getEnv("HTTP_PROXY", httpProxy)
-		httpsProxy = getEnv("HTTPS_PROXY", httpsProxy)
-		noProxy = getEnv("HTTP_PROXY", noProxy)
+		httpProxy = helpers.GetEnv("HTTP_PROXY", httpProxy)
+		httpsProxy = helpers.GetEnv("HTTPS_PROXY", httpsProxy)
+		noProxy = helpers.GetEnv("HTTP_PROXY", noProxy)
 		if podsUseDifferentProxy {
-			httpProxy = getEnv("LAGOON_HTTP_PROXY", httpProxy)
-			httpsProxy = getEnv("LAGOON_HTTPS_PROXY", httpsProxy)
-			noProxy = getEnv("LAGOON_HTTP_PROXY", noProxy)
+			httpProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", httpProxy)
+			httpsProxy = helpers.GetEnv("LAGOON_HTTPS_PROXY", httpsProxy)
+			noProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", noProxy)
 		}
 	}
 
@@ -570,6 +570,7 @@ func main() {
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		WebhookURL:            harborLagoonWebhook,
+		LagoonTargetName:      lagoonTargetName,
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
@@ -709,6 +710,12 @@ func main() {
 		BuildQoS:                         buildQoSConfig,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
+		LagoonFeatureFlags:               helpers.GetLagoonFeatureFlags(),
+		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
+			APIHost: lagoonAPIHost,
+			SSHHost: lagoonSSHHost,
+			SSHPort: lagoonSSHPort,
+		},
 		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
 			HTTPProxy:  httpProxy,
 			HTTPSProxy: httpsProxy,
@@ -740,7 +747,7 @@ func main() {
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
-		TaskSettings: lagoonv1beta1ctrl.LagoonTaskSettings{
+		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
 			APIHost: lagoonAPIHost,
 			SSHHost: lagoonSSHHost,
 			SSHPort: lagoonSSHPort,
@@ -767,33 +774,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
-func getEnvInt(key string, fallback int) int {
-	if value, ok := os.LookupEnv(key); ok {
-		valueInt, e := strconv.Atoi(value)
-		if e == nil {
-			return valueInt
-		}
-	}
-	return fallback
-}
-
-// accepts fallback values 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False
-// anything else is false.
-func getEnvBool(key string, fallback bool) bool {
-	if value, ok := os.LookupEnv(key); ok {
-		rVal, _ := strconv.ParseBool(value)
-		return rVal
-	}
-	return fallback
 }
 
 func init() {

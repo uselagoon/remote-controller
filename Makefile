@@ -6,6 +6,8 @@ CRD_OPTIONS ?= "crd:trivialVersions=false"
 
 CONTROLLER_NAMESPACE ?= lagoon-builddeploy
 
+OVERRIDE_BUILD_DEPLOY_DIND_IMAGE ?= uselagoon/kubectl-build-deploy-dind:latest
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -39,9 +41,14 @@ uninstall: manifests
 	kustomize build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+preview: manifests
+	cd config/manager && kustomize edit set image controller=${IMG}
+	OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=${OVERRIDE_BUILD_DEPLOY_DIND_IMAGE} kustomize build config/default
+
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl apply -f -
+	OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=${OVERRIDE_BUILD_DEPLOY_DIND_IMAGE} kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen

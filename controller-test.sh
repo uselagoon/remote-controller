@@ -147,15 +147,34 @@ install_path_provisioner
 echo "==> Install helm-git plugin"
 helm plugin install https://github.com/aslafy-z/helm-git 
 
+
+echo "===> Install Ingress-Nginx"
+kubectl create namespace ingress-nginx
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
+NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
+if [ $NUM_PODS -ne 1 ]; then
+    echo "Install ingress-nginx"
+    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
+    kubectl get pods --all-namespaces
+    echo "Wait for ingress-nginx to become ready"
+    sleep 120
+else
+    echo "===> Ingress-Nginx is running"
+fi
+
+echo "===> Install Harbor"
+kubectl create namespace harbor
+helm repo add harbor https://helm.goharbor.io
+helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
+
 echo "==> Install lagoon-remote docker-host"
 helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
 ## configure the docker-host to talk to our insecure registry
 kubectl create namespace lagoon
 helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
     --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
-    --set dockerHost.storage.size=10Gi \
-    --set dockerHost.extraEnvs[0].name=DOCKER_TLS_VERIFY \
-    --set dockerHost.extraEnvs[0].value=1 \
+    --set dockerHost.storage.size=5Gi \
     --set dioscuri.enabled=false \
     --set dbaas-operator.enabled=false
 CHECK_COUNTER=1
@@ -176,27 +195,6 @@ else
 fi
 done
 echo "===> Docker-host is running"
-
-echo "===> Install Ingress-Nginx"
-kubectl create namespace ingress-nginx
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
-NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
-if [ $NUM_PODS -ne 1 ]; then
-    echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
-    kubectl get pods --all-namespaces
-    echo "Wait for ingress-nginx to become ready"
-    sleep 120
-else
-    echo "===> Ingress-Nginx is running"
-fi
-
-
-echo "===> Install Harbor"
-kubectl create namespace harbor
-helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
 
 # echo "====> Install dbaas-operator"
 # helm repo add amazeeio https://amazeeio.github.io/charts/

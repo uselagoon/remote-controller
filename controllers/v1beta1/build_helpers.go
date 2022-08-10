@@ -82,6 +82,61 @@ func (r *LagoonBuildReconciler) getOrCreateServiceAccount(ctx context.Context, s
 	return nil
 }
 
+// getOrCreateNamespacePatchRoleAndBinding will create the role for patching namespaces if it doesn't exist.
+func (r *LagoonBuildReconciler) getOrCreateNamespacePatchRoleAndBinding(ctx context.Context, ns string) error {
+	// create the role that allows the namespace to be patch
+	patchRole := &rbacv1.Role{
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"patch"},
+				Resources: []string{"namespaces"},
+				APIGroups: []string{"*"},
+			},
+		},
+	}
+	patchRole.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-namespace-patch",
+		Namespace: ns,
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-namespace-patch",
+	}, patchRole)
+	if err != nil {
+		if err := r.Create(ctx, patchRole); err != nil {
+			return fmt.Errorf("There was an error creating the lagoon-namespace-patch role. Error was: %v", err)
+		}
+	}
+	// add the role binding to the deployer service account
+	patchRoleBinding := &rbacv1.RoleBinding{}
+	patchRoleBinding.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-deployer-ns-patch",
+		Namespace: ns,
+	}
+	patchRoleBinding.RoleRef = rbacv1.RoleRef{
+		Name:     "lagoon-namespace-patch",
+		Kind:     "Role",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+	patchRoleBinding.Subjects = []rbacv1.Subject{
+		{
+			Name:      "lagoon-deployer",
+			Kind:      "ServiceAccount",
+			Namespace: ns,
+		},
+	}
+	err = r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-deployer-ns-patch",
+	}, patchRoleBinding)
+	if err != nil {
+		if err := r.Create(ctx, patchRoleBinding); err != nil {
+			return fmt.Errorf("There was an error creating the lagoon-deployer-ns-patch role binding. Error was: %v", err)
+		}
+	}
+	return nil
+}
+
 // getOrCreateSARoleBinding will create the rolebinding for the lagoon-deployer if it doesn't exist.
 func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, saRoleBinding *rbacv1.RoleBinding, ns string) error {
 	saRoleBinding.ObjectMeta = metav1.ObjectMeta{
@@ -405,6 +460,15 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 	saRoleBinding := &rbacv1.RoleBinding{}
 	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.ObjectMeta.Namespace)
+	if err != nil {
+		return err
+	}
+
+	// ServiceAccount RoleBinding creation
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-ns-patch` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+	}
+	err = r.getOrCreateNamespacePatchRoleAndBinding(ctx, lagoonBuild.ObjectMeta.Namespace)
 	if err != nil {
 		return err
 	}

@@ -298,7 +298,7 @@ func main() {
 		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
 	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
-	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
+	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "1d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")

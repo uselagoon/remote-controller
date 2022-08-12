@@ -144,60 +144,6 @@ check_lagoon_build () {
 start_docker_compose_services
 install_path_provisioner
 
-echo "==> Install helm-git plugin"
-helm plugin install https://github.com/aslafy-z/helm-git 
-
-echo "==> Install lagoon-remote docker-host"
-helm repo add lagoon-remote https://uselagoon.github.io/lagoon-charts/
-## configure the docker-host to talk to our insecure registry
-kubectl create namespace lagoon
-helm upgrade --install -n lagoon lagoon-remote lagoon-remote/lagoon-remote \
-    --set dockerHost.registry=http://harbor.172.17.0.1.nip.io:32080 \
-    --set dockerHost.storage.size=10Gi \
-    --set dockerHost.extraEnvs[0].name=DOCKER_TLS_VERIFY \
-    --set dockerHost.extraEnvs[0].value=1 \
-    --set dioscuri.enabled=false \
-    --set dbaas-operator.enabled=false
-CHECK_COUNTER=1
-echo "===> Ensure docker-host is running"
-until $(kubectl -n lagoon get pods $(kubectl -n lagoon get pods | grep "lagoon-remote-docker-host" | awk '{print $1}') --no-headers | grep -q "Running")
-do
-if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
-    let CHECK_COUNTER=CHECK_COUNTER+1
-    echo "Docker host not running yet"
-    sleep 5
-else
-    echo "Timeout of $CHECK_TIMEOUT for controller startup reached"
-    check_controller_log
-    tear_down
-    echo "================ END ================"
-    echo "============== FAILED ==============="
-    exit 1
-fi
-done
-echo "===> Docker-host is running"
-
-echo "===> Install Ingress-Nginx"
-kubectl create namespace ingress-nginx
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
-NUM_PODS=$(kubectl -n ingress-nginx get pods | grep -ow "Running"| wc -l |  tr  -d " ")
-if [ $NUM_PODS -ne 1 ]; then
-    echo "Install ingress-nginx"
-    helm upgrade --install -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx -f test-resources/ingress-nginx-values.yaml --version 4.0.16
-    kubectl get pods --all-namespaces
-    echo "Wait for ingress-nginx to become ready"
-    sleep 120
-else
-    echo "===> Ingress-Nginx is running"
-fi
-
-
-echo "===> Install Harbor"
-kubectl create namespace harbor
-helm repo add harbor https://helm.goharbor.io
-helm upgrade --install -n harbor harbor harbor/harbor -f test-resources/harbor-values.yaml --version "${HARBOR_VERSION}"
-
 # echo "====> Install dbaas-operator"
 # helm repo add amazeeio https://amazeeio.github.io/charts/
 # kubectl create namespace dbaas-operator
@@ -237,26 +183,25 @@ echo '
             },
             \"gitReference\": \"origin\/main\",
             \"project\": {
-            \"name\": \"nginx-example\",
-            \"environment\": \"main\",
-            \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
-            \"routerPattern\": \"main-nginx-example\",
-            \"environmentType\": \"production\",
-            \"productionEnvironment\": \"main\",
-            \"standbyEnvironment\": \"\",
-            \"gitUrl\": \"https:\/\/github.com\/shreddedbacon\/lagoon-nginx-example.git\",
-            \"deployTarget\": \"kind\",
-            \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
-            \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
-            \"monitoring\": {
-                \"contact\": \"1234\",
-                \"statuspageID\": \"1234\"
-            },
-            \"variables\": {
-                \"project\": \"W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==\",
-                \"environment\": \"W10=\"
-            },
-            \"registry\": \"172.17.0.1:5000\"
+                \"name\": \"nginx-example\",
+                \"environment\": \"main\",
+                \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
+                \"routerPattern\": \"main-nginx-example\",
+                \"environmentType\": \"production\",
+                \"productionEnvironment\": \"main\",
+                \"standbyEnvironment\": \"\",
+                \"gitUrl\": \"https:\/\/github.com\/shreddedbacon\/lagoon-nginx-example.git\",
+                \"deployTarget\": \"kind\",
+                \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
+                \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
+                \"monitoring\": {
+                    \"contact\": \"1234\",
+                    \"statuspageID\": \"1234\"
+                },
+                \"variables\": {
+                    \"project\": \"W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==\",
+                    \"environment\": \"W10=\"
+                }
             },
             \"branch\": {
                 \"name\": \"main\"

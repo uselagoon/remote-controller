@@ -349,7 +349,7 @@ func (h *Messaging) DeleteNamespace(ctx context.Context, opLog logr.Logger, name
 
 // CheckPVCExists checks if the PVC being deleted has been deleted.
 func (h *Messaging) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *corev1.PersistentVolumeClaim) error {
-	try.MaxRetries = 60
+	try.MaxRetries = h.DeleteConfig.PVCRetryAttempts
 	err := try.Do(func(attempt int) (bool, error) {
 		var pvcErr error
 		err := h.Client.Get(ctx, types.NamespacedName{
@@ -366,8 +366,8 @@ func (h *Messaging) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *
 			pvcErr = fmt.Errorf("%s: %v", msg, err)
 			opLog.Info(msg)
 		}
-		time.Sleep(10 * time.Second)
-		return attempt < 6, pvcErr
+		time.Sleep(time.Duration(h.DeleteConfig.PVCRetryInterval) * time.Second)
+		return attempt < h.DeleteConfig.PVCRetryAttempts, pvcErr
 	})
 	return err
 }

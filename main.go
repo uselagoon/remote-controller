@@ -141,6 +141,8 @@ func main() {
 	var harborLagoonWebhook string
 	var harborWebhookEventTypes string
 	var nativeCronPodMinFrequency int
+	var pvcRetryAttempts int
+	var pvcRetryInterval int
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -298,7 +300,7 @@ func main() {
 		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
 	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
-	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
+	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "1d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
@@ -324,6 +326,10 @@ func main() {
 		"Flag to have this controller inject proxy variables to build and task pods.")
 	flag.BoolVar(&podsUseDifferentProxy, "pods-use-different-proxy", false,
 		"Flag to have this controller provide different proxy configuration to build pods.\nUse LAGOON_HTTP_PROXY, LAGOON_HTTPS_PROXY, and LAGOON_NO_PROXY when using this flag")
+
+	// the number of attempts for cleaning up pvcs in a namespace default 30 attempts, 10 seconds apart (300 seconds total)
+	flag.IntVar(&pvcRetryAttempts, "delete-pvc-retry-attempts", 30, "How many attempts to check that PVCs have been removed (default 30).")
+	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
 
 	flag.Parse()
 
@@ -615,6 +621,10 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
+	deleteConfig := messenger.DeleteConfig{
+		PVCRetryAttempts: pvcRetryAttempts,
+		PVCRetryInterval: pvcRetryInterval,
+	}
 	messaging := messenger.NewMessaging(config,
 		mgr.GetClient(),
 		startupConnectionAttempts,
@@ -625,6 +635,7 @@ func main() {
 		advancedTaskSSHKeyInjection,
 		advancedTaskDeployToken,
 		harborConfig,
+		deleteConfig,
 		cleanupHarborRepositoryOnDelete,
 		enableSingleQueue,
 		enableDebug,

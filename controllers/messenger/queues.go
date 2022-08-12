@@ -33,6 +33,11 @@ type messaging interface {
 	GetPendingMessages()
 }
 
+type DeleteConfig struct {
+	PVCRetryAttempts int `json:"pvcRetryAttempts"`
+	PVCRetryInterval int `json:"pvcRetryInterval"`
+}
+
 // Messaging is used for the config and client information for the messaging queue.
 type Messaging struct {
 	Config                           mq.Config
@@ -48,6 +53,7 @@ type Messaging struct {
 	CleanupHarborRepositoryOnDelete  bool
 	EnableDebug                      bool
 	EnableSingleQueue                bool
+	DeleteConfig                     DeleteConfig
 }
 
 // NewMessaging returns a messaging with config and controller-runtime client.
@@ -61,6 +67,7 @@ func NewMessaging(config mq.Config,
 	advancedTaskSSHKeyInjection bool,
 	advancedTaskDeployTokenInjection bool,
 	harborConfig harbor.Harbor,
+	deleteConfig DeleteConfig,
 	cleanupHarborOnDelete bool,
 	enableSingleQueue bool,
 	enableDebug bool,
@@ -76,6 +83,7 @@ func NewMessaging(config mq.Config,
 		AdvancedTaskSSHKeyInjection:      advancedTaskSSHKeyInjection,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		Harbor:                           harborConfig,
+		DeleteConfig:                     deleteConfig,
 		CleanupHarborRepositoryOnDelete:  cleanupHarborOnDelete,
 		EnableSingleQueue:                enableSingleQueue,
 		EnableDebug:                      enableDebug,

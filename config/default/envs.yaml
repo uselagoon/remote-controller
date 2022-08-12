@@ -26,3 +26,13 @@ spec:
                 configMapKeyRef:
                   name: overrides
                   key: OVERRIDE_BUILD_DEPLOY_DIND_IMAGE
+            - name: HARBOR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: overrides
+                  key: HARBOR_URL
+            - name: HARBOR_API
+              valueFrom:
+                configMapKeyRef:
+                  name: overrides
+                  key: HARBOR_API

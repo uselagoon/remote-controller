@@ -274,6 +274,49 @@ func (h *Messaging) DeleteJobs(ctx context.Context, opLog logr.Logger, ns, proje
 	return true
 }
 
+// DeletePods will delete any pods from the namespace.
+func (h *Messaging) DeletePods(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
+	pods := &corev1.PodList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+	})
+	if err := h.Client.List(ctx, pods, listOption); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to list jobs in namespace %s for project %s, branch %s",
+				ns,
+				project,
+				branch,
+			),
+		)
+		return false
+	}
+	for _, ds := range pods.Items {
+		if err := h.Client.Delete(ctx, &ds); err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to delete pods %s in %s for project %s, branch %s",
+					ds.ObjectMeta.Name,
+					ns,
+					project,
+					branch,
+				),
+			)
+			return false
+		}
+		opLog.Info(
+			fmt.Sprintf(
+				"Deleted pods %s in  %s for project %s, branch %s",
+				ds.ObjectMeta.Name,
+				ns,
+				project,
+				branch,
+			),
+		)
+	}
+	return true
+}
+
 // DeletePVCs will delete any PVCs from the namespace.
 func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
 	pvcs := &corev1.PersistentVolumeClaimList{}

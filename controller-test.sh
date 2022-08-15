@@ -164,7 +164,6 @@ kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-$
 sleep 10
 check_lagoon_build lagoon-build-${LBUILD}
 
-
 echo "==> Trigger a lagoon build using rabbitmq"
 echo '
 {
@@ -215,7 +214,6 @@ echo ""
 sleep 10
 check_lagoon_build lagoon-build-${LBUILD2}
 
-
 echo "==> Check pod cleanup worked"
 CHECK_COUNTER=1
 until ! $(kubectl -n nginx-example-main get pods lagoon-build-7m5zypx &> /dev/null)
@@ -246,7 +244,6 @@ if [ $POD_CLEANUP_COUNT -gt 1 ]; then
     exit 1
 fi
 
-
 echo "==> Check robot credential rotation worked"
 CHECK_COUNTER=1
 until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Robot credentials rotated for")
@@ -265,6 +262,124 @@ else
 fi
 done
 kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep "handlers.RotateRobotCredentials"
+
+# install the k8upv1alpha1 crds for first test
+kubectl apply -f test-resources/k8upv1alpha1-crds.yaml
+
+echo "==> Trigger a lagoon restore using rabbitmq"
+echo '
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJhcGlWZXJzaW9uIjoiYmFja3VwLmFwcHVpby5jaC92MWFscGhhMSIsImtpbmQiOiJSZXN0b3JlIiwibWV0YWRhdGEiOnsibmFtZSI6InJlc3RvcmUtYmYwNzJhMC11cXhxbzMifSwic3BlYyI6eyJzbmFwc2hvdCI6ImJmMDcyYTA5ZTE3NzI2ZGE1NGFkYzc5OTM2ZWM4NzQ1NTIxOTkzNTk5ZDQxMjExZGZjOTQ2NmRmZDViYzMyYTUiLCJyZXN0b3JlTWV0aG9kIjp7InMzIjp7fX0sImJhY2tlbmQiOnsiczMiOnsiYnVja2V0IjoiYmFhcy1uZ2lueC1leGFtcGxlIn0sInJlcG9QYXNzd29yZFNlY3JldFJlZiI6eyJrZXkiOiJyZXBvLXB3IiwibmFtZSI6ImJhYXMtcmVwby1wdyJ9fX19\"
+        },
+        \"key\":\"kubernetes:restic:backup:restore\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}' >payload.json
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+echo ""
+sleep 10
+CHECK_COUNTER=1
+kubectl -n nginx-example-main get restores
+until $(kubectl -n nginx-example-main get restores restore-bf072a0-uqxqo3 &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Restore not created yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for restore to be created"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+kubectl -n nginx-example-main get restores restore-bf072a0-uqxqo3 -o yaml | kubectl-neat > test-resources/results/k8upv1alpha1-cluster.yaml
+if cmp --silent -- "test-resources/results/k8upv1alpha1.yaml" "test-resources/results/k8upv1alpha1-cluster.yaml"; then
+    echo "Resulting restores match"
+else
+    echo "Files don't match"
+    echo "============"
+    cat test-resources/results/k8upv1alpha1.yaml
+    echo "============"
+    cat test-resources/results/k8upv1alpha1-cluster.yaml
+    echo "============"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+
+# install the k8upv1 crds for testing
+kubectl apply -f test-resources/k8upv1-crds.yaml
+
+echo "==> Trigger a lagoon restore using rabbitmq"
+echo '
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJtZXRhZGF0YSI6eyJuYW1lIjoicmVzdG9yZS1iZjA3MmEwLXVxeHFvNCJ9LCJzcGVjIjp7InNuYXBzaG90IjoiYmYwNzJhMDllMTc3MjZkYTU0YWRjNzk5MzZlYzg3NDU1MjE5OTM1OTlkNDEyMTFkZmM5NDY2ZGZkNWJjMzJhNSIsInJlc3RvcmVNZXRob2QiOnsiczMiOnt9fSwiYmFja2VuZCI6eyJzMyI6eyJidWNrZXQiOiJiYWFzLW5naW54LWV4YW1wbGUifSwicmVwb1Bhc3N3b3JkU2VjcmV0UmVmIjp7ImtleSI6InJlcG8tcHciLCJuYW1lIjoiYmFhcy1yZXBvLXB3In19fX0=\"
+        },
+        \"key\":\"kubernetes:restic:backup:restore\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}' >payload.json
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+echo ""
+sleep 10
+CHECK_COUNTER=1
+kubectl -n nginx-example-main get restores.k8up.io
+until $(kubectl -n nginx-example-main get restores.k8up.io restore-bf072a0-uqxqo4 &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Restore not created yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for restore to be created"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+kubectl -n nginx-example-main get restores.k8up.io restore-bf072a0-uqxqo4 -o yaml | kubectl-neat > test-resources/results/k8upv1-cluster.yaml
+if cmp --silent -- "test-resources/results/k8upv1.yaml" "test-resources/results/k8upv1-cluster.yaml"; then
+    echo "Resulting restores match"
+else
+    echo "Files don't match"
+    echo "============"
+    cat test-resources/results/k8upv1.yaml
+    echo "============"
+    cat test-resources/results/k8upv1-cluster.yaml
+    echo "============"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
 
 echo "==> Delete the environment"
 echo '

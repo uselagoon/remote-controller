@@ -44,6 +44,11 @@ jobs:
         sudo mv /tmp/kubebuilder_2.3.2_linux_amd64/bin/* /usr/local/kubebuilder/bin
         chmod +x /usr/local/kubebuilder/bin/*
         echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
+        curl -sL https://github.com/itaysk/kubectl-neat/releases/download/v2.0.3/kubectl-neat_linux_amd64.tar.gz | tar -xz -C /tmp/
+        sudo mkdir -p /usr/local/kubectl-neat/bin
+        sudo mv /tmp/kubectl-neat /usr/local/kubectl-neat/bin
+        chmod +x /usr/local/kubectl-neat/bin/*
+        echo "/usr/local/kubectl-neat/bin" >> $GITHUB_PATH
     - name: Check go, kustomize, kubebuilder, helm, kind versions
       run: |
         go version

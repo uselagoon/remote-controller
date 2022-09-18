@@ -142,6 +142,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if lagoonBuild.Spec.Project.ProjectIdling != nil {
 		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
 	}
+	if lagoonBuild.Spec.Project.StorageCalculatorDisabled != nil {
+		if *lagoonBuild.Spec.Project.StorageCalculatorDisabled != 1 {
+			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "false"
+		}
+	}
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{
 		Name:   ns,

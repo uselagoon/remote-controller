@@ -75,6 +75,7 @@ type LagoonBuildReconciler struct {
 	LagoonFeatureFlags               map[string]string
 	LagoonAPIConfiguration           LagoonAPIConfiguration
 	ProxyConfig                      ProxyConfig
+	LagoonContainerMemoryLimit       string
 }
 
 // BackupConfig holds all the backup configuration settings

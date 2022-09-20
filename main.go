@@ -157,6 +157,8 @@ func main() {
 	var enablePodProxy bool
 	var podsUseDifferentProxy bool
 
+	var lagoonContainerMemoryLimit string
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -328,6 +330,9 @@ func main() {
 	// the number of attempts for cleaning up pvcs in a namespace default 30 attempts, 10 seconds apart (300 seconds total)
 	flag.IntVar(&pvcRetryAttempts, "delete-pvc-retry-attempts", 30, "How many attempts to check that PVCs have been removed (default 30).")
 	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
+
+	flag.StringVar(&lagoonContainerMemoryLimit, "lagoon-container-memory-limit", "16Gi",
+		"Container memory limit for pods deployed by Lagoon")
 
 	flag.Parse()
 
@@ -732,6 +737,7 @@ func main() {
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,
 		},
+		LagoonContainerMemoryLimit: lagoonContainerMemoryLimit,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

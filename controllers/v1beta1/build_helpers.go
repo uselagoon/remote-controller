@@ -531,6 +531,10 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.LagoonAPIConfiguration.SSHPort,
 		},
 		// in the future, the SSH_HOST and SSH_PORT could also have regional variants
+		{
+			Name:  "LAGOON_CONTAINER_MEMORY_LIMIT",
+			Value: r.LagoonContainerMemoryLimit,
+		},
 	}
 	// add proxy variables to builds if they are defined
 	if r.ProxyConfig.HTTPProxy != "" {

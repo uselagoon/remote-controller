@@ -16,16 +16,9 @@ import (
 const lagoonNSExpirationLabel = "lagoon.sh/expiration"
 const lagoonNSExpirationPausedLabel = "lagoon.sh/expiration-paused"
 
-// startSecretNSCronjob spins up a cron that looks specifically for secrets of the form
+// RunNSDeletionLoop returns a function that looks specifically for secrets of the form
 // advanced-task-toolbox-migration-done with a label of the same name. We will then delete
 // these namespaces if the secret is older than a week.
-
-//func StartNSLabelCronjob(mgr manager.Manager) {
-//	c := cron.New()
-//	fmt.Println("Spinning up secret searcher")
-//	c.AddFunc("* * * * *", runNSDeletionLoop(mgr))
-//	c.Start()
-//}
 
 func RunNSDeletionLoop(mgr manager.Manager) func() {
 	log := log.FromContext(context.Background())

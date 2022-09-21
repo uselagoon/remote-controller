@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	namespace_utilities "github.com/uselagoon/remote-controller/internal/namespace-utilities"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,7 +39,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
-	"gopkg.in/robfig/cron.v2"
+	cron "gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/controllers/messenger"
@@ -142,6 +143,8 @@ func main() {
 	var nativeCronPodMinFrequency int
 	var pvcRetryAttempts int
 	var pvcRetryInterval int
+	var cleanNamespacesEnabled bool
+	var cleanNamespacesCron string
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -310,6 +313,12 @@ func main() {
 		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
 		"The event types to use for the Lagoon webhook")
+
+	// NS cleanup configuration
+	flag.BoolVar(&cleanNamespacesEnabled, "enable-namespace-cleanup", false,
+		"Tells the controller to remove namespaces marked for deletion with labels (lagoon.sh/expiration=<unixtimestamp>).")
+	flag.StringVar(&cleanNamespacesCron, "namespace-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the namespace resources cleanup.")
 
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
@@ -673,6 +682,13 @@ func main() {
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
+
+	// if we've set namespaces to be cleaned up, we run the job periodically
+	if cleanNamespacesEnabled {
+		setupLog.Info("starting namespace cleanup task")
+		c.AddFunc(cleanNamespacesCron, namespace_utilities.RunNSDeletionLoop(mgr))
+	}
+
 	c.Start()
 
 	setupLog.Info("starting controllers")

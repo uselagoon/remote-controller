@@ -1,4 +1,4 @@
-package namespace_utilities
+package utilities
 
 import (
 	"context"
@@ -21,9 +21,8 @@ const lagoonNSExpirationPausedLabel = "lagoon.sh/expiration-paused"
 // these namespaces if the secret is older than a week.
 
 func RunNSDeletionLoop(mgr manager.Manager) func() {
-	log := log.FromContext(context.Background())
+	log := log.FromContext(context.Background()).WithName("utilities").WithName("NamespaceCleanup")
 	return func() {
-		log.Info("NS searcher running ...")
 		client := mgr.GetClient()
 
 		nsList := &v1.NamespaceList{}
@@ -57,7 +56,7 @@ func RunNSDeletionLoop(mgr manager.Manager) func() {
 					log.Error(err, "Unable to convert "+val+" from a unix timestamp - pausing deletion of namespace for manual intervention")
 					ierr := LabelNS(context.Background(), client, ns, lagoonNSExpirationPausedLabel, "true")
 					if ierr != nil {
-						log.Error(ierr, "Unable to annotate ns "+ns.Name+" with "+lagoonNSExpirationPausedLabel)
+						log.Error(ierr, "Unable to annotate namespace "+ns.Name+" with "+lagoonNSExpirationPausedLabel)
 					}
 					continue //on to the next NS
 				}
@@ -66,20 +65,19 @@ func RunNSDeletionLoop(mgr manager.Manager) func() {
 					log.Info(fmt.Sprintf("Preparing to delete namespace: %v", x.Name))
 					err = client.Delete(context.Background(), ns)
 					if err != nil {
-						log.Error(err, "Unable to delete ns: "+ns.Name+" pausing deletion for manual intervention")
+						log.Error(err, "Unable to delete namespace: "+ns.Name+" pausing deletion for manual intervention")
 						ierr := LabelNS(context.Background(), client, ns, lagoonNSExpirationPausedLabel, "true")
 						if ierr != nil {
-							log.Error(ierr, "Unable to annotate ns "+ns.Name+" with "+lagoonNSExpirationPausedLabel)
+							log.Error(ierr, "Unable to annotate namespace "+ns.Name+" with "+lagoonNSExpirationPausedLabel)
 						}
 						continue
 					}
-					log.Info("Deleted ns: " + ns.Name)
+					log.Info("Deleted namespace: " + ns.Name)
 
 				} else {
-					log.Info(fmt.Sprintf("ns %v is expiring later, so we skip", x.Name))
-					log.Info("Annotating NS with future deletion details")
+					log.Info(fmt.Sprintf("namespace %v is expiring later, so we skip", x.Name))
+					log.Info("Annotating namespace with future deletion details")
 
-					//ns.Annotations[lagoonNSExpirationLabel] = expiryDate.Format(time.RFC822)
 					annotations := ns.GetAnnotations()
 					if annotations == nil {
 						annotations = map[string]string{}
@@ -88,7 +86,7 @@ func RunNSDeletionLoop(mgr manager.Manager) func() {
 					ns.SetAnnotations(annotations)
 					err = client.Update(context.Background(), ns)
 					if err != nil {
-						log.Error(err, "unable to update ns: "+ns.Name)
+						log.Error(err, "unable to update namespace: "+ns.Name)
 						continue
 					}
 				}
@@ -98,7 +96,7 @@ func RunNSDeletionLoop(mgr manager.Manager) func() {
 }
 
 func LabelNS(ctx context.Context, r client2.Client, ns *v1.Namespace, labelKey string, labelValue string) error {
-	log := log.FromContext(ctx)
+	log := log.FromContext(ctx).WithName("utilities").WithName("NamespaceCleanup")
 	labels := ns.GetLabels()
 	if labels == nil {
 		labels = map[string]string{}

@@ -20,7 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	namespace_utilities "github.com/uselagoon/remote-controller/internal/namespace-utilities"
+	"github.com/uselagoon/remote-controller/internal/utilities"
 	"net/http"
 	"net/url"
 	"os"
@@ -686,7 +686,7 @@ func main() {
 	// if we've set namespaces to be cleaned up, we run the job periodically
 	if cleanNamespacesEnabled {
 		setupLog.Info("starting namespace cleanup task")
-		c.AddFunc(cleanNamespacesCron, namespace_utilities.RunNSDeletionLoop(mgr))
+		c.AddFunc(cleanNamespacesCron, utilities.RunNSDeletionLoop(mgr))
 	}
 
 	c.Start()

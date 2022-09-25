@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/uselagoon/remote-controller/internal/utilities"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,6 +37,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
 	cron "gopkg.in/robfig/cron.v2"
 
@@ -626,7 +626,7 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
-	resourceCleanup := messenger.NewCleanup(mgr.GetClient(),
+	resourceCleanup := pruner.New(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
@@ -642,7 +642,7 @@ func main() {
 		// use cron to run a lagoonbuild cleanup task
 		// this will check any Lagoon builds and attempt to delete them
 		c.AddFunc(buildsCleanUpCron, func() {
-			resourceCleanup.LagoonBuildCleanup()
+			resourceCleanup.LagoonBuildPruner()
 		})
 	}
 	// if the build pod cleanup is enabled, add the cronjob for it
@@ -651,7 +651,7 @@ func main() {
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
-			resourceCleanup.BuildPodCleanup()
+			resourceCleanup.BuildPodPruner()
 		})
 	}
 	// if the lagoontask cleanup is enabled, add the cronjob for it
@@ -660,7 +660,7 @@ func main() {
 		// use cron to run a lagoontask cleanup task
 		// this will check any Lagoon tasks and attempt to delete them
 		c.AddFunc(taskCleanUpCron, func() {
-			resourceCleanup.LagoonTaskCleanup()
+			resourceCleanup.LagoonTaskPruner()
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
@@ -669,7 +669,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
-			resourceCleanup.TaskPodCleanup()
+			resourceCleanup.TaskPodPruner()
 		})
 	}
 	// if harbor is enabled, add the cronjob for credential rotation
@@ -686,7 +686,9 @@ func main() {
 	// if we've set namespaces to be cleaned up, we run the job periodically
 	if cleanNamespacesEnabled {
 		setupLog.Info("starting namespace cleanup task")
-		c.AddFunc(cleanNamespacesCron, utilities.RunNSDeletionLoop(mgr))
+		c.AddFunc(taskPodCleanUpCron, func() {
+			resourceCleanup.NamespacePruner()
+		})
 	}
 
 	c.Start()

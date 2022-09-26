@@ -486,7 +486,7 @@ Build %s
 			lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 			mergeMap["status"] = map[string]interface{}{
 				"conditions": lagoonBuild.Status.Conditions,
-				"log":        allContainerLogs,
+				// don't save build logs in resource anymore
 			}
 		}
 
@@ -523,7 +523,8 @@ Build %s
 			if pendingEnvironment {
 				mergeMap["statusMessages"].(map[string]interface{})["environmentMessage"] = pendingEnvironmentMessage
 			}
-			if pendingBuildLog {
+			// if the build log message is too long, don't save it
+			if pendingBuildLog && len(pendingBuildLogMessage.Message) > 1048576 {
 				mergeMap["statusMessages"].(map[string]interface{})["buildLogMessage"] = pendingBuildLogMessage
 			}
 		}

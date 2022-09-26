@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,7 +15,77 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 )
+
+func (h *Messaging) ProcessDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace, project, branch string) {
+	/*
+		get any deployments/statefulsets/daemonsets
+		then delete them
+	*/
+	if h.CleanupHarborRepositoryOnDelete {
+		lagoonHarbor, err := harbor.NewHarbor(h.Harbor)
+		if err != nil {
+			return
+		}
+		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
+		if err != nil {
+			return
+		}
+		if lagoonHarbor.UseV2Functions(curVer) {
+			lagoonHarbor.DeleteRepository(ctx, project, branch)
+		}
+	}
+	if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeletePods(ctx, opLog.WithName("DeletePods"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	/*
+		then delete the namespace
+	*/
+	if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
+		return
+	}
+	opLog.WithName("DeleteNamespace").Info(
+		fmt.Sprintf(
+			"Deleted namespace %s for project %s, branch %s",
+			namespace.ObjectMeta.Name,
+			project,
+			branch,
+		),
+	)
+	msg := lagoonv1beta1.LagoonMessage{
+		Type:      "remove",
+		Namespace: namespace.ObjectMeta.Name,
+		Meta: &lagoonv1beta1.LagoonLogMeta{
+			Project:     project,
+			Environment: branch,
+		},
+	}
+	msgBytes, _ := json.Marshal(msg)
+	h.Publish("lagoon-tasks:controller", msgBytes)
+}
 
 // DeleteLagoonBuilds will delete any lagoon builds from the namespace.
 func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {
@@ -34,7 +105,7 @@ func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, n
 		return false
 	}
 	for _, lagoonBuild := range lagoonBuilds.Items {
-		if err := h.Client.Delete(ctx, &lagoonBuild); err != nil {
+		if err := h.Client.Delete(ctx, &lagoonBuild); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete lagoon build %s in %s for project %s, branch %s",
@@ -77,7 +148,7 @@ func (h *Messaging) DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, ns
 		return false
 	}
 	for _, lagoonTask := range lagoonTasks.Items {
-		if err := h.Client.Delete(ctx, &lagoonTask); err != nil {
+		if err := h.Client.Delete(ctx, &lagoonTask); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete lagoon task %s in %s for project %s, branch %s",
@@ -120,7 +191,7 @@ func (h *Messaging) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns
 		return false
 	}
 	for _, dep := range deployments.Items {
-		if err := h.Client.Delete(ctx, &dep); err != nil {
+		if err := h.Client.Delete(ctx, &dep); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete deployment %s in %s for project %s, branch %s",
@@ -163,7 +234,7 @@ func (h *Messaging) DeleteStatefulSets(ctx context.Context, opLog logr.Logger, n
 		return false
 	}
 	for _, ss := range statefulsets.Items {
-		if err := h.Client.Delete(ctx, &ss); err != nil {
+		if err := h.Client.Delete(ctx, &ss); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete statefulset %s in %s for project %s, branch %s",
@@ -206,7 +277,7 @@ func (h *Messaging) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 		return false
 	}
 	for _, ds := range daemonsets.Items {
-		if err := h.Client.Delete(ctx, &ds); err != nil {
+		if err := h.Client.Delete(ctx, &ds); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete daemonset %s in %s for project %s, branch %s",
@@ -249,7 +320,7 @@ func (h *Messaging) DeleteJobs(ctx context.Context, opLog logr.Logger, ns, proje
 		return false
 	}
 	for _, ds := range jobs.Items {
-		if err := h.Client.Delete(ctx, &ds); err != nil {
+		if err := h.Client.Delete(ctx, &ds); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete jobs %s in %s for project %s, branch %s",
@@ -292,7 +363,7 @@ func (h *Messaging) DeletePods(ctx context.Context, opLog logr.Logger, ns, proje
 		return false
 	}
 	for _, ds := range pods.Items {
-		if err := h.Client.Delete(ctx, &ds); err != nil {
+		if err := h.Client.Delete(ctx, &ds); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete pods %s in %s for project %s, branch %s",
@@ -335,7 +406,7 @@ func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 		return false
 	}
 	for _, pvc := range pvcs.Items {
-		if err := h.Client.Delete(ctx, &pvc); err != nil {
+		if err := h.Client.Delete(ctx, &pvc); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete pvc %s in %s for project %s, branch %s",
@@ -376,7 +447,7 @@ func (h *Messaging) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 
 // DeleteNamespace will delete the namespace.
 func (h *Messaging) DeleteNamespace(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace, project, branch string) bool {
-	if err := h.Client.Delete(ctx, namespace); err != nil {
+	if err := h.Client.Delete(ctx, namespace); helpers.IgnoreNotFound(err) != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Unable to delete namespace %s for project %s, branch %s",

@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,8 +15,77 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
+
+func (h *Messaging) ProcessDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace, project, branch string) {
+	/*
+		get any deployments/statefulsets/daemonsets
+		then delete them
+	*/
+	if h.CleanupHarborRepositoryOnDelete {
+		lagoonHarbor, err := harbor.NewHarbor(h.Harbor)
+		if err != nil {
+			return
+		}
+		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
+		if err != nil {
+			return
+		}
+		if lagoonHarbor.UseV2Functions(curVer) {
+			lagoonHarbor.DeleteRepository(ctx, project, branch)
+		}
+	}
+	if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeletePods(ctx, opLog.WithName("DeletePods"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), namespace.ObjectMeta.Name, project, branch); del == false {
+		return
+	}
+	/*
+		then delete the namespace
+	*/
+	if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
+		return
+	}
+	opLog.WithName("DeleteNamespace").Info(
+		fmt.Sprintf(
+			"Deleted namespace %s for project %s, branch %s",
+			namespace.ObjectMeta.Name,
+			project,
+			branch,
+		),
+	)
+	msg := lagoonv1beta1.LagoonMessage{
+		Type:      "remove",
+		Namespace: namespace.ObjectMeta.Name,
+		Meta: &lagoonv1beta1.LagoonLogMeta{
+			Project:     project,
+			Environment: branch,
+		},
+	}
+	msgBytes, _ := json.Marshal(msg)
+	h.Publish("lagoon-tasks:controller", msgBytes)
+}
 
 // DeleteLagoonBuilds will delete any lagoon builds from the namespace.
 func (h *Messaging) DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, ns, project, branch string) bool {

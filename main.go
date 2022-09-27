@@ -37,13 +37,14 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
 	cron "gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/controllers/messenger"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -589,11 +590,17 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	deleteConfig := messenger.DeleteConfig{
-		PVCRetryAttempts: pvcRetryAttempts,
-		PVCRetryInterval: pvcRetryInterval,
-	}
-	messaging := messenger.NewMessaging(config,
+	deletion := deletions.New(mgr.GetClient(),
+		harborConfig,
+		deletions.DeleteConfig{
+			PVCRetryAttempts: pvcRetryAttempts,
+			PVCRetryInterval: pvcRetryInterval,
+		},
+		cleanupHarborRepositoryOnDelete,
+		enableDebug,
+	)
+
+	messaging := messenger.New(config,
 		mgr.GetClient(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
@@ -602,11 +609,10 @@ func main() {
 		randomPrefix,
 		advancedTaskSSHKeyInjection,
 		advancedTaskDeployToken,
-		harborConfig,
-		deleteConfig,
-		cleanupHarborRepositoryOnDelete,
+		deletion,
 		enableDebug,
 	)
+
 	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
@@ -632,8 +638,7 @@ func main() {
 		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
-		namespacePrefix,
-		randomPrefix,
+		deletion,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it

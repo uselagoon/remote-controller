@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/controllers/messenger"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 )
 
 // LagoonBuildReconciler reconciles a LagoonBuild object
@@ -40,7 +40,7 @@ type LagoonBuildReconciler struct {
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
-	Messaging             *messenger.Messaging
+	Messaging             *messenger.Messenger
 	BuildImage            string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool

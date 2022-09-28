@@ -16,7 +16,7 @@ import (
 )
 
 // LagoonTaskPruner will prune any build crds that are hanging around.
-func (h *Pruner) LagoonTaskPruner() {
+func (p *Pruner) LagoonTaskPruner() {
 	opLog := ctrl.Log.WithName("utilities").WithName("LagoonTaskPruner")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
@@ -25,7 +25,7 @@ func (h *Pruner) LagoonTaskPruner() {
 			Selector: labels.NewSelector().Add(*labelRequirements),
 		},
 	})
-	if err := h.Client.List(context.Background(), namespaces, listOption); err != nil {
+	if err := p.Client.List(context.Background(), namespaces, listOption); err != nil {
 		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
 		return
 	}
@@ -40,10 +40,10 @@ func (h *Pruner) LagoonTaskPruner() {
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
+				"lagoon.sh/controller": p.ControllerNamespace, // created by this controller
 			}),
 		})
-		if err := h.Client.List(context.Background(), lagoonTasks, listOption); err != nil {
+		if err := p.Client.List(context.Background(), lagoonTasks, listOption); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to list LagoonTask resources, there may be none or something went wrong"))
 			return
 		}
@@ -51,15 +51,15 @@ func (h *Pruner) LagoonTaskPruner() {
 		sort.Slice(lagoonTasks.Items, func(i, j int) bool {
 			return lagoonTasks.Items[i].ObjectMeta.CreationTimestamp.After(lagoonTasks.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
-		if len(lagoonTasks.Items) > h.TasksToKeep {
+		if len(lagoonTasks.Items) > p.TasksToKeep {
 			for idx, lagoonTask := range lagoonTasks.Items {
-				if idx >= h.TasksToKeep {
+				if idx >= p.TasksToKeep {
 					if helpers.ContainsString(
 						helpers.TaskCompletedCancelledFailedStatus,
 						lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"],
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))
-						if err := h.Client.Delete(context.Background(), &lagoonTask); err != nil {
+						if err := p.Client.Delete(context.Background(), &lagoonTask); err != nil {
 							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
 							break
 						}
@@ -72,7 +72,7 @@ func (h *Pruner) LagoonTaskPruner() {
 }
 
 // TaskPodPruner will prune any task pods that are hanging around.
-func (h *Pruner) TaskPodPruner() {
+func (p *Pruner) TaskPodPruner() {
 	opLog := ctrl.Log.WithName("utilities").WithName("TaskPodPruner")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
@@ -81,7 +81,7 @@ func (h *Pruner) TaskPodPruner() {
 			Selector: labels.NewSelector().Add(*labelRequirements),
 		},
 	})
-	if err := h.Client.List(context.Background(), namespaces, listOption); err != nil {
+	if err := p.Client.List(context.Background(), namespaces, listOption); err != nil {
 		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
 		return
 	}
@@ -97,10 +97,10 @@ func (h *Pruner) TaskPodPruner() {
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/jobType":    "task",
-				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
+				"lagoon.sh/controller": p.ControllerNamespace, // created by this controller
 			}),
 		})
-		if err := h.Client.List(context.Background(), taskPods, listOption); err != nil {
+		if err := p.Client.List(context.Background(), taskPods, listOption); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon task pods, there may be none or something went wrong"))
 			return
 		}
@@ -108,13 +108,13 @@ func (h *Pruner) TaskPodPruner() {
 		sort.Slice(taskPods.Items, func(i, j int) bool {
 			return taskPods.Items[i].ObjectMeta.CreationTimestamp.After(taskPods.Items[j].ObjectMeta.CreationTimestamp.Time)
 		})
-		if len(taskPods.Items) > h.TaskPodsToKeep {
+		if len(taskPods.Items) > p.TaskPodsToKeep {
 			for idx, pod := range taskPods.Items {
-				if idx >= h.TaskPodsToKeep {
+				if idx >= p.TaskPodsToKeep {
 					if pod.Status.Phase == corev1.PodFailed ||
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
-						if err := h.Client.Delete(context.Background(), &pod); err != nil {
+						if err := p.Client.Delete(context.Background(), &pod); err != nil {
 							opLog.Error(err, fmt.Sprintf("Unable to delete pod"))
 							break
 						}

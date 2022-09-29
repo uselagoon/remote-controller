@@ -45,8 +45,8 @@ import (
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
-	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
 	"github.com/uselagoon/remote-controller/internal/messenger"
+	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

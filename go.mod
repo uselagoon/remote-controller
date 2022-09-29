@@ -76,6 +76,7 @@ require (
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/streadway/amqp v0.0.0-20200108173154-1c71cc93ed71 // indirect
+	github.com/stretchr/objx v0.4.0 // indirect
 	github.com/tiago4orion/conjure v0.0.0-20150908101743-93cb30b9d218 // indirect
 	go.mongodb.org/mongo-driver v1.8.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect

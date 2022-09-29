@@ -33,7 +33,7 @@ func (p *Pruner) LagoonBuildPruner() {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
 			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pruner", ns.ObjectMeta.Name))
-			return
+			continue
 		}
 		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
 		lagoonBuilds := &lagoonv1beta1.LagoonBuildList{}
@@ -45,7 +45,7 @@ func (p *Pruner) LagoonBuildPruner() {
 		})
 		if err := p.Client.List(context.Background(), lagoonBuilds, listOption); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuild resources, there may be none or something went wrong"))
-			return
+			continue
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(lagoonBuilds.Items, func(i, j int) bool {

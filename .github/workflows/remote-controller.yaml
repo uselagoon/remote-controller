@@ -18,13 +18,13 @@ jobs:
       matrix:
         kindest_node_version: [v1.21.12, v1.22.9]
         harbor: ["1.5.6", "1.9.0"]
-        lagoon_build_image: ["uselagoon/kubectl-build-deploy-dind:latest"]
+        lagoon_build_image: ["uselagoon/build-deploy-image:latest"]
         experimental: [false]
-        # include:
-        #   - kindest_node_version: v1.24.0
-        #     harbor: "1.9.0"
-        #     lagoon_build_image: "uselagoon/kubectl-build-deploy-dind:latest"
-        #     experimental: true
+        include:
+          - kindest_node_version: v1.23.6
+            harbor: "1.9.0"
+            lagoon_build_image: "uselagoon/build-deploy-image:latest"
+            experimental: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -51,26 +51,65 @@ jobs:
         helm version
         kubebuilder version
         kind version
+
+    - name: Add dependency chart repos
+      run: |
+        helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+        helm repo add harbor https://helm.goharbor.io
+        helm repo add lagoon https://uselagoon.github.io/lagoon-charts/
+
+    - name: Install gojq
+      if: |
+        (steps.list-changed.outputs.changed == 'true') ||
+        (contains(github.event.pull_request.labels.*.name, 'needs-testing'))
+      run: |
+        cd /tmp
+        curl -sSLO https://github.com/itchyny/gojq/releases/download/v0.11.1/gojq_v0.11.1_linux_amd64.tar.gz
+        tar -xf ./gojq_v0.11.1_linux_amd64.tar.gz
+        sudo cp /tmp/gojq_v0.11.1_linux_amd64/gojq /usr/local/bin/jq
+        
+    - name: Configure node IP in kind-config.yaml
+      run: |
+        docker network create kind
+        export KIND_NODE_IP=$(docker run --network kind --rm alpine ip -o addr show eth0 | sed -nE 's/.* ([0-9.]{7,})\/.*/\1/p')
+        envsubst < test-resources/kind-config.yaml.tpl > test-resources/kind-config.yaml
+        cat test-resources/kind-config.yaml
+
     - name: Create kind cluster
       uses: helm/kind-action@v1.3.0
       with:
         version: v0.14.0
         node_image: kindest/node:${{ matrix.kindest_node_version }}
         config: test-resources/kind-config.yaml
+  
+    - name: Check node IP matches kind configuration
+      run: |
+        NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')"
+        echo Checking for NODE_IP "$NODE_IP"
+        grep $NODE_IP test-resources/kind-config.yaml
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
+
     - name: Build
       uses: docker/build-push-action@v2
       with:
         context: .
         load: true
         tags: uselagoon/remote-controller:test-tag
+
+    - name: Install prerequisites
+      run: make -j8 -O install-lagoon-remote HARBOR_VERSION=${{matrix.harbor}}
+
     - name: Run Tests
       run: |
         export PATH=$PATH:/usr/local/kubebuilder/bin
         export PATH=$PATH:/usr/local/go/bin
         export GOPATH=$HOME/go
         export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}"
+        export HARBOR_URL="http://harbor.$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080"
+        export HARBOR_API="http://harbor.$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080/api"
+        export KIND_NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')"
         export HARBOR_VERSION=${{matrix.harbor}}
         # export GO111MODULE=on
         make controller-test

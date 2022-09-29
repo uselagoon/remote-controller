@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,7 +26,7 @@ const (
 	lagoonRemval = "lagoon:removal"
 )
 
-func (h *Messaging) handleLagoonEvent(ctx context.Context, opLog logr.Logger, body []byte) error {
+func (m *Messenger) handleLagoonEvent(ctx context.Context, opLog logr.Logger, body []byte) error {
 	// unmarshal the body of the message into a lagoonevent
 	lEvent := &LagoonEvent{}
 	err := json.Unmarshal(body, lEvent)
@@ -42,28 +41,28 @@ func (h *Messaging) handleLagoonEvent(ctx context.Context, opLog logr.Logger, bo
 	}
 	switch lEvent.EventType {
 	case lagoonBuild:
-		h.handleBuildEvent(ctx, opLog, payloadBytes)
+		m.handleBuildEvent(ctx, opLog, payloadBytes)
 	case lagoonTask:
-		h.handleTaskEvent(ctx, opLog, payloadBytes)
+		m.handleTaskEvent(ctx, opLog, payloadBytes)
 	case lagoonMisc:
-		h.handleMiscEvent(ctx, opLog, payloadBytes)
+		m.handleMiscEvent(ctx, opLog, payloadBytes)
 	case lagoonRemval:
-		h.handleRemovalEvent(ctx, opLog, payloadBytes)
+		m.handleRemovalEvent(ctx, opLog, payloadBytes)
 	}
 	return nil
 }
 
-func (h *Messaging) handleBuildEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
+func (m *Messenger) handleBuildEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
 	// unmarshal the body into a lagoonbuild
 	newBuild := &lagoonv1beta1.LagoonBuild{}
 	json.Unmarshal(payload, newBuild)
 	// new builds that come in should initially get created in the controllers own
 	// namespace before being handled and re-created in the correct namespace
 	// so set the controller namespace to the build namespace here
-	newBuild.ObjectMeta.Namespace = h.ControllerNamespace
+	newBuild.ObjectMeta.Namespace = m.ControllerNamespace
 	newBuild.SetLabels(
 		map[string]string{
-			"lagoon.sh/controller": h.ControllerNamespace,
+			"lagoon.sh/controller": m.ControllerNamespace,
 		},
 	)
 	opLog.Info(
@@ -74,7 +73,7 @@ func (h *Messaging) handleBuildEvent(ctx context.Context, opLog logr.Logger, pay
 		),
 	)
 	// create it now
-	if err := h.Client.Create(ctx, newBuild); err != nil {
+	if err := m.Client.Create(ctx, newBuild); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Failed to create builddeploy task for project %s, environment %s",
@@ -88,7 +87,7 @@ func (h *Messaging) handleBuildEvent(ctx context.Context, opLog logr.Logger, pay
 	return nil
 }
 
-func (h *Messaging) handleTaskEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
+func (m *Messenger) handleTaskEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
 	// unmarshall the message into a remove task to be processed
 	jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 	json.Unmarshal(payload, jobSpec)
@@ -96,9 +95,9 @@ func (h *Messaging) handleTaskEvent(ctx context.Context, opLog logr.Logger, payl
 		jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		jobSpec.Environment.Name,
 		jobSpec.Project.Name,
-		h.NamespacePrefix,
-		h.ControllerNamespace,
-		h.RandomNamespacePrefix,
+		m.NamespacePrefix,
+		m.ControllerNamespace,
+		m.RandomNamespacePrefix,
 	)
 	opLog.Info(
 		fmt.Sprintf(
@@ -116,14 +115,14 @@ func (h *Messaging) handleTaskEvent(ctx context.Context, opLog logr.Logger, payl
 		map[string]string{
 			"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeStandard),
 			"lagoon.sh/taskStatus": string(lagoonv1beta1.TaskStatusPending),
-			"lagoon.sh/controller": h.ControllerNamespace,
+			"lagoon.sh/controller": m.ControllerNamespace,
 		},
 	)
 	job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.HashString(job.Spec.Task.ID)[0:6])
 	if job.Spec.Task.TaskName != "" {
 		job.ObjectMeta.Name = job.Spec.Task.TaskName
 	}
-	if err := h.Client.Create(ctx, job); err != nil {
+	if err := m.Client.Create(ctx, job); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Unable to create job task for project %s, environment %s",
@@ -136,7 +135,7 @@ func (h *Messaging) handleTaskEvent(ctx context.Context, opLog logr.Logger, payl
 	return nil
 }
 
-func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
+func (m *Messenger) handleMiscEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
 	// unmarshall the message into a remove task to be processed
 	jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
 	json.Unmarshal(payload, jobSpec)
@@ -145,9 +144,9 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 		jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		jobSpec.Environment.Name,
 		jobSpec.Project.Name,
-		h.NamespacePrefix,
-		h.ControllerNamespace,
-		h.RandomNamespacePrefix,
+		m.NamespacePrefix,
+		m.ControllerNamespace,
+		m.RandomNamespacePrefix,
 	)
 	switch jobSpec.Key {
 	case "kubernetes:build:cancel", "deploytarget:build:cancel":
@@ -159,7 +158,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 				namespace,
 			),
 		)
-		err := h.CancelBuild(namespace, jobSpec)
+		err := m.CancelBuild(namespace, jobSpec)
 		if err != nil {
 			return err
 		}
@@ -172,7 +171,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 				namespace,
 			),
 		)
-		err := h.CancelTask(namespace, jobSpec)
+		err := m.CancelTask(namespace, jobSpec)
 		if err != nil {
 			return err
 		}
@@ -184,7 +183,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 				jobSpec.Environment.Name,
 			),
 		)
-		err := h.ResticRestore(namespace, jobSpec)
+		err := m.ResticRestore(namespace, jobSpec)
 		if err != nil {
 			return err
 		}
@@ -195,7 +194,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 				jobSpec.Project.Name,
 			),
 		)
-		err := h.IngressRouteMigration(namespace, jobSpec)
+		err := m.IngressRouteMigration(namespace, jobSpec)
 		if err != nil {
 			return err
 		}
@@ -206,7 +205,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 				jobSpec.Project.Name,
 			),
 		)
-		err := h.AdvancedTask(namespace, jobSpec)
+		err := m.AdvancedTask(namespace, jobSpec)
 		if err != nil {
 			return err
 		}
@@ -222,7 +221,7 @@ func (h *Messaging) handleMiscEvent(ctx context.Context, opLog logr.Logger, payl
 	return nil
 }
 
-func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
+func (m *Messenger) handleRemovalEvent(ctx context.Context, opLog logr.Logger, payload []byte) error {
 	// unmarshall the message into a remove task to be processed
 	removeTask := &removeTask{}
 	json.Unmarshal(payload, removeTask)
@@ -237,9 +236,9 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 		removeTask.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
 		removeTask.Branch,
 		removeTask.ProjectName,
-		h.NamespacePrefix,
-		h.ControllerNamespace,
-		h.RandomNamespacePrefix,
+		m.NamespacePrefix,
+		m.ControllerNamespace,
+		m.RandomNamespacePrefix,
 	)
 	branch := removeTask.Branch
 	project := removeTask.ProjectName
@@ -252,7 +251,7 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 		),
 	)
 	namespace := &corev1.Namespace{}
-	err := h.Client.Get(ctx, types.NamespacedName{
+	err := m.Client.Get(ctx, types.NamespacedName{
 		Name: ns,
 	}, namespace)
 	if err != nil {
@@ -274,7 +273,7 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 				},
 			}
 			msgBytes, _ := json.Marshal(msg)
-			h.Publish("lagoon-tasks:controller", msgBytes)
+			m.Publish("lagoon-tasks:controller", msgBytes)
 		} else {
 			opLog.WithName("RemoveTask").Info(
 				fmt.Sprintf(
@@ -292,69 +291,23 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 	}
 	// check that the namespace selected for deletion is owned by this controller
 	if value, ok := namespace.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
-		if value == h.ControllerNamespace {
-			/*
-				get any deployments/statefulsets/daemonsets
-				then delete them
-			*/
-			if h.CleanupHarborRepositoryOnDelete {
-				lagoonHarbor, err := harbor.NewHarbor(h.Harbor)
-				if err != nil {
-					return err
+		if value == m.ControllerNamespace {
+			// spawn the deletion process for this namespace
+			go func() {
+				err := m.DeletionHandler.ProcessDeletion(ctx, opLog, namespace)
+				if err == nil {
+					msg := lagoonv1beta1.LagoonMessage{
+						Type:      "remove",
+						Namespace: namespace.ObjectMeta.Name,
+						Meta: &lagoonv1beta1.LagoonLogMeta{
+							Project:     project,
+							Environment: branch,
+						},
+					}
+					msgBytes, _ := json.Marshal(msg)
+					m.Publish("lagoon-tasks:controller", msgBytes)
 				}
-				curVer, err := lagoonHarbor.GetHarborVersion(ctx)
-				if err != nil {
-					return err
-				}
-				if lagoonHarbor.UseV2Functions(curVer) {
-					lagoonHarbor.DeleteRepository(ctx, project, branch)
-				}
-			}
-			if del := h.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), ns, project, branch); del == false {
-				return nil
-			}
-			if del := h.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), ns, project, branch); del == false {
-				return nil
-			}
-			/*
-				then delete the namespace
-			*/
-			if del := h.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, branch); del == false {
-				return nil
-			}
-			opLog.WithName("DeleteNamespace").Info(
-				fmt.Sprintf(
-					"Deleted namespace %s for project %s, branch %s",
-					ns,
-					project,
-					branch,
-				),
-			)
-			msg := lagoonv1beta1.LagoonMessage{
-				Type:      "remove",
-				Namespace: ns,
-				Meta: &lagoonv1beta1.LagoonLogMeta{
-					Project:     project,
-					Environment: branch,
-				},
-			}
-			msgBytes, _ := json.Marshal(msg)
-			h.Publish("lagoon-tasks:controller", msgBytes)
+			}()
 			return nil
 		}
 		// controller label didn't match, log the message
@@ -364,7 +317,7 @@ func (h *Messaging) handleRemovalEvent(ctx context.Context, opLog logr.Logger, p
 				ns,
 				project,
 				branch,
-				fmt.Errorf("The controller label value %s does not match %s for this namespace", value, h.ControllerNamespace),
+				fmt.Errorf("The controller label value %s does not match %s for this namespace", value, m.ControllerNamespace),
 			),
 		)
 		return nil

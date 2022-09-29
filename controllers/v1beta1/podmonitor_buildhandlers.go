@@ -411,8 +411,10 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	switch jobPod.Status.Phase {
 	case corev1.PodFailed:
 		buildCondition = lagoonv1beta1.BuildStatusFailed
+		cancel = false // don't cancel failed builds
 	case corev1.PodSucceeded:
 		buildCondition = lagoonv1beta1.BuildStatusComplete
+		cancel = false // don't cancel complete builds
 	case corev1.PodPending:
 		buildCondition = lagoonv1beta1.BuildStatusPending
 	case corev1.PodRunning:
@@ -429,10 +431,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 		buildStep = value
 	}
-	// if the build status is Pending or Running
-	// then the buildCondition is Failed, Complete, or Cancelled
-	// then update the build to reflect the current pod status
-	// we do this so we don't update the status of the build again
+	// if the buildstatus is pending or running, or the cancel flag is provided
+	// send the update status to lagoon
 	if helpers.ContainsString(
 		helpers.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
@@ -486,7 +486,7 @@ Build %s
 			lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 			mergeMap["status"] = map[string]interface{}{
 				"conditions": lagoonBuild.Status.Conditions,
-				"log":        allContainerLogs,
+				// don't save build logs in resource anymore
 			}
 		}
 
@@ -523,7 +523,8 @@ Build %s
 			if pendingEnvironment {
 				mergeMap["statusMessages"].(map[string]interface{})["environmentMessage"] = pendingEnvironmentMessage
 			}
-			if pendingBuildLog {
+			// if the build log message is too long, don't save it
+			if pendingBuildLog && len(pendingBuildLogMessage.Message) > 1048576 {
 				mergeMap["statusMessages"].(map[string]interface{})["buildLogMessage"] = pendingBuildLogMessage
 			}
 		}

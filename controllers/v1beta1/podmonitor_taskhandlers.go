@@ -340,7 +340,7 @@ Task %s
 			lagoonTask.Status.Conditions = append(lagoonTask.Status.Conditions, condition)
 			mergeMap["status"] = map[string]interface{}{
 				"conditions": lagoonTask.Status.Conditions,
-				"log":        allContainerLogs,
+				// don't save build logs in resource anymore
 			}
 		}
 

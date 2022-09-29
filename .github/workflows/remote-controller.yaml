@@ -18,12 +18,12 @@ jobs:
       matrix:
         kindest_node_version: [v1.21.12, v1.22.9]
         harbor: ["1.5.6", "1.9.0"]
-        lagoon_build_image: ["uselagoon/kubectl-build-deploy-dind:latest"]
+        lagoon_build_image: ["uselagoon/build-deploy-image:latest"]
         experimental: [false]
         include:
           - kindest_node_version: v1.23.6
             harbor: "1.9.0"
-            lagoon_build_image: "uselagoon/kubectl-build-deploy-dind:latest"
+            lagoon_build_image: "uselagoon/build-deploy-image:latest"
             experimental: true
     steps:
     - name: Checkout

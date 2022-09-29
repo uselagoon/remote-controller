@@ -650,13 +650,8 @@ func main() {
 		randomPrefix,
 		advancedTaskSSHKeyInjection,
 		advancedTaskDeployToken,
-<<<<<<< HEAD
-		harborConfig,
-		cleanupHarborRepositoryOnDelete,
 		enableSingleQueue,
-=======
 		deletion,
->>>>>>> main
 		enableDebug,
 	)
 

@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/uselagoon/remote-controller/internal/utilities"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,14 +37,16 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
+	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
 	cron "gopkg.in/robfig/cron.v2"
 
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/controllers/messenger"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -593,11 +594,17 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	deleteConfig := messenger.DeleteConfig{
-		PVCRetryAttempts: pvcRetryAttempts,
-		PVCRetryInterval: pvcRetryInterval,
-	}
-	messaging := messenger.NewMessaging(config,
+	deletion := deletions.New(mgr.GetClient(),
+		harborConfig,
+		deletions.DeleteConfig{
+			PVCRetryAttempts: pvcRetryAttempts,
+			PVCRetryInterval: pvcRetryInterval,
+		},
+		cleanupHarborRepositoryOnDelete,
+		enableDebug,
+	)
+
+	messaging := messenger.New(config,
 		mgr.GetClient(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
@@ -606,11 +613,10 @@ func main() {
 		randomPrefix,
 		advancedTaskSSHKeyInjection,
 		advancedTaskDeployToken,
-		harborConfig,
-		deleteConfig,
-		cleanupHarborRepositoryOnDelete,
+		deletion,
 		enableDebug,
 	)
+
 	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
@@ -630,14 +636,13 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
-	resourceCleanup := messenger.NewCleanup(mgr.GetClient(),
+	resourceCleanup := pruner.New(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
-		namespacePrefix,
-		randomPrefix,
+		deletion,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -646,7 +651,7 @@ func main() {
 		// use cron to run a lagoonbuild cleanup task
 		// this will check any Lagoon builds and attempt to delete them
 		c.AddFunc(buildsCleanUpCron, func() {
-			resourceCleanup.LagoonBuildCleanup()
+			resourceCleanup.LagoonBuildPruner()
 		})
 	}
 	// if the build pod cleanup is enabled, add the cronjob for it
@@ -655,7 +660,7 @@ func main() {
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
-			resourceCleanup.BuildPodCleanup()
+			resourceCleanup.BuildPodPruner()
 		})
 	}
 	// if the lagoontask cleanup is enabled, add the cronjob for it
@@ -664,7 +669,7 @@ func main() {
 		// use cron to run a lagoontask cleanup task
 		// this will check any Lagoon tasks and attempt to delete them
 		c.AddFunc(taskCleanUpCron, func() {
-			resourceCleanup.LagoonTaskCleanup()
+			resourceCleanup.LagoonTaskPruner()
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
@@ -673,7 +678,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
-			resourceCleanup.TaskPodCleanup()
+			resourceCleanup.TaskPodPruner()
 		})
 	}
 	// if harbor is enabled, add the cronjob for credential rotation
@@ -690,7 +695,9 @@ func main() {
 	// if we've set namespaces to be cleaned up, we run the job periodically
 	if cleanNamespacesEnabled {
 		setupLog.Info("starting namespace cleanup task")
-		c.AddFunc(cleanNamespacesCron, utilities.RunNSDeletionLoop(mgr))
+		c.AddFunc(taskPodCleanUpCron, func() {
+			resourceCleanup.NamespacePruner()
+		})
 	}
 
 	c.Start()

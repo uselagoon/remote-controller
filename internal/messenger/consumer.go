@@ -393,7 +393,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := h.ActiveStandbySwitch(namespace, jobSpec)
+				err := m.ActiveStandbySwitch(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue

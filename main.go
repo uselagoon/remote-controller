@@ -37,12 +37,14 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
+	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
-	"gopkg.in/robfig/cron.v2"
+	cron "gopkg.in/robfig/cron.v2"
 
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/controllers/messenger"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -140,6 +142,10 @@ func main() {
 	var harborLagoonWebhook string
 	var harborWebhookEventTypes string
 	var nativeCronPodMinFrequency int
+	var pvcRetryAttempts int
+	var pvcRetryInterval int
+	var cleanNamespacesEnabled bool
+	var cleanNamespacesCron string
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -296,7 +302,7 @@ func main() {
 		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
 	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
-	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "30d",
+	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "1d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
@@ -308,6 +314,12 @@ func main() {
 		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
 		"The event types to use for the Lagoon webhook")
+
+	// NS cleanup configuration
+	flag.BoolVar(&cleanNamespacesEnabled, "enable-namespace-cleanup", false,
+		"Tells the controller to remove namespaces marked for deletion with labels (lagoon.sh/expiration=<unixtimestamp>).")
+	flag.StringVar(&cleanNamespacesCron, "namespace-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the namespace resources cleanup.")
 
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
@@ -322,6 +334,10 @@ func main() {
 		"Flag to have this controller inject proxy variables to build and task pods.")
 	flag.BoolVar(&podsUseDifferentProxy, "pods-use-different-proxy", false,
 		"Flag to have this controller provide different proxy configuration to build pods.\nUse LAGOON_HTTP_PROXY, LAGOON_HTTPS_PROXY, and LAGOON_NO_PROXY when using this flag")
+
+	// the number of attempts for cleaning up pvcs in a namespace default 30 attempts, 10 seconds apart (300 seconds total)
+	flag.IntVar(&pvcRetryAttempts, "delete-pvc-retry-attempts", 30, "How many attempts to check that PVCs have been removed (default 30).")
+	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
 
 	flag.Parse()
 
@@ -574,7 +590,17 @@ func main() {
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 	}
 
-	messaging := messenger.NewMessaging(config,
+	deletion := deletions.New(mgr.GetClient(),
+		harborConfig,
+		deletions.DeleteConfig{
+			PVCRetryAttempts: pvcRetryAttempts,
+			PVCRetryInterval: pvcRetryInterval,
+		},
+		cleanupHarborRepositoryOnDelete,
+		enableDebug,
+	)
+
+	messaging := messenger.New(config,
 		mgr.GetClient(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
@@ -583,10 +609,10 @@ func main() {
 		randomPrefix,
 		advancedTaskSSHKeyInjection,
 		advancedTaskDeployToken,
-		harborConfig,
-		cleanupHarborRepositoryOnDelete,
+		deletion,
 		enableDebug,
 	)
+
 	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 	if enableMQ {
@@ -606,14 +632,13 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
-	resourceCleanup := messenger.NewCleanup(mgr.GetClient(),
+	resourceCleanup := pruner.New(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
 		taskPodsToKeep,
 		controllerNamespace,
-		namespacePrefix,
-		randomPrefix,
+		deletion,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -622,7 +647,7 @@ func main() {
 		// use cron to run a lagoonbuild cleanup task
 		// this will check any Lagoon builds and attempt to delete them
 		c.AddFunc(buildsCleanUpCron, func() {
-			resourceCleanup.LagoonBuildCleanup()
+			resourceCleanup.LagoonBuildPruner()
 		})
 	}
 	// if the build pod cleanup is enabled, add the cronjob for it
@@ -631,7 +656,7 @@ func main() {
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
-			resourceCleanup.BuildPodCleanup()
+			resourceCleanup.BuildPodPruner()
 		})
 	}
 	// if the lagoontask cleanup is enabled, add the cronjob for it
@@ -640,7 +665,7 @@ func main() {
 		// use cron to run a lagoontask cleanup task
 		// this will check any Lagoon tasks and attempt to delete them
 		c.AddFunc(taskCleanUpCron, func() {
-			resourceCleanup.LagoonTaskCleanup()
+			resourceCleanup.LagoonTaskPruner()
 		})
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
@@ -649,7 +674,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
-			resourceCleanup.TaskPodCleanup()
+			resourceCleanup.TaskPodPruner()
 		})
 	}
 	// if harbor is enabled, add the cronjob for credential rotation
@@ -658,10 +683,19 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := harbor.NewHarbor(harborConfig)
+			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
+
+	// if we've set namespaces to be cleaned up, we run the job periodically
+	if cleanNamespacesEnabled {
+		setupLog.Info("starting namespace cleanup task")
+		c.AddFunc(taskPodCleanUpCron, func() {
+			resourceCleanup.NamespacePruner()
+		})
+	}
+
 	c.Start()
 
 	setupLog.Info("starting controllers")

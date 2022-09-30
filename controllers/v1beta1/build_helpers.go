@@ -41,29 +41,6 @@ This issue is related to the deployment system, not the repository or code base 
 Contact your Lagoon support team for help`
 )
 
-// updateBuildStatusCondition is used to patch the lagoon build with the status conditions for the build, plus any logs
-func (r *LagoonBuildReconciler) updateBuildStatusCondition(ctx context.Context,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	condition lagoonv1beta1.LagoonBuildConditions,
-	log []byte,
-) error {
-	// set the transition time
-	condition.LastTransitionTime = time.Now().UTC().Format(time.RFC3339)
-	if !helpers.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
-		lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"status": map[string]interface{}{
-				"conditions": lagoonBuild.Status.Conditions,
-				"log":        log,
-			},
-		})
-		if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			return fmt.Errorf("Unable to update status condition: %v", err)
-		}
-	}
-	return nil
-}
-
 // getOrCreateServiceAccount will create the lagoon-deployer service account if it doesn't exist.
 func (r *LagoonBuildReconciler) getOrCreateServiceAccount(ctx context.Context, serviceAccount *corev1.ServiceAccount, ns string) error {
 	serviceAccount.ObjectMeta = metav1.ObjectMeta{
@@ -142,6 +119,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if lagoonBuild.Spec.Project.ProjectIdling != nil {
 		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
 	}
+	if lagoonBuild.Spec.Project.StorageCalculatorDisabled != nil {
+		if *lagoonBuild.Spec.Project.StorageCalculatorDisabled != 1 {
+			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "false"
+		}
+	}
 	// add the required lagoon labels to the namespace when creating
 	namespace.ObjectMeta = metav1.ObjectMeta{
 		Name:   ns,
@@ -201,7 +185,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
 		// create the harbor client
-		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
+		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
 			return fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}

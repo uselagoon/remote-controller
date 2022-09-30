@@ -24,8 +24,8 @@ import (
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	"github.com/uselagoon/remote-controller/controllers/messenger"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -42,7 +42,7 @@ type LagoonMonitorReconciler struct {
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
-	Messaging             *messenger.Messaging
+	Messaging             *messenger.Messenger
 	ControllerNamespace   string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool

@@ -185,7 +185,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
 		// create the harbor client
-		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
+		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
 			return fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}

@@ -127,7 +127,7 @@ type Project struct {
 	Registry              string     `json:"registry,omitempty"`
 	EnvironmentIdling     *int       `json:"environmentIdling,omitempty"`
 	ProjectIdling         *int       `json:"projectIdling,omitempty"`
-	StorageCalculator     *int       `json:"storageCalc,omitempty"`
+	StorageCalculator     *int       `json:"storageCalculator,omitempty"`
 }
 
 // Variables contains the project and environment variables from lagoon.

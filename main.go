@@ -146,6 +146,8 @@ func main() {
 	var pvcRetryInterval int
 	var cleanNamespacesEnabled bool
 	var cleanNamespacesCron string
+	var pruneLongRunningWorkerPods bool
+	var timeoutForLongRunningWorkerPods int
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -320,6 +322,11 @@ func main() {
 		"Tells the controller to remove namespaces marked for deletion with labels (lagoon.sh/expiration=<unixtimestamp>).")
 	flag.StringVar(&cleanNamespacesCron, "namespace-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the namespace resources cleanup.")
+
+	// LongRuning Worker Pod Timeout config
+	flag.BoolVar(&pruneLongRunningWorkerPods, "enable-longrunning-pod-cleanup", true,
+		"Tells the controller to remove Task and Build pods that have been running for too long.")
+	flag.IntVar(&timeoutForLongRunningWorkerPods, "timeout-longrunning-pod-cleanup", 6, "How many hours a build or task pod should run before forcefully closed.")
 
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
@@ -639,6 +646,7 @@ func main() {
 		taskPodsToKeep,
 		controllerNamespace,
 		deletion,
+		timeoutForLongRunningWorkerPods,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -693,6 +701,13 @@ func main() {
 		setupLog.Info("starting namespace cleanup task")
 		c.AddFunc(taskPodCleanUpCron, func() {
 			resourceCleanup.NamespacePruner()
+		})
+	}
+
+	if pruneLongRunningWorkerPods || true {
+		setupLog.Info("starting long running task cleanup task")
+		c.AddFunc("* * * * *", func() {
+			resourceCleanup.LagoonOldProcPruner()
 		})
 	}
 

@@ -146,8 +146,11 @@ func main() {
 	var pvcRetryInterval int
 	var cleanNamespacesEnabled bool
 	var cleanNamespacesCron string
-	var pruneLongRunningWorkerPods bool
-	var timeoutForLongRunningWorkerPods int
+	var pruneLongRunningBuildPods bool
+	var pruneLongRunningTaskPods bool
+	var timeoutForLongRunningBuildPods int
+	var timeoutForLongRunningTaskPods int
+	var pruneLongRunningPodsCron string
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -324,9 +327,14 @@ func main() {
 		"The cron definition for how often to run the namespace resources cleanup.")
 
 	// LongRuning Worker Pod Timeout config
-	flag.BoolVar(&pruneLongRunningWorkerPods, "enable-longrunning-pod-cleanup", true,
-		"Tells the controller to remove Task and Build pods that have been running for too long.")
-	flag.IntVar(&timeoutForLongRunningWorkerPods, "timeout-longrunning-pod-cleanup", 6, "How many hours a build or task pod should run before forcefully closed.")
+	flag.StringVar(&pruneLongRunningPodsCron, "longrunning-pod-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the long running Task/Build cleanup process.")
+	flag.BoolVar(&pruneLongRunningBuildPods, "enable-longrunning-build-pod-cleanup", true,
+		"Tells the controller to remove Build pods that have been running for too long.")
+	flag.BoolVar(&pruneLongRunningTaskPods, "enable-longrunning-task-pod-cleanup", true,
+		"Tells the controller to remove Task pods that have been running for too long.")
+	flag.IntVar(&timeoutForLongRunningBuildPods, "timeout-longrunning-build-pod-cleanup", 6, "How many hours a build pod should run before forcefully closed.")
+	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
 
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
@@ -646,7 +654,8 @@ func main() {
 		taskPodsToKeep,
 		controllerNamespace,
 		deletion,
-		timeoutForLongRunningWorkerPods,
+		timeoutForLongRunningBuildPods,
+		timeoutForLongRunningTaskPods,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -704,10 +713,10 @@ func main() {
 		})
 	}
 
-	if pruneLongRunningWorkerPods || true {
+	if pruneLongRunningTaskPods || pruneLongRunningBuildPods {
 		setupLog.Info("starting long running task cleanup task")
-		c.AddFunc("* * * * *", func() {
-			resourceCleanup.LagoonOldProcPruner()
+		c.AddFunc(pruneLongRunningPodsCron, func() {
+			resourceCleanup.LagoonOldProcPruner(pruneLongRunningBuildPods, pruneLongRunningTaskPods)
 		})
 	}
 

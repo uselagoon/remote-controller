@@ -15,7 +15,7 @@ import (
 )
 
 // LagoonOldProcPruner will identify and remove any long running builds or tasks.
-func (p *Pruner) LagoonOldProcPruner() {
+func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 	opLog := ctrl.Log.WithName("utilities").WithName("LagoonOldProcPruner")
 	opLog.Info("Beginning marking old build and task pods")
 	namespaces := &corev1.NamespaceList{}
@@ -38,10 +38,6 @@ func (p *Pruner) LagoonOldProcPruner() {
 			continue
 		}
 
-		//Now let's look for build and task pods
-		// NOTE: build and task pods really are the same kind of thing, right - they're simply pods, but tagged differently
-		// So what we're going to do is just find those that match the various
-
 		podList := corev1.PodList{
 			TypeMeta: metav1.TypeMeta{},
 			ListMeta: metav1.ListMeta{},
@@ -59,57 +55,64 @@ func (p *Pruner) LagoonOldProcPruner() {
 			continue
 		}
 
-		opLog.Info(fmt.Sprintf("Running task/build recon"))
-
-		hours, err := time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForWorkerPods))
+		hours, err := time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForBuildPods))
 		if err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
-					"Unable to parse TimeoutForWorkerPods '%v' - cannot run long running task removal process.",
-					p.TimeoutForWorkerPods,
+					"Unable to parse TimeoutForBuildPods '%v' - cannot run long running task removal process.",
+					p.TimeoutForBuildPods,
 				),
 			)
 			return
 		}
-		removeIfCreatedBefore := time.Now().Add(-time.Hour * hours)
+
+		removeBuildIfCreatedBefore := time.Now().Add(-time.Hour * hours)
+
+		hours, err = time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForTaskPods))
+		if err != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to parse TimeoutForTaskPods '%v' - cannot run long running task removal process.",
+					p.TimeoutForBuildPods,
+				),
+			)
+			return
+		}
+		removeTaskIfCreatedBefore := time.Now().Add(-time.Hour * hours)
 
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodRunning {
-				opLog.Info(fmt.Sprintf("Found a pod named - %v", pod.Name))
-
-				if pod.CreationTimestamp.Time.Before(removeIfCreatedBefore) || true {
-					if podType, ok := pod.GetLabels()["lagoon.sh/jobType"]; ok {
-						switch podType {
-						case "task":
-							//podTypeName = "task"
+				if podType, ok := pod.GetLabels()["lagoon.sh/jobType"]; ok {
+					switch podType {
+					case "task":
+						if pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore) && pruneTasks {
 							pod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
 							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled task due to timeout")
-							break
-						case "build":
-							//podTypeName = "build"
+						}
+						break
+					case "build":
+						if pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore) && pruneBuilds {
 							pod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
 							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled build due to timeout")
-							break
-						default:
-							return
 						}
-						// this isn't actually a job, so we skip
-						if err := p.Client.Update(context.Background(), &pod); err != nil {
-							opLog.Error(err,
-								fmt.Sprintf(
-									"Unable to update %s to cancel it.",
-									pod.Name,
-								),
-							)
-						}
-						opLog.Info("Cancelled pod %v - timeout", pod.Name)
-					} else {
-						continue
+						break
+					default:
+						return
 					}
-
+					// this isn't actually a job, so we skip
+					if err := p.Client.Update(context.Background(), &pod); err != nil {
+						opLog.Error(err,
+							fmt.Sprintf(
+								"Unable to update %s to cancel it.",
+								pod.Name,
+							),
+						)
+					}
+					opLog.Info(fmt.Sprintf("Cancelled pod %v - timeout", pod.Name))
+				} else {
+					continue
 				}
 			}
 		}
-		opLog.Info(fmt.Sprintf("Endint task/build recon"))
 	}
 }

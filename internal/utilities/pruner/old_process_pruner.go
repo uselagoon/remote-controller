@@ -19,7 +19,6 @@ import (
 // LagoonOldProcPruner will identify and remove any long running builds or tasks.
 func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 	opLog := ctrl.Log.WithName("utilities").WithName("LagoonOldProcPruner")
-	opLog.Info("Beginning marking old build and task pods")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -37,7 +36,6 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't search it for long running tasks
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, skipping build/task pruner", ns.ObjectMeta.Name))
 			continue
 		}
 

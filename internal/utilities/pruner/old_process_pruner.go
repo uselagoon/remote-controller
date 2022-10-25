@@ -2,6 +2,7 @@ package pruner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -9,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 	"time"
 	//lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	//"github.com/uselagoon/remote-controller/internal/helpers"
@@ -32,6 +34,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 
 	//now we iterate through each namespace, and look for build/task pods
 	for _, ns := range namespaces.Items {
+
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't search it for long running tasks
 			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, skipping build/task pruner", ns.ObjectMeta.Name))
@@ -42,6 +45,12 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			TypeMeta: metav1.TypeMeta{},
 			ListMeta: metav1.ListMeta{},
 			Items:    nil,
+		}
+
+		removeBuildIfCreatedBefore, removeTaskIfCreatedBefore, err := calculateRemoveBeforeTimes(p, ns, time.Now())
+		if err != nil {
+			opLog.Error(err, err.Error())
+			return
 		}
 
 		jobTypeLabelRequirements, _ := labels.NewRequirement("lagoon.sh/jobType", selection.Exists, nil)
@@ -58,31 +67,6 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			opLog.Error(err, fmt.Sprintf("Unable to list pod resources, there may be none or something went wrong"))
 			continue
 		}
-
-		hours, err := time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForBuildPods))
-		if err != nil {
-			opLog.Error(err,
-				fmt.Sprintf(
-					"Unable to parse TimeoutForBuildPods '%v' - cannot run long running task removal process.",
-					p.TimeoutForBuildPods,
-				),
-			)
-			return
-		}
-
-		removeBuildIfCreatedBefore := time.Now().Add(-hours)
-
-		hours, err = time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForTaskPods))
-		if err != nil {
-			opLog.Error(err,
-				fmt.Sprintf(
-					"Unable to parse TimeoutForTaskPods '%v' - cannot run long running task removal process.",
-					p.TimeoutForBuildPods,
-				),
-			)
-			return
-		}
-		removeTaskIfCreatedBefore := time.Now().Add(-hours)
 
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodRunning {
@@ -124,4 +108,50 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			}
 		}
 	}
+}
+
+// calculateRemoveBeforeTimes will return the date/times before which a build and task should be pruned.
+func calculateRemoveBeforeTimes(p *Pruner, ns corev1.Namespace, startTime time.Time) (time.Time, time.Time, error) {
+	// Here we set the timeout for build and task pods
+	// these are able to be overridden by a namespace level
+	// specification,
+	timeoutForBuildPods := p.TimeoutForBuildPods
+	if nsTimeoutForBuildPods, ok := ns.GetLabels()["lagoon.sh/buildPodTimeout"]; ok {
+		insTimeoutForBuildpods, err := strconv.Atoi(nsTimeoutForBuildPods)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		timeoutForBuildPods = insTimeoutForBuildpods
+	}
+
+	timeoutForTaskPods := p.TimeoutForTaskPods
+	if nsTimeoutForTaskPods, ok := ns.GetLabels()["lagoon.sh/taskPodTimeout"]; ok {
+		insTimeoutForTaskPods, err := strconv.Atoi(nsTimeoutForTaskPods)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		timeoutForTaskPods = insTimeoutForTaskPods
+	}
+
+	hours, err := time.ParseDuration(fmt.Sprintf("%vh", timeoutForBuildPods))
+	if err != nil {
+		errorText := fmt.Sprintf(
+			"Unable to parse TimeoutForBuildPods '%v' - cannot run long running task removal process.",
+			p.TimeoutForBuildPods,
+		)
+		return time.Time{}, time.Time{}, errors.New(errorText)
+	}
+
+	removeBuildIfCreatedBefore := startTime.Add(-hours)
+
+	hours, err = time.ParseDuration(fmt.Sprintf("%vh", timeoutForTaskPods))
+	if err != nil {
+		errorText := fmt.Sprintf(
+			"Unable to parse TimeoutForTaskPods '%v' - cannot run long running task removal process.",
+			p.TimeoutForBuildPods,
+		)
+		return time.Time{}, time.Time{}, errors.New(errorText)
+	}
+	removeTaskIfCreatedBefore := startTime.Add(-hours)
+	return removeBuildIfCreatedBefore, removeTaskIfCreatedBefore, nil
 }

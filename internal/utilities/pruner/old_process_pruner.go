@@ -44,11 +44,15 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			Items:    nil,
 		}
 
+		jobTypeLabelRequirements, _ := labels.NewRequirement("lagoon.sh/jobType", selection.Exists, nil)
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(ns.ObjectMeta.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/controller": p.ControllerNamespace, // created by this controller
 			}),
+			client.MatchingLabelsSelector{
+				Selector: labels.NewSelector().Add(*jobTypeLabelRequirements),
+			},
 		})
 		if err := p.Client.List(context.Background(), &podList, listOption); err != nil {
 			opLog.Error(err, fmt.Sprintf("Unable to list pod resources, there may be none or something went wrong"))
@@ -66,7 +70,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			return
 		}
 
-		removeBuildIfCreatedBefore := time.Now().Add(-time.Hour * hours)
+		removeBuildIfCreatedBefore := time.Now().Add(-hours)
 
 		hours, err = time.ParseDuration(fmt.Sprintf("%vh", p.TimeoutForTaskPods))
 		if err != nil {
@@ -78,28 +82,33 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			)
 			return
 		}
-		removeTaskIfCreatedBefore := time.Now().Add(-time.Hour * hours)
+		removeTaskIfCreatedBefore := time.Now().Add(-hours)
 
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodRunning {
 				if podType, ok := pod.GetLabels()["lagoon.sh/jobType"]; ok {
+
+					updatePod := false
 					switch podType {
 					case "task":
 						if pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore) && pruneTasks {
+							updatePod = true
 							pod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
 							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled task due to timeout")
 						}
-						break
 					case "build":
 						if pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore) && pruneBuilds {
+							updatePod = true
 							pod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
 							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled build due to timeout")
 						}
-						break
 					default:
 						return
 					}
-					// this isn't actually a job, so we skip
+					if !updatePod {
+						return
+					}
+
 					if err := p.Client.Update(context.Background(), &pod); err != nil {
 						opLog.Error(err,
 							fmt.Sprintf(

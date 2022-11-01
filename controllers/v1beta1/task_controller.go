@@ -435,6 +435,15 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					Name:            "lagoon-task",
 					Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
 					ImagePullPolicy: "Always",
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "lagoon-env",
+								},
+							},
+						},
+					},
 					Env: []corev1.EnvVar{
 						{
 							Name:  "JSON_PAYLOAD",

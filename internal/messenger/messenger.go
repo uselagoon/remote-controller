@@ -63,6 +63,7 @@ func New(config mq.Config,
 		AdvancedTaskSSHKeyInjection:      advancedTaskSSHKeyInjection,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		DeletionHandler:                  deletionHandler,
+		EnableSingleQueue:                enableSingleQueue,
 		EnableDebug:                      enableDebug,
 	}
 }

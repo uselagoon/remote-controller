@@ -165,52 +165,55 @@ sleep 10
 check_lagoon_build lagoon-build-${LBUILD}
 
 
-echo "==> Trigger a lagoon build using rabbitmq"
+echo "==> Trigger a lagoon build using rabbitmq to the single queue"
 echo '
 {
     "properties":{
         "delivery_mode":2
     },
-    "routing_key":"ci-local-controller-kubernetes:builddeploy",
+    "routing_key":"controller:ci-local-controller-kubernetes",
     "payload":"{
-        \"metadata\": {
-            \"name\": \"lagoon-build-8m5zypx\"
-        },
-        \"spec\": {
-            \"build\": {
-                \"ci\": \"true\",
-                \"type\": \"branch\"
+        \"eventType\": \"lagoon:build\",
+        \"payload\": {
+            \"metadata\": {
+                \"name\": \"lagoon-build-8m5zypx\"
             },
-            \"gitReference\": \"origin\/main\",
-            \"project\": {
-                \"name\": \"nginx-example\",
-                \"environment\": \"main\",
-                \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
-                \"routerPattern\": \"main-nginx-example\",
-                \"environmentType\": \"production\",
-                \"productionEnvironment\": \"main\",
-                \"standbyEnvironment\": \"\",
-                \"gitUrl\": \"https:\/\/github.com\/shreddedbacon\/lagoon-nginx-example.git\",
-                \"deployTarget\": \"kind\",
-                \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
-                \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
-                \"monitoring\": {
-                    \"contact\": \"1234\",
-                    \"statuspageID\": \"1234\"
+            \"spec\": {
+                \"build\": {
+                    \"ci\": \"true\",
+                    \"type\": \"branch\"
                 },
-                \"variables\": {
-                    \"project\": \"W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==\",
-                    \"environment\": \"W10=\"
+                \"gitReference\": \"origin\/main\",
+                \"project\": {
+                    \"name\": \"nginx-example\",
+                    \"environment\": \"main\",
+                    \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
+                    \"routerPattern\": \"main-nginx-example\",
+                    \"environmentType\": \"production\",
+                    \"productionEnvironment\": \"main\",
+                    \"standbyEnvironment\": \"\",
+                    \"gitUrl\": \"https:\/\/github.com\/shreddedbacon\/lagoon-nginx-example.git\",
+                    \"deployTarget\": \"kind\",
+                    \"projectSecret\": \"4d6e7dd0f013a75d62a0680139fa82d350c2a1285f43f867535bad1143f228b1\",
+                    \"key\": \"LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUUNjc1g2RG5KNXpNb0RqQ2R6a1JFOEg2TEh2TDQzaUhsekJLTWo4T1VNV05ZZG5YekdqCkR5Mkp1anQ3ZDNlMTVLeC8zOFo5UzJLdHNnVFVtWi9lUlRQSTdabE1idHRJK250UmtyblZLblBWNzhEeEFKNW8KTGZtQndmdWE2MnlVYnl0cnpYQ2pwVVJrQUlBMEZiR2VqS2Rvd3cxcnZGMzJoZFUzQ3ZIcG5rKzE2d0lEQVFBQgpBb0dCQUkrV0dyL1NDbVMzdCtIVkRPVGtMNk9vdVR6Y1QrRVFQNkVGbGIrRFhaV0JjZFhwSnB3c2NXZFBEK2poCkhnTEJUTTFWS3hkdnVEcEE4aW83cUlMTzJWYm1MeGpNWGk4TUdwY212dXJFNVJydTZTMXJzRDl2R0c5TGxoR3UKK0pUSmViMVdaZFduWFZ2am5LbExrWEV1eUthbXR2Z253Um5xNld5V05OazJ6SktoQWtFQThFenpxYnowcFVuTApLc241K2k0NUdoRGVpRTQvajRtamo1b1FHVzJxbUZWT2pHaHR1UGpaM2lwTis0RGlTRkFyMkl0b2VlK085d1pyCkRINHBkdU5YOFFKQkFLYnVOQ3dXK29sYXA4R2pUSk1TQjV1MW8wMVRHWFdFOGhVZG1leFBBdjl0cTBBT0gzUUQKUTIrM0RsaVY0ektoTlMra2xaSkVjNndzS0YyQmJIby81NXNDUVFETlBJd24vdERja3loSkJYVFJyc1RxZEZuOApCUWpZYVhBZTZEQ3o1eXg3S3ZFSmp1K1h1a01xTXV1ajBUSnpITFkySHVzK3FkSnJQVG9VMDNSS3JHV2hBa0JFCnB3aXI3Vk5pYy9jMFN2MnVLcWNZWWM1a2ViMnB1R0I3VUs1Q0lvaWdGakZzNmFJRDYyZXJwVVJ3S0V6RlFNbUgKNjQ5Y0ZXemhMVlA0aU1iZFREVHJBa0FFMTZXU1A3WXBWOHV1eFVGMGV0L3lFR3dURVpVU2R1OEppSTBHN0tqagpqcVR6RjQ3YkJZc0pIYTRYcWpVb2E3TXgwcS9FSUtRWkJ2NGFvQm42bGFOQwotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQ==\",
+                    \"monitoring\": {
+                        \"contact\": \"1234\",
+                        \"statuspageID\": \"1234\"
+                    },
+                    \"variables\": {
+                        \"project\": \"W3sibmFtZSI6IkxBR09PTl9TWVNURU1fUk9VVEVSX1BBVFRFUk4iLCJ2YWx1ZSI6IiR7ZW52aXJvbm1lbnR9LiR7cHJvamVjdH0uZXhhbXBsZS5jb20iLCJzY29wZSI6ImludGVybmFsX3N5c3RlbSJ9XQ==\",
+                        \"environment\": \"W10=\"
+                    }
+                },
+                \"branch\": {
+                    \"name\": \"main\"
                 }
-            },
-            \"branch\": {
-                \"name\": \"main\"
             }
         }
     }",
     "payload_encoding":"string"
 }' >payload.json
-curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-controller/publish
 echo ""
 sleep 10
 check_lagoon_build lagoon-build-${LBUILD2}
@@ -268,17 +271,24 @@ kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '
 
 echo "==> Delete the environment"
 echo '
-{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:remove",
+{
+    "properties":{
+        "delivery_mode":2
+    },
+    "routing_key":"controller:ci-local-controller-kubernetes",
     "payload":"{
-        \"projectName\": \"nginx-example\",
-        \"type\":\"branch\",
-        \"forceDeleteProductionEnvironment\":true,
-        \"branch\":\"main\",
-        \"openshiftProjectName\":\"nginx-example-main\"
+        \"eventType\": \"lagoon:removal\",
+        \"payload\": {
+            \"projectName\": \"nginx-example\",
+            \"type\":\"branch\",
+            \"forceDeleteProductionEnvironment\":true,
+            \"branch\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        }
     }",
 "payload_encoding":"string"
 }' >payload.json
-curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-controller/publish
 echo ""
 CHECK_COUNTER=1
 until $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Deleted namespace nginx-example-main for project nginx-example, environment main")

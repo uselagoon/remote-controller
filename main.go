@@ -362,6 +362,7 @@ func main() {
 	mqUser = helpers.GetEnv("RABBITMQ_USERNAME", mqUser)
 	mqPass = helpers.GetEnv("RABBITMQ_PASSWORD", mqPass)
 	mqHost = helpers.GetEnv("RABBITMQ_HOSTNAME", mqHost)
+	enableSingleQueue = helpers.GetEnvBool("ENABLE_SINGLE_QUEUE", enableSingleQueue)
 	lagoonTargetName = helpers.GetEnv("LAGOON_TARGET_NAME", lagoonTargetName)
 	lagoonAppID = helpers.GetEnv("LAGOON_APP_ID", lagoonAppID)
 	pendingMessageCron = helpers.GetEnv("PENDING_MESSAGE_CRON", pendingMessageCron)

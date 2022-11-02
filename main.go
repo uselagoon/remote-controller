@@ -147,6 +147,11 @@ func main() {
 	var pvcRetryInterval int
 	var cleanNamespacesEnabled bool
 	var cleanNamespacesCron string
+	var pruneLongRunningBuildPods bool
+	var pruneLongRunningTaskPods bool
+	var timeoutForLongRunningBuildPods int
+	var timeoutForLongRunningTaskPods int
+	var pruneLongRunningPodsCron string
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -322,6 +327,16 @@ func main() {
 		"Tells the controller to remove namespaces marked for deletion with labels (lagoon.sh/expiration=<unixtimestamp>).")
 	flag.StringVar(&cleanNamespacesCron, "namespace-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the namespace resources cleanup.")
+
+	// LongRuning Worker Pod Timeout config
+	flag.StringVar(&pruneLongRunningPodsCron, "longrunning-pod-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the long running Task/Build cleanup process.")
+	flag.BoolVar(&pruneLongRunningBuildPods, "enable-longrunning-build-pod-cleanup", true,
+		"Tells the controller to remove Build pods that have been running for too long.")
+	flag.BoolVar(&pruneLongRunningTaskPods, "enable-longrunning-task-pod-cleanup", true,
+		"Tells the controller to remove Task pods that have been running for too long.")
+	flag.IntVar(&timeoutForLongRunningBuildPods, "timeout-longrunning-build-pod-cleanup", 6, "How many hours a build pod should run before forcefully closed.")
+	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
 
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
@@ -681,6 +696,8 @@ func main() {
 		taskPodsToKeep,
 		controllerNamespace,
 		deletion,
+		timeoutForLongRunningBuildPods,
+		timeoutForLongRunningTaskPods,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -725,7 +742,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := harbor.NewHarbor(harborConfig)
+			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
@@ -735,6 +752,13 @@ func main() {
 		setupLog.Info("starting namespace cleanup task")
 		c.AddFunc(taskPodCleanUpCron, func() {
 			resourceCleanup.NamespacePruner()
+		})
+	}
+
+	if pruneLongRunningTaskPods || pruneLongRunningBuildPods {
+		setupLog.Info("starting long running task cleanup task")
+		c.AddFunc(pruneLongRunningPodsCron, func() {
+			resourceCleanup.LagoonOldProcPruner(pruneLongRunningBuildPods, pruneLongRunningTaskPods)
 		})
 	}
 

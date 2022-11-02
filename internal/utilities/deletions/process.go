@@ -34,7 +34,7 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		then delete them
 	*/
 	if d.CleanupHarborRepositoryOnDelete && cleanupHarbor {
-		lagoonHarbor, err := harbor.NewHarbor(d.Harbor)
+		lagoonHarbor, err := harbor.New(d.Harbor)
 		if err != nil {
 			return err
 		}

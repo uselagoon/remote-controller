@@ -22,6 +22,8 @@ type Pruner struct {
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
 	DeletionHandler       *deletions.Deletions
+	TimeoutForBuildPods   int
+	TimeoutForTaskPods    int
 	EnableDebug           bool
 }
 
@@ -34,6 +36,8 @@ func New(
 	taskPodsToKeep int,
 	controllerNamespace string,
 	deletionHandler *deletions.Deletions,
+	timeoutForBuildPods int,
+	timeoutForTaskPods int,
 	enableDebug bool) *Pruner {
 	return &Pruner{
 		Client:              client,
@@ -43,6 +47,8 @@ func New(
 		TaskPodsToKeep:      taskPodsToKeep,
 		ControllerNamespace: controllerNamespace,
 		DeletionHandler:     deletionHandler,
+		TimeoutForBuildPods: timeoutForBuildPods,
+		TimeoutForTaskPods:  timeoutForTaskPods,
 		EnableDebug:         enableDebug,
 	}
 }

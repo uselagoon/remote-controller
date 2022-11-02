@@ -114,16 +114,28 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	// set the auto idling values if they are defined
 	if lagoonBuild.Spec.Project.EnvironmentIdling != nil {
+		// eventually deprecate 'lagoon.sh/environmentAutoIdle' for 'lagoon.sh/environmentIdlingEnabled'
 		nsLabels["lagoon.sh/environmentAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentIdling)
+		if *lagoonBuild.Spec.Project.ProjectIdling == 1 {
+			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "false"
+		}
 	}
 	if lagoonBuild.Spec.Project.ProjectIdling != nil {
+		// eventually deprecate 'lagoon.sh/projectAutoIdle' for 'lagoon.sh/projectIdlingEnabled'
 		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
-	}
-	if lagoonBuild.Spec.Project.StorageCalculatorDisabled != nil {
-		if *lagoonBuild.Spec.Project.StorageCalculatorDisabled != 1 {
-			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "true"
+		if *lagoonBuild.Spec.Project.ProjectIdling == 1 {
+			nsLabels["lagoon.sh/projectIdlingEnabled"] = "true"
 		} else {
-			nsLabels["lagoon.sh/storageCalculatorDisabled"] = "false"
+			nsLabels["lagoon.sh/projectIdlingEnabled"] = "false"
+		}
+	}
+	if lagoonBuild.Spec.Project.StorageCalculator != nil {
+		if *lagoonBuild.Spec.Project.StorageCalculator == 1 {
+			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "false"
 		}
 	}
 	// add the required lagoon labels to the namespace when creating
@@ -185,7 +197,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
 		// create the harbor client
-		lagoonHarbor, err := harbor.NewHarbor(r.Harbor)
+		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
 			return fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}

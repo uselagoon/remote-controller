@@ -452,10 +452,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 				allContainerLogs, err = r.collectLogs(ctx, req, jobPod)
 				if err == nil {
 					if cancel {
+						cancellationMessage := "Build cancelled"
+						if cancellationDetails, ok := jobPod.GetAnnotations()["lagoon.sh/cancelReason"]; ok {
+							cancellationMessage = fmt.Sprintf("%v : %v", cancellationMessage, cancellationDetails)
+						}
 						allContainerLogs = append(allContainerLogs, []byte(fmt.Sprintf(`
 ========================================
-Build cancelled
-========================================`))...)
+%v
+========================================`, cancellationMessage))...)
 					}
 				} else {
 					allContainerLogs = []byte(fmt.Sprintf(`

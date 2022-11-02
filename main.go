@@ -183,7 +183,7 @@ func main() {
 		"The number of workers to start with.")
 	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
 		"The retry interval for rabbitmq.")
-	flag.BoolVar(&enableSingleQueue, "enable-single-queue", false, "Flag to have this controller use the single queue option.")
+	flag.BoolVar(&enableSingleQueue, "enable-single-queue", true, "Flag to have this controller use the single queue option.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
 	flag.StringVar(&pendingMessageCron, "pending-message-cron", "15,45 * * * *",

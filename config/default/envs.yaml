@@ -36,8 +36,3 @@ spec:
                 configMapKeyRef:
                   name: overrides
                   key: HARBOR_API
-            - name: ENABLE_SINGLE_QUEUE
-              valueFrom:
-                configMapKeyRef:
-                  name: overrides
-                  key: ENABLE_SINGLE_QUEUE

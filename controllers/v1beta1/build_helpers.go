@@ -287,6 +287,22 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	return nil
 }
 
+func (r *LagoonBuildReconciler) getOrCreateConfigMap(ctx context.Context, cmName string, configMap *corev1.ConfigMap, ns string) error {
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		configMap.SetNamespace(ns)
+		configMap.SetName(cmName)
+		//we create it
+		if err = r.Create(ctx, configMap); err != nil {
+			return fmt.Errorf("There was an error creating the configmap '%v'. Error was: %v", cmName, err)
+		}
+	}
+	return nil
+}
+
 // getOrCreatePromoteSARoleBinding will create the rolebinding for openshift promotions to be used by the lagoon-deployer service account.
 // @TODO: this role binding can be used as a basis for active/standby tasks allowing one ns to work in another ns
 func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Context, sourcens string, ns string) error {

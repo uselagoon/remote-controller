@@ -194,7 +194,7 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,
 		"Enable message queue to provide updates back to Lagoon.")
-	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
+	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/build-deploy-image:latest",
 		"The build and deploy image that should be used by builds started by the controller.")
 	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
 		"The prefix that will be added to all namespaces that are generated, maximum 8 characters. (only used if random-prefix is set false)")

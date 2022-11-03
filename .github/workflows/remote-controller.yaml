@@ -25,6 +25,10 @@ jobs:
             harbor: "1.9.0"
             lagoon_build_image: "uselagoon/build-deploy-image:latest"
             experimental: true
+          - kindest_node_version: v1.24.7
+            harbor: "1.9.0"
+            lagoon_build_image: "uselagoon/build-deploy-image:latest"
+            experimental: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2

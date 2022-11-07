@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -293,25 +292,9 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	}, newTaskPod)
 	if err != nil {
 		// if it doesn't exist, then create the task pod
-		token, err := r.getDeployerToken(ctx, lagoonTask)
-		if err != nil {
-			return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
-		}
-		config := &rest.Config{
-			BearerToken: token,
-			Host:        "https://kubernetes.default.svc",
-			TLSClientConfig: rest.TLSClientConfig{
-				Insecure: true,
-			},
-		}
-		// create the client using the rest config.
-		c, err := client.New(config, client.Options{})
-		if err != nil {
-			return fmt.Errorf("Task failed creating the client, error was: %v", err)
-		}
 		opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
-		// use the client that was created with the deployer-token to create the task pod
-		if err := c.Create(ctx, newTaskPod); err != nil {
+		// create the task pod
+		if err := r.Create(ctx, newTaskPod); err != nil {
 			opLog.Info(
 				fmt.Sprintf(
 					"Unable to create task pod for project %s, environment %s: %v",
@@ -352,33 +335,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 // createAdvancedTask allows running of more advanced tasks than the standard lagoon tasks
 // see notes in the docs for infomration about advanced tasks
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
-	serviceAccount := &corev1.ServiceAccount{}
-	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
-	if err != nil {
-		return err
-	}
-	var serviceaccountTokenSecret string
-	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
-		if match {
-			serviceaccountTokenSecret = secret.Name
-			break
-		}
-	}
-	if serviceaccountTokenSecret == "" {
-		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
-	}
-	// handle the volumes for sshkey and deployer tokens
-	deployerTokenVolume := corev1.Volume{
-		Name: serviceaccountTokenSecret,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName:  serviceaccountTokenSecret,
-				DefaultMode: helpers.IntPtr(420),
-			},
-		},
-	}
+	// handle the volumes for sshkey
 	sshKeyVolume := corev1.Volume{
 		Name: "lagoon-sshkey",
 		VolumeSource: corev1.VolumeSource{
@@ -388,11 +345,6 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			},
 		},
 	}
-	deployerTokenVolumeMount := corev1.VolumeMount{
-		Name:      serviceaccountTokenSecret,
-		ReadOnly:  true,
-		MountPath: "/var/run/secrets/lagoon/deployer",
-	}
 	sshKeyVolumeMount := corev1.VolumeMount{
 		Name:      "lagoon-sshkey",
 		ReadOnly:  true,
@@ -400,118 +352,157 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	}
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{}
-	if lagoonTask.Spec.AdvancedTask.DeployerToken {
-		volumes = append(volumes, deployerTokenVolume)
-		volumeMounts = append(volumeMounts, deployerTokenVolumeMount)
-	}
 	if lagoonTask.Spec.AdvancedTask.SSHKey {
 		volumes = append(volumes, sshKeyVolume)
 		volumeMounts = append(volumeMounts, sshKeyVolumeMount)
 	}
-	newPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      lagoonTask.ObjectMeta.Name,
-			Namespace: lagoonTask.ObjectMeta.Namespace,
-			Labels: map[string]string{
-				"lagoon.sh/jobType":    "task",
-				"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
-				"lagoon.sh/crdVersion": crdVersion,
-				"lagoon.sh/controller": r.ControllerNamespace,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
-					Kind:       "LagoonTask",
-					Name:       lagoonTask.ObjectMeta.Name,
-					UID:        lagoonTask.UID,
+	if lagoonTask.Spec.AdvancedTask.DeployerToken {
+		// if this advanced task can access kubernetes, mount the token in
+		serviceAccount := &corev1.ServiceAccount{}
+		err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
+		if err != nil {
+			return err
+		}
+		var serviceaccountTokenSecret string
+		for _, secret := range serviceAccount.Secrets {
+			match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+			if match {
+				serviceaccountTokenSecret = secret.Name
+				break
+			}
+		}
+		// if the existing token exists, mount it
+		if serviceaccountTokenSecret != "" {
+			volumes = append(volumes, corev1.Volume{
+				Name: serviceaccountTokenSecret,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName:  serviceaccountTokenSecret,
+						DefaultMode: helpers.IntPtr(420),
+					},
+				},
+			})
+			// legacy tokens are mounted /var/run/secrets/lagoon/deployer
+			// new tokens using volume projection are mounted /var/run/secrets/kubernetes.io/serviceaccount/token
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      serviceaccountTokenSecret,
+				ReadOnly:  true,
+				MountPath: "/var/run/secrets/lagoon/deployer",
+			})
+		}
+	}
+	opLog.Info(fmt.Sprintf("Checking advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
+	// once the pod spec has been defined, check if it isn't already created
+
+	newPod := &corev1.Pod{}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: lagoonTask.ObjectMeta.Namespace,
+		Name:      lagoonTask.ObjectMeta.Name,
+	}, newPod)
+	if err != nil {
+		newPod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      lagoonTask.ObjectMeta.Name,
+				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Labels: map[string]string{
+					"lagoon.sh/jobType":    "task",
+					"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
+					"lagoon.sh/crdVersion": crdVersion,
+					"lagoon.sh/controller": r.ControllerNamespace,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
+						Kind:       "LagoonTask",
+						Name:       lagoonTask.ObjectMeta.Name,
+						UID:        lagoonTask.UID,
+					},
 				},
 			},
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: "Never",
-			Volumes:       volumes,
-			Containers: []corev1.Container{
-				{
-					Name:            "lagoon-task",
-					Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
-					ImagePullPolicy: "Always",
-					EnvFrom: []corev1.EnvFromSource{
-						{
-							ConfigMapRef: &corev1.ConfigMapEnvSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "lagoon-env",
+			Spec: corev1.PodSpec{
+				RestartPolicy: "Never",
+				Volumes:       volumes,
+				Containers: []corev1.Container{
+					{
+						Name:            "lagoon-task",
+						Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
+						ImagePullPolicy: "Always",
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "lagoon-env",
+									},
 								},
 							},
 						},
+						Env: []corev1.EnvVar{
+							{
+								Name:  "JSON_PAYLOAD",
+								Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
+							},
+							{
+								Name:  "NAMESPACE",
+								Value: lagoonTask.ObjectMeta.Namespace,
+							},
+							{
+								Name:  "PODNAME",
+								Value: lagoonTask.ObjectMeta.Name,
+							},
+							{
+								Name:  "LAGOON_PROJECT",
+								Value: lagoonTask.Spec.Project.Name,
+							},
+							{
+								Name:  "LAGOON_GIT_BRANCH",
+								Value: lagoonTask.Spec.Environment.Name,
+							},
+							{
+								Name:  "TASK_API_HOST",
+								Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
+							},
+							{
+								Name:  "TASK_SSH_HOST",
+								Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
+							},
+							{
+								Name:  "TASK_SSH_PORT",
+								Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
+							},
+							{
+								Name:  "TASK_DATA_ID",
+								Value: lagoonTask.Spec.Task.ID,
+							},
+						},
+						VolumeMounts: volumeMounts,
 					},
-					Env: []corev1.EnvVar{
-						{
-							Name:  "JSON_PAYLOAD",
-							Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
-						},
-						{
-							Name:  "NAMESPACE",
-							Value: lagoonTask.ObjectMeta.Namespace,
-						},
-						{
-							Name:  "PODNAME",
-							Value: lagoonTask.ObjectMeta.Name,
-						},
-						{
-							Name:  "LAGOON_PROJECT",
-							Value: lagoonTask.Spec.Project.Name,
-						},
-						{
-							Name:  "LAGOON_GIT_BRANCH",
-							Value: lagoonTask.Spec.Environment.Name,
-						},
-						{
-							Name:  "TASK_API_HOST",
-							Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
-						},
-						{
-							Name:  "TASK_SSH_HOST",
-							Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
-						},
-						{
-							Name:  "TASK_SSH_PORT",
-							Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
-						},
-						{
-							Name:  "TASK_DATA_ID",
-							Value: lagoonTask.Spec.Task.ID,
-						},
-					},
-					VolumeMounts: volumeMounts,
 				},
 			},
-		},
+		}
+		if lagoonTask.Spec.AdvancedTask.DeployerToken {
+			// start this with the serviceaccount so that it gets the token mounted into it
+			newPod.Spec.ServiceAccountName = "lagoon-deployer"
+		}
+		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
+		if err := r.Create(ctx, newPod); err != nil {
+			opLog.Info(
+				fmt.Sprintf(
+					"Unable to create advanced task pod for project %s, environment %s: %v",
+					lagoonTask.Spec.Project.Name,
+					lagoonTask.Spec.Environment.Name,
+					err,
+				),
+			)
+			return err
+		}
+		taskRunningStatus.With(prometheus.Labels{
+			"task_namespace": lagoonTask.ObjectMeta.Namespace,
+			"task_name":      lagoonTask.ObjectMeta.Name,
+		}).Set(1)
+		tasksStartedCounter.Inc()
+	} else {
+		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}
-	token, err := r.getDeployerToken(ctx, lagoonTask)
-	if err != nil {
-		return fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
-	}
-	config := &rest.Config{
-		BearerToken: token,
-		Host:        "https://kubernetes.default.svc",
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
-		},
-	}
-	// create the client using the rest config.
-	c, err := client.New(config, client.Options{})
-	if err != nil {
-		return fmt.Errorf("Task failed creating the client, error was: %v", err)
-	}
-	// use the client that was created with the deployer-token to create the task pod
-	if err := c.Create(ctx, newPod); err != nil {
-		return err
-	}
-	taskRunningStatus.With(prometheus.Labels{
-		"task_namespace": lagoonTask.ObjectMeta.Namespace,
-		"task_name":      lagoonTask.ObjectMeta.Name,
-	}).Set(1)
-	tasksStartedCounter.Inc()
 	return nil
 }
 
@@ -566,37 +557,4 @@ func (r *LagoonTaskReconciler) getServiceAccount(ctx context.Context, serviceAcc
 		return err
 	}
 	return nil
-}
-
-// getDeployerToken will get the deployer token from the service account if it exists
-func (r *LagoonTaskReconciler) getDeployerToken(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (string, error) {
-	serviceAccount := &corev1.ServiceAccount{}
-	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
-	if err != nil {
-		return "", err
-	}
-	var serviceaccountTokenSecret string
-	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
-		if match {
-			serviceaccountTokenSecret = secret.Name
-			break
-		}
-	}
-	if serviceaccountTokenSecret == "" {
-		return "", fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
-	}
-	saSecret := &corev1.Secret{}
-	err = r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonTask.ObjectMeta.Namespace,
-		Name:      serviceaccountTokenSecret,
-	}, saSecret)
-	if err != nil {
-		return "", fmt.Errorf("Task failed getting the deployer token, error was: %v", err)
-	}
-	if string(saSecret.Data["token"]) == "" {
-		return "", fmt.Errorf("There is no token field in the deployer token secret")
-	}
-	return string(saSecret.Data["token"]), nil
 }

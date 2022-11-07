@@ -287,6 +287,22 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	return nil
 }
 
+func (r *LagoonBuildReconciler) getOrCreateConfigMap(ctx context.Context, cmName string, configMap *corev1.ConfigMap, ns string) error {
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		configMap.SetNamespace(ns)
+		configMap.SetName(cmName)
+		//we create it
+		if err = r.Create(ctx, configMap); err != nil {
+			return fmt.Errorf("There was an error creating the configmap '%v'. Error was: %v", cmName, err)
+		}
+	}
+	return nil
+}
+
 // getOrCreatePromoteSARoleBinding will create the rolebinding for openshift promotions to be used by the lagoon-deployer service account.
 // @TODO: this role binding can be used as a basis for active/standby tasks allowing one ns to work in another ns
 func (r *LagoonBuildReconciler) getOrCreatePromoteSARoleBinding(ctx context.Context, sourcens string, ns string) error {
@@ -408,6 +424,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	if r.EnableDebug {
 		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
 	}
+
 	var serviceaccountTokenSecret string
 	for _, secret := range serviceAccount.Secrets {
 		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
@@ -415,9 +432,6 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			serviceaccountTokenSecret = secret.Name
 			break
 		}
-	}
-	if serviceaccountTokenSecret == "" {
-		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
 	}
 
 	// create the Pod that will do the work
@@ -788,6 +802,44 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// otherwise if the build spec contains an image definition, use it instead.
 		buildImage = lagoonBuild.Spec.Build.Image
 	}
+	volumes := []corev1.Volume{
+		{
+			Name: "lagoon-sshkey",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  "lagoon-sshkey",
+					DefaultMode: helpers.IntPtr(420),
+				},
+			},
+		},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "lagoon-sshkey",
+			ReadOnly:  true,
+			MountPath: "/var/run/secrets/lagoon/ssh",
+		},
+	}
+
+	// if the existing token exists, mount it
+	if serviceaccountTokenSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: serviceaccountTokenSecret,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  serviceaccountTokenSecret,
+					DefaultMode: helpers.IntPtr(420),
+				},
+			},
+		})
+		// legacy tokens are mounted /var/run/secrets/lagoon/deployer
+		// new tokens using volume projection are mounted /var/run/secrets/kubernetes.io/serviceaccount/token
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      serviceaccountTokenSecret,
+			ReadOnly:  true,
+			MountPath: "/var/run/secrets/lagoon/deployer",
+		})
+	}
 	newPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lagoonBuild.ObjectMeta.Name,
@@ -809,27 +861,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: "Never",
-			Volumes: []corev1.Volume{
-				{
-					Name: serviceaccountTokenSecret,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  serviceaccountTokenSecret,
-							DefaultMode: helpers.IntPtr(420),
-						},
-					},
-				},
-				{
-					Name: "lagoon-sshkey",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName:  "lagoon-sshkey",
-							DefaultMode: helpers.IntPtr(420),
-						},
-					},
-				},
-			},
+			ServiceAccountName: "lagoon-deployer",
+			RestartPolicy:      "Never",
+			Volumes:            volumes,
 			Tolerations: []corev1.Toleration{
 				{
 					Key:      "lagoon/build",
@@ -858,18 +892,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 					Image:           buildImage,
 					ImagePullPolicy: "Always",
 					Env:             podEnvs,
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      serviceaccountTokenSecret,
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/deployer",
-						},
-						{
-							Name:      "lagoon-sshkey",
-							ReadOnly:  true,
-							MountPath: "/var/run/secrets/lagoon/ssh",
-						},
-					},
+					VolumeMounts:    volumeMounts,
 				},
 			},
 		},

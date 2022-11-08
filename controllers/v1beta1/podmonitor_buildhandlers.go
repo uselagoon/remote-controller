@@ -479,6 +479,7 @@ Build %s
 					"lagoon.sh/buildStarted": "true",
 				},
 			},
+			"statusMessages": map[string]interface{}{},
 		}
 
 		condition := lagoonv1beta1.LagoonBuildConditions{

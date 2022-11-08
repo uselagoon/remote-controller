@@ -325,6 +325,7 @@ Task %s
 					"lagoon.sh/taskStatus": string(taskCondition),
 				},
 			},
+			"statusMessages": map[string]interface{}{},
 		}
 
 		condition := lagoonv1beta1.LagoonTaskConditions{

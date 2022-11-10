@@ -104,7 +104,7 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 	condition string,
 	logs []byte,
 ) (bool, lagoonv1beta1.LagoonLog) {
-	if r.EnableMQ {
+	if r.EnableMQ && lagoonTask != nil {
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
@@ -141,20 +141,12 @@ Logs on pod %s
 
 // updateLagoonTask sends the status of the task and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
+func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
 ) (bool, lagoonv1beta1.LagoonMessage) {
-	namespace := helpers.GenerateNamespaceName(
-		lagoonTask.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-		lagoonTask.Spec.Environment.Name,
-		lagoonTask.Spec.Project.Name,
-		r.NamespacePrefix,
-		r.ControllerNamespace,
-		r.RandomNamespacePrefix,
-	)
-	if r.EnableMQ {
+	if r.EnableMQ && lagoonTask != nil {
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				taskRunningStatus.Delete(prometheus.Labels{
@@ -165,7 +157,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",
-			Namespace: namespace,
+			Namespace: lagoonTask.ObjectMeta.Namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,
@@ -217,7 +209,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 	jobPod *corev1.Pod,
 	condition string,
 ) (bool, lagoonv1beta1.LagoonLog) {
-	if r.EnableMQ {
+	if r.EnableMQ && lagoonTask != nil {
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
@@ -352,7 +344,7 @@ Task %s
 		// send any messages to lagoon message queues
 		// update the deployment with the status
 		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
-		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
+		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(ctx, opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
 		var pendingTaskLog bool
 		var pendingTaskLogMessage lagoonv1beta1.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke

@@ -115,6 +115,18 @@ func TestGenerateNamespaceName(t *testing.T) {
 			},
 			want: "this-is-my-project-feature-branch",
 		},
+		{
+			name: "missing environment and project name",
+			args: args{
+				pattern:             "",
+				environmentName:     "",
+				projectname:         "",
+				prefix:              "",
+				controllerNamespace: "lagoon",
+				randomPrefix:        false,
+			},
+			want: "-",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

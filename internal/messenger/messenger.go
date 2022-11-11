@@ -34,6 +34,7 @@ type Messenger struct {
 	AdvancedTaskSSHKeyInjection      bool
 	AdvancedTaskDeployTokenInjection bool
 	DeletionHandler                  *deletions.Deletions
+	EnableSingleQueue                bool
 	EnableDebug                      bool
 }
 
@@ -47,6 +48,7 @@ func New(config mq.Config,
 	randomNamespacePrefix,
 	advancedTaskSSHKeyInjection bool,
 	advancedTaskDeployTokenInjection bool,
+	enableSingleQueue bool,
 	deletionHandler *deletions.Deletions,
 	enableDebug bool,
 ) *Messenger {
@@ -61,6 +63,7 @@ func New(config mq.Config,
 		AdvancedTaskSSHKeyInjection:      advancedTaskSSHKeyInjection,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		DeletionHandler:                  deletionHandler,
+		EnableSingleQueue:                enableSingleQueue,
 		EnableDebug:                      enableDebug,
 	}
 }

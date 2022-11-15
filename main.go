@@ -577,7 +577,7 @@ func main() {
 				},
 			},
 		},
-		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
+		DSN: fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost),
 	}
 
 	harborURLParsed, _ := url.Parse(harborURL)

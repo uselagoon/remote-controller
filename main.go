@@ -431,11 +431,11 @@ func main() {
 	if enablePodProxy {
 		httpProxy = helpers.GetEnv("HTTP_PROXY", httpProxy)
 		httpsProxy = helpers.GetEnv("HTTPS_PROXY", httpsProxy)
-		noProxy = helpers.GetEnv("HTTP_PROXY", noProxy)
+		noProxy = helpers.GetEnv("NO_PROXY", noProxy)
 		if podsUseDifferentProxy {
 			httpProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", httpProxy)
 			httpsProxy = helpers.GetEnv("LAGOON_HTTPS_PROXY", httpsProxy)
-			noProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", noProxy)
+			noProxy = helpers.GetEnv("LAGOON_NO_PROXY", noProxy)
 		}
 	}
 

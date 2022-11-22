@@ -10,11 +10,55 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
+
+// DeleteIngress will delete any ingress from the namespace.
+func (d *Deletions) DeleteIngress(ctx context.Context, opLog logr.Logger, ns, project, environment string) bool {
+	ingress := &networkv1.IngressList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(ns),
+	})
+	if err := d.Client.List(ctx, ingress, listOption); err != nil {
+		opLog.Error(err,
+			fmt.Sprintf(
+				"Unable to list ingress in namespace %s for project %s, environment %s",
+				ns,
+				project,
+				environment,
+			),
+		)
+		return false
+	}
+	for _, ing := range ingress.Items {
+		if err := d.Client.Delete(ctx, &ing); helpers.IgnoreNotFound(err) != nil {
+			opLog.Error(err,
+				fmt.Sprintf(
+					"Unable to delete ingress %s in %s for project %s, environment %s",
+					ing.ObjectMeta.Name,
+					ns,
+					project,
+					environment,
+				),
+			)
+			return false
+		}
+		opLog.Info(
+			fmt.Sprintf(
+				"Deleted ingress %s in  %s for project %s, environment %s",
+				ing.ObjectMeta.Name,
+				ns,
+				project,
+				environment,
+			),
+		)
+	}
+	return true
+}
 
 // DeleteDeployments will delete any deployments from the namespace.
 func (d *Deletions) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns, project, environment string) bool {

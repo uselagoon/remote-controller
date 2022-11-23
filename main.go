@@ -150,6 +150,11 @@ func main() {
 	var pvcRetryInterval int
 	var cleanNamespacesEnabled bool
 	var cleanNamespacesCron string
+	var pruneLongRunningBuildPods bool
+	var pruneLongRunningTaskPods bool
+	var timeoutForLongRunningBuildPods int
+	var timeoutForLongRunningTaskPods int
+	var pruneLongRunningPodsCron string
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
@@ -193,7 +198,7 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableMQ, "enable-message-queue", true,
 		"Enable message queue to provide updates back to Lagoon.")
-	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/kubectl-build-deploy-dind:latest",
+	flag.StringVar(&overrideBuildDeployImage, "override-builddeploy-image", "uselagoon/build-deploy-image:latest",
 		"The build and deploy image that should be used by builds started by the controller.")
 	flag.StringVar(&namespacePrefix, "namespace-prefix", "",
 		"The prefix that will be added to all namespaces that are generated, maximum 8 characters. (only used if random-prefix is set false)")
@@ -325,6 +330,16 @@ func main() {
 	flag.StringVar(&cleanNamespacesCron, "namespace-cleanup-cron", "30 * * * *",
 		"The cron definition for how often to run the namespace resources cleanup.")
 
+	// LongRuning Worker Pod Timeout config
+	flag.StringVar(&pruneLongRunningPodsCron, "longrunning-pod-cleanup-cron", "30 * * * *",
+		"The cron definition for how often to run the long running Task/Build cleanup process.")
+	flag.BoolVar(&pruneLongRunningBuildPods, "enable-longrunning-build-pod-cleanup", true,
+		"Tells the controller to remove Build pods that have been running for too long.")
+	flag.BoolVar(&pruneLongRunningTaskPods, "enable-longrunning-task-pod-cleanup", true,
+		"Tells the controller to remove Task pods that have been running for too long.")
+	flag.IntVar(&timeoutForLongRunningBuildPods, "timeout-longrunning-build-pod-cleanup", 6, "How many hours a build pod should run before forcefully closed.")
+	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
+
 	// QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
 	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The number of builds that can run at any one time.")
@@ -420,11 +435,11 @@ func main() {
 	if enablePodProxy {
 		httpProxy = helpers.GetEnv("HTTP_PROXY", httpProxy)
 		httpsProxy = helpers.GetEnv("HTTPS_PROXY", httpsProxy)
-		noProxy = helpers.GetEnv("HTTP_PROXY", noProxy)
+		noProxy = helpers.GetEnv("NO_PROXY", noProxy)
 		if podsUseDifferentProxy {
 			httpProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", httpProxy)
 			httpsProxy = helpers.GetEnv("LAGOON_HTTPS_PROXY", httpsProxy)
-			noProxy = helpers.GetEnv("LAGOON_HTTP_PROXY", noProxy)
+			noProxy = helpers.GetEnv("LAGOON_NO_PROXY", noProxy)
 		}
 	}
 
@@ -566,7 +581,7 @@ func main() {
 				},
 			},
 		},
-		DSN: fmt.Sprintf("amqp://%s:%s@%s/", mqUser, mqPass, mqHost),
+		DSN: fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost),
 	}
 
 	harborURLParsed, _ := url.Parse(harborURL)
@@ -643,6 +658,8 @@ func main() {
 		taskPodsToKeep,
 		controllerNamespace,
 		deletion,
+		timeoutForLongRunningBuildPods,
+		timeoutForLongRunningTaskPods,
 		enableDebug,
 	)
 	// if the lagoonbuild cleanup is enabled, add the cronjob for it
@@ -687,7 +704,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := harbor.NewHarbor(harborConfig)
+			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 	}
@@ -697,6 +714,13 @@ func main() {
 		setupLog.Info("starting namespace cleanup task")
 		c.AddFunc(taskPodCleanUpCron, func() {
 			resourceCleanup.NamespacePruner()
+		})
+	}
+
+	if pruneLongRunningTaskPods || pruneLongRunningBuildPods {
+		setupLog.Info("starting long running task cleanup task")
+		c.AddFunc(pruneLongRunningPodsCron, func() {
+			resourceCleanup.LagoonOldProcPruner(pruneLongRunningBuildPods, pruneLongRunningTaskPods)
 		})
 	}
 

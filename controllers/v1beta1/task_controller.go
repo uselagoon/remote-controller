@@ -376,16 +376,6 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	if serviceaccountTokenSecret == "" {
 		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
 	}
-	// handle the volumes for sshkey and deployer tokens
-	deployerTokenVolume := corev1.Volume{
-		Name: serviceaccountTokenSecret,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName:  serviceaccountTokenSecret,
-				DefaultMode: helpers.IntPtr(420),
-			},
-		},
-	}
 	// handle the volumes for sshkey
 	sshKeyVolume := corev1.Volume{
 		Name: "lagoon-sshkey",
@@ -446,7 +436,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	// once the pod spec has been defined, check if it isn't already created
 
 	newPod := &corev1.Pod{}
-	err := r.Get(ctx, types.NamespacedName{
+	err = r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonTask.ObjectMeta.Namespace,
 		Name:      lagoonTask.ObjectMeta.Name,
 	}, newPod)

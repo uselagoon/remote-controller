@@ -580,8 +580,8 @@ func (in *Project) DeepCopyInto(out *Project) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.StorageCalculatorDisabled != nil {
-		in, out := &in.StorageCalculatorDisabled, &out.StorageCalculatorDisabled
+	if in.StorageCalculator != nil {
+		in, out := &in.StorageCalculator, &out.StorageCalculator
 		*out = new(int)
 		**out = **in
 	}

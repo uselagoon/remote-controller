@@ -34,7 +34,7 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		then delete them
 	*/
 	if d.CleanupHarborRepositoryOnDelete && cleanupHarbor {
-		lagoonHarbor, err := harbor.NewHarbor(d.Harbor)
+		lagoonHarbor, err := harbor.New(d.Harbor)
 		if err != nil {
 			return err
 		}
@@ -60,6 +60,9 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 	}
 	if del := d.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), namespace.ObjectMeta.Name, project, environment); del == false {
 		return fmt.Errorf("error deleting daemonsets")
+	}
+	if del := d.DeleteIngress(ctx, opLog.WithName("DeleteIngress"), namespace.ObjectMeta.Name, project, environment); del == false {
+		return fmt.Errorf("error deleting ingress")
 	}
 	if del := d.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), namespace.ObjectMeta.Name, project, environment); del == false {
 		return fmt.Errorf("error deleting jobs")

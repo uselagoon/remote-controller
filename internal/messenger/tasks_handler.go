@@ -11,7 +11,6 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -187,34 +186,6 @@ func (m *Messenger) updateLagoonTask(opLog logr.Logger, namespace string, jobSpe
 	if err := m.Publish("lagoon-tasks:controller", msgBytes); err != nil {
 		opLog.Error(err, "Unable to publish message.")
 	}
-}
-
-// ResticRestore handles creating the restic restore jobs.
-func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	restore := unstructured.Unstructured{}
-	if err := restore.UnmarshalJSON(jobSpec.Misc.MiscResource); err != nil {
-		opLog.Error(err,
-			fmt.Sprintf(
-				"Unable to unmarshal the json into a job %s.",
-				jobSpec.Misc.Name,
-			),
-		)
-		// just log the error then return
-		return nil
-	}
-	restore.SetNamespace(namespace)
-	if err := m.Client.Create(context.Background(), &restore); err != nil {
-		opLog.Error(err,
-			fmt.Sprintf(
-				"Unable to create backup for job %s.",
-				jobSpec.Misc.Name,
-			),
-		)
-		// just log the error then return
-		return nil
-	}
-	return nil
 }
 
 // IngressRouteMigration handles running the ingress migrations.

@@ -1,0 +1,13 @@
+apiVersion: backup.appuio.ch/v1alpha1
+kind: Restore
+metadata:
+  name: restore-bf072a0-uqxqo3
+  namespace: nginx-example-main
+spec:
+  backend:
+    repoPasswordSecretRef:
+      key: repo-pw
+      name: baas-repo-pw
+    s3:
+      bucket: baas-nginx-example
+  snapshot: bf072a09e17726da54adc79936ec8745521993599d41211dfc9466dfd5bc32a5

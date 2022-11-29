@@ -941,7 +941,45 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	return nil
 }
 
-// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod)
+// updateQueuedBuild will update a build if it is queued
+func (r *LagoonBuildReconciler) updateQueuedBuild(
+	ctx context.Context,
+	lagoonBuild lagoonv1beta1.LagoonBuild,
+	message string,
+	opLog logr.Logger,
+) error {
+	var allContainerLogs []byte
+	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
+	// so just set the logs to be cancellation message
+	allContainerLogs = []byte(fmt.Sprintf(`
+========================================
+%s
+========================================
+`, message))
+	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
+	var lagoonEnv corev1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: lagoonBuild.ObjectMeta.Namespace,
+		Name:      "lagoon-env",
+	},
+		&lagoonEnv,
+	)
+	if err != nil {
+		// if there isn't a configmap, just info it and move on
+		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+		}
+	}
+	// send any messages to lagoon message queues
+	// update the deployment with the status
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, false)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, false)
+	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, false)
+	return nil
+}
+
+// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod, pending in queue)
 func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 	ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild,
@@ -989,10 +1027,10 @@ Build cancelled
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status
-	r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-	r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
 	if cancelled {
-		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, true)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)

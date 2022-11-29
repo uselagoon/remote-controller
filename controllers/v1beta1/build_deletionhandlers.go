@@ -213,23 +213,29 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, true)
 	}
 	return nil
 }
 
-// cancelledBuildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
+// buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	logs []byte,
+	cancelled bool,
 ) {
 	if r.EnableMQ {
-		condition := "cancelled"
-		buildStep := "cancelled"
+		condition := "pending" //@TODO: remove this and uncomment the queued condition when lagoon supports queued status
+		// condition := "queued"
+		buildStep := "queued"
+		if cancelled {
+			condition = "cancelled"
+			buildStep = "cancelled"
+		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
@@ -247,10 +253,7 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 			},
 		}
 		// add the actual build log message
-		msg.Message = fmt.Sprintf(`========================================
-Logs on pod %s
-========================================
-%s`, lagoonBuild.ObjectMeta.Name, logs)
+		msg.Message = fmt.Sprintf("%s", logs)
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")
@@ -271,12 +274,13 @@ Logs on pod %s
 	}
 }
 
-// updateCancelledDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
+// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
+	cancelled bool,
 ) {
 	namespace := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -287,7 +291,11 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 		r.RandomNamespacePrefix,
 	)
 	if r.EnableMQ {
-		condition := "cancelled"
+		condition := "pending" //@TODO: remove this and uncomment the queued condition when lagoon supports queued status
+		// condition := "queued"
+		if cancelled {
+			condition = "cancelled"
+		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
 			Namespace: namespace,
@@ -363,13 +371,19 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 	}
 }
 
-// cancelledBuildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context.Context,
+// buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
+func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	lagoonEnv *corev1.ConfigMap) {
+	lagoonEnv *corev1.ConfigMap,
+	cancelled bool,
+) {
 	if r.EnableMQ {
-		condition := "cancelled"
+		condition := "pending" //@TODO: remove this and uncomment the queued condition when lagoon supports queued status
+		// condition := "queued"
+		if cancelled {
+			condition = "cancelled"
+		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
@@ -386,7 +400,7 @@ func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context
 				lagoonBuild.Spec.Project.Name,
 				lagoonBuild.Spec.Project.Environment,
 				lagoonBuild.ObjectMeta.Name,
-				"cancelled",
+				condition,
 			),
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc

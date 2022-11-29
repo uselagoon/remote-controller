@@ -127,7 +127,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 				// update the build to be queued, and add a log message with the build log with the current position in the queue
 				// this position will update as builds are created/processed, so the position of a build could change depending on
 				// higher or lower priority builds being created
-				r.updateQueuedBuild(ctx, pBuild, fmt.Sprintf("This build is currently queued in position %v", (idx+1)), opLog)
+				r.updateQueuedBuild(ctx, pBuild, fmt.Sprintf("This build is currently queued in position %v/%v", (idx+1), len(pendingBuilds.Items)), opLog)
 			}
 		}
 	}

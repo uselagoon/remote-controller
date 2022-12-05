@@ -303,7 +303,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 				m.RandomNamespacePrefix,
 			)
 			switch jobSpec.Key {
-			case "kubernetes:build:cancel":
+			case "deploytarget:build:cancel", "kubernetes:build:cancel":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received build cancellation for project %s, environment %s - %s",
@@ -318,7 +318,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-			case "kubernetes:task:cancel":
+			case "deploytarget:task:cancel", "kubernetes:task:cancel":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received task cancellation for project %s, environment %s - %s",
@@ -333,7 +333,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-			case "kubernetes:restic:backup:restore":
+			case "deploytarget:restic:backup:restore", "kubernetes:restic:backup:restore":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received backup restoration for project %s, environment %s",
@@ -347,7 +347,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-			case "kubernetes:route:migrate":
+			case "deploytarget:route:migrate", "kubernetes:route:migrate", "openshift:route:migrate":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received ingress migration for project %s",
@@ -360,20 +360,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-			case "openshift:route:migrate":
-				opLog.Info(
-					fmt.Sprintf(
-						"Received route migration for project %s",
-						jobSpec.Project.Name,
-					),
-				)
-				err := m.IngressRouteMigration(namespace, jobSpec)
-				if err != nil {
-					//@TODO: send msg back to lagoon and update task to failed?
-					message.Ack(false) // ack to remove from queue
-					return
-				}
-			case "kubernetes:task:advanced":
+			case "deploytarget:task:advanced", "kubernetes:task:advanced":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received advanced task for project %s",

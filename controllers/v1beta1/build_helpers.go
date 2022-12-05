@@ -941,7 +941,46 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	return nil
 }
 
-// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod)
+// updateQueuedBuild will update a build if it is queued
+func (r *LagoonBuildReconciler) updateQueuedBuild(
+	ctx context.Context,
+	lagoonBuild lagoonv1beta1.LagoonBuild,
+	message string,
+	opLog logr.Logger,
+) error {
+	var allContainerLogs []byte
+	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
+	// so just set the logs to be cancellation message
+	allContainerLogs = []byte(fmt.Sprintf(`
+========================================
+%s
+========================================
+`, message))
+	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
+	var lagoonEnv corev1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: lagoonBuild.ObjectMeta.Namespace,
+		Name:      "lagoon-env",
+	},
+		&lagoonEnv,
+	)
+	if err != nil {
+		// if there isn't a configmap, just info it and move on
+		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
+		}
+	}
+	// send any messages to lagoon message queues
+	// update the deployment with the status
+	//@TODO: change BuildStatusPending to BuildStatusQueued when lagoon supports queued
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
+	return nil
+}
+
+// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod, pending in queue)
 func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 	ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild,
@@ -960,11 +999,11 @@ Build cancelled
 %s`, message))
 		var buildCondition lagoonv1beta1.BuildStatusType
 		buildCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(buildCondition),
+					"lagoon.sh/buildStatus": buildCondition.String(),
 				},
 			},
 		})
@@ -988,11 +1027,11 @@ Build cancelled
 		}
 	}
 	// send any messages to lagoon message queues
-	// update the deployment with the status
-	r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-	r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
+	// update the deployment with the status of cancelled in lagoon
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
 	if cancelled {
-		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
@@ -1005,7 +1044,7 @@ Build cancelled
 func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending)}),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
@@ -1026,7 +1065,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 			} else {
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Attempting to cancel build %s", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return fmt.Errorf("There was an error updating the pending build. Error was: %v", err)

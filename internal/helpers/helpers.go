@@ -23,25 +23,27 @@ import (
 var (
 	// BuildRunningPendingStatus .
 	BuildRunningPendingStatus = []string{
-		string(lagoonv1beta1.BuildStatusPending),
-		string(lagoonv1beta1.BuildStatusRunning),
+		lagoonv1beta1.BuildStatusPending.String(),
+		lagoonv1beta1.BuildStatusQueued.String(),
+		lagoonv1beta1.BuildStatusRunning.String(),
 	}
 	// BuildCompletedCancelledFailedStatus .
 	BuildCompletedCancelledFailedStatus = []string{
-		string(lagoonv1beta1.BuildStatusFailed),
-		string(lagoonv1beta1.BuildStatusComplete),
-		string(lagoonv1beta1.BuildStatusCancelled),
+		lagoonv1beta1.BuildStatusFailed.String(),
+		lagoonv1beta1.BuildStatusComplete.String(),
+		lagoonv1beta1.BuildStatusCancelled.String(),
 	}
 	// TaskRunningPendingStatus .
 	TaskRunningPendingStatus = []string{
-		string(lagoonv1beta1.TaskStatusPending),
-		string(lagoonv1beta1.TaskStatusRunning),
+		lagoonv1beta1.TaskStatusPending.String(),
+		lagoonv1beta1.TaskStatusQueued.String(),
+		lagoonv1beta1.TaskStatusRunning.String(),
 	}
 	// TaskCompletedCancelledFailedStatus .
 	TaskCompletedCancelledFailedStatus = []string{
-		string(lagoonv1beta1.TaskStatusFailed),
-		string(lagoonv1beta1.TaskStatusComplete),
-		string(lagoonv1beta1.TaskStatusCancelled),
+		lagoonv1beta1.TaskStatusFailed.String(),
+		lagoonv1beta1.TaskStatusComplete.String(),
+		lagoonv1beta1.TaskStatusCancelled.String(),
 	}
 )
 
@@ -221,7 +223,7 @@ func VariableExists(vars *[]LagoonEnvironmentVariable, name, value string) bool 
 func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending)}),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
@@ -240,7 +242,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 			} else {
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
 				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {

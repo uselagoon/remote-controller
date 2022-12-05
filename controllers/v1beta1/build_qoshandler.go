@@ -38,7 +38,7 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
+			"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String(),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -56,7 +56,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		// if there are any free slots to start a build, do that here
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
+				"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String(),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -95,7 +95,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 						client.InNamespace(pBuild.ObjectMeta.Namespace),
 						client.MatchingLabels(map[string]string{
-							"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
+							"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String(),
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						}),
 					})
@@ -124,6 +124,10 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 						}
 					}
 				}
+				// update the build to be queued, and add a log message with the build log with the current position in the queue
+				// this position will update as builds are created/processed, so the position of a build could change depending on
+				// higher or lower priority builds being created
+				r.updateQueuedBuild(ctx, pBuild, fmt.Sprintf("This build is currently queued in position %v/%v", (idx+1), len(pendingBuilds.Items)), opLog)
 			}
 		}
 	}

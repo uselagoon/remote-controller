@@ -42,11 +42,11 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 			if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the task and get the logs from the container
 				opLog.Info(fmt.Sprintf("Task failed, container exit reason was: %v", container.State.Waiting.Reason))
-				lagoonTask.Labels["lagoon.sh/taskStatus"] = string(lagoonv1beta1.TaskStatusFailed)
+				lagoonTask.Labels["lagoon.sh/taskStatus"] = lagoonv1beta1.TaskStatusFailed.String()
 				if err := r.Update(ctx, &lagoonTask); err != nil {
 					return err
 				}
-				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, string(lagoonv1beta1.TaskStatusFailed)))
+				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, lagoonv1beta1.TaskStatusFailed.String()))
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}
@@ -322,7 +322,7 @@ Task %s
 		mergeMap := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/taskStatus": string(taskCondition),
+					"lagoon.sh/taskStatus": taskCondition.String(),
 				},
 			},
 			"statusMessages": map[string]interface{}{},
@@ -343,14 +343,14 @@ Task %s
 
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
-		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(ctx, opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)))
+		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
+		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(ctx, opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
 		var pendingTaskLog bool
 		var pendingTaskLogMessage lagoonv1beta1.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingTaskLog, pendingTaskLogMessage = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, strings.ToLower(string(taskCondition)), allContainerLogs)
+			pendingTaskLog, pendingTaskLogMessage = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower(), allContainerLogs)
 		}
 
 		if pendingStatus || pendingEnvironment || pendingTaskLog {

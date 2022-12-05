@@ -55,11 +55,11 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 				if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 					// if we have a failure state, then fail the build and get the logs from the container
 					opLog.Info(fmt.Sprintf("Build failed, container exit reason was: %v", container.State.Waiting.Reason))
-					lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusFailed)
+					lagoonBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusFailed.String()
 					if err := r.Update(ctx, &lagoonBuild); err != nil {
 						return err
 					}
-					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, string(lagoonv1beta1.BuildStatusFailed)))
+					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, lagoonv1beta1.BuildStatusFailed.String()))
 					if err := r.Delete(ctx, &jobPod); err != nil {
 						return err
 					}
@@ -511,7 +511,7 @@ Build %s
 		mergeMap := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus":  string(buildCondition),
+					"lagoon.sh/buildStatus":  buildCondition.String(),
 					"lagoon.sh/buildStarted": "true",
 				},
 			},
@@ -547,14 +547,14 @@ Build %s
 		}
 
 		// do any message publishing here, and update any pending messages if needed
-		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, strings.ToLower(string(buildCondition)))
-		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, strings.ToLower(string(buildCondition)))
+		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
+		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
 		var pendingBuildLog bool
 		var pendingBuildLogMessage lagoonv1beta1.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, strings.ToLower(string(buildCondition)), allContainerLogs)
+			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs)
 		}
 		if pendingStatus || pendingEnvironment || pendingBuildLog {
 			mergeMap["metadata"].(map[string]interface{})["labels"].(map[string]interface{})["lagoon.sh/pendingMessages"] = "true"

@@ -87,7 +87,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
+			"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String(),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		}),
 	})
@@ -111,7 +111,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
 			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
+				"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String(),
 				"lagoon.sh/controller":  r.ControllerNamespace,
 			}),
 		})
@@ -138,7 +138,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
-						"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
+						"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String(),
 					},
 				},
 			})
@@ -185,11 +185,11 @@ Build cancelled
 ========================================`))
 		var buildCondition lagoonv1beta1.BuildStatusType
 		buildCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(buildCondition),
+					"lagoon.sh/buildStatus": buildCondition.String(),
 				},
 			},
 		})
@@ -212,24 +212,28 @@ Build cancelled
 			}
 		}
 		// send any messages to lagoon message queues
-		// update the deployment with the status
-		r.cancelledBuildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.updateCancelledDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv)
-		r.cancelledBuildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs)
+		// update the deployment with the status of cancelled in lagoon
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	return nil
 }
 
-// cancelledBuildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
+// buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	logs []byte,
+	buildCondition lagoonv1beta1.BuildStatusType,
 ) {
 	if r.EnableMQ {
-		condition := "cancelled"
-		buildStep := "cancelled"
+		condition := buildCondition
+		buildStep := "queued"
+		if condition == lagoonv1beta1.BuildStatusCancelled {
+			buildStep = "cancelled"
+		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
@@ -237,8 +241,8 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				JobName:     lagoonBuild.ObjectMeta.Name, // @TODO: remove once lagoon is corrected in controller-handler
 				BuildName:   lagoonBuild.ObjectMeta.Name,
-				BuildPhase:  condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
-				BuildStatus: condition, // same as buildstatus label
+				BuildPhase:  buildCondition.ToLower(), // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
+				BuildStatus: buildCondition.ToLower(), // same as buildstatus label
 				BuildStep:   buildStep,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
 				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
@@ -247,10 +251,7 @@ func (r *LagoonBuildReconciler) cancelledBuildLogsToLagoonLogs(ctx context.Conte
 			},
 		}
 		// add the actual build log message
-		msg.Message = fmt.Sprintf(`========================================
-Logs on pod %s
-========================================
-%s`, lagoonBuild.ObjectMeta.Name, logs)
+		msg.Message = fmt.Sprintf("%s", logs)
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")
@@ -271,12 +272,13 @@ Logs on pod %s
 	}
 }
 
-// updateCancelledDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
+// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
+	buildCondition lagoonv1beta1.BuildStatusType,
 ) {
 	namespace := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -287,14 +289,13 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 		r.RandomNamespacePrefix,
 	)
 	if r.EnableMQ {
-		condition := "cancelled"
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
 			Namespace: namespace,
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,
-				BuildPhase:  condition,
+				BuildPhase:  buildCondition.ToLower(),
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
@@ -363,21 +364,22 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentAndEnvironmentTask(ctx 
 	}
 }
 
-// cancelledBuildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context.Context,
+// buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
+func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	lagoonEnv *corev1.ConfigMap) {
+	lagoonEnv *corev1.ConfigMap,
+	buildCondition lagoonv1beta1.BuildStatusType,
+) {
 	if r.EnableMQ {
-		condition := "cancelled"
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "task:builddeploy-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), //@TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &lagoonv1beta1.LagoonLogMeta{
 				ProjectName: lagoonBuild.Spec.Project.Name,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
-				BuildPhase:  condition,
+				BuildPhase:  buildCondition.ToLower(),
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				Cluster:     r.LagoonTargetName,
@@ -386,7 +388,7 @@ func (r *LagoonBuildReconciler) cancelledBuildStatusLogsToLagoonLogs(ctx context
 				lagoonBuild.Spec.Project.Name,
 				lagoonBuild.Spec.Project.Environment,
 				lagoonBuild.ObjectMeta.Name,
-				"cancelled",
+				buildCondition.ToLower(),
 			),
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc

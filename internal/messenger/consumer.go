@@ -257,8 +257,8 @@ func (m *Messenger) Consumer(targetName string) { //error {
 			job.ObjectMeta.Namespace = namespace
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeStandard),
-					"lagoon.sh/taskStatus": string(lagoonv1beta1.TaskStatusPending),
+					"lagoon.sh/taskType":   lagoonv1beta1.TaskTypeStandard.String(),
+					"lagoon.sh/taskStatus": lagoonv1beta1.TaskStatusPending.String(),
 					"lagoon.sh/controller": m.ControllerNamespace,
 				},
 			)

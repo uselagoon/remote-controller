@@ -16,6 +16,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,8 +27,10 @@ type BuildStatusType string
 
 // These are valid conditions of a job.
 const (
-	// BuildStatusRunning means the build is pending.
+	// BuildStatusPending means the build is pending.
 	BuildStatusPending BuildStatusType = "Pending"
+	// BuildStatusQueued means the build is queued.
+	BuildStatusQueued BuildStatusType = "Queued"
 	// BuildStatusRunning means the build is running.
 	BuildStatusRunning BuildStatusType = "Running"
 	// BuildStatusComplete means the build has completed its execution.
@@ -36,6 +40,14 @@ const (
 	// BuildStatusCancelled means the job been cancelled.
 	BuildStatusCancelled BuildStatusType = "Cancelled"
 )
+
+func (b BuildStatusType) String() string {
+	return string(b)
+}
+
+func (b BuildStatusType) ToLower() string {
+	return strings.ToLower(b.String())
+}
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.

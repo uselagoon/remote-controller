@@ -149,7 +149,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		runningBuilds := &lagoonv1beta1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(req.Namespace),
-			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning)}),
+			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String()}),
 		})
 		// list all builds in the namespace that have the running buildstatus
 		if err := r.List(ctx, runningBuilds, listOption); err != nil {

@@ -48,7 +48,7 @@ func (m *Messenger) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 		}
 		// as there is no build pod, but there is a lagoon build resource
 		// update it to cancelled so that the controller doesn't try to run it
-		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
 		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
 		if err := m.Client.Update(context.Background(), &lagoonBuild); err != nil {
 			opLog.Error(err,
@@ -105,7 +105,7 @@ func (m *Messenger) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTa
 		}
 		// as there is no task pod, but there is a lagoon task resource
 		// update it to cancelled so that the controller doesn't try to run it
-		lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] = string(lagoonv1beta1.TaskStatusCancelled)
+		lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] = lagoonv1beta1.TaskStatusCancelled.String()
 		if err := m.Client.Update(context.Background(), &lagoonTask); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
@@ -243,8 +243,8 @@ func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec,
 			Name:      "lagoon-advanced-task-" + helpers.RandString(6),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"lagoon.sh/taskType":   string(lagoonv1beta1.TaskTypeAdvanced),
-				"lagoon.sh/taskStatus": string(lagoonv1beta1.TaskStatusPending),
+				"lagoon.sh/taskType":   lagoonv1beta1.TaskTypeAdvanced.String(),
+				"lagoon.sh/taskStatus": lagoonv1beta1.TaskStatusPending.String(),
 				"lagoon.sh/controller": m.ControllerNamespace,
 			},
 		},

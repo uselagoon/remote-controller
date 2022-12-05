@@ -973,9 +973,10 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, false)
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, false)
-	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, false)
+	//@TODO: change BuildStatusPending to BuildStatusQueued when lagoon supports queued
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
 	return nil
 }
 
@@ -998,11 +999,11 @@ Build cancelled
 %s`, message))
 		var buildCondition lagoonv1beta1.BuildStatusType
 		buildCondition = lagoonv1beta1.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = string(buildCondition)
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": string(buildCondition),
+					"lagoon.sh/buildStatus": buildCondition.String(),
 				},
 			},
 		})
@@ -1026,11 +1027,11 @@ Build cancelled
 		}
 	}
 	// send any messages to lagoon message queues
-	// update the deployment with the status
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, true)
+	// update the deployment with the status of cancelled in lagoon
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
 	if cancelled {
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, true)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
@@ -1043,7 +1044,7 @@ Build cancelled
 func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending)}),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
@@ -1064,7 +1065,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 			} else {
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Attempting to cancel build %s", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = string(lagoonv1beta1.BuildStatusCancelled)
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return fmt.Errorf("There was an error updating the pending build. Error was: %v", err)

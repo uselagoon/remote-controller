@@ -123,7 +123,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// if the build isn't being deleted, but the status is cancelled
 		// then clean up the undeployable build
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
-			if value == string(lagoonv1beta1.BuildStatusCancelled) {
+			if value == lagoonv1beta1.BuildStatusCancelled.String() {
 				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok {
 					if value == "true" {
 						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
@@ -142,7 +142,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 				client.InNamespace(req.Namespace),
 				client.MatchingLabels(map[string]string{
-					"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusRunning),
+					"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String(),
 					"lagoon.sh/controller":  r.ControllerNamespace,
 				}),
 			})
@@ -261,7 +261,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// the `lagoon.sh/buildStatus = Pending` now
 	// so end this reconcile process
 	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
-	return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, string(lagoonv1beta1.BuildStatusPending))
+	return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
 }
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace
@@ -272,7 +272,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, bu
 	newBuild.SetResourceVersion("")
 	newBuild.SetLabels(
 		map[string]string{
-			"lagoon.sh/buildStatus": string(lagoonv1beta1.BuildStatusPending),
+			"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String(),
 			"lagoon.sh/controller":  r.ControllerNamespace,
 		},
 	)

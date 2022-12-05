@@ -16,6 +16,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -28,11 +30,13 @@ type TaskStatusType string
 
 // These are valid conditions of a job.
 const (
-	// TaskStatusRunning means the build is pending.
+	// TaskStatusPending means the job is pending.
 	TaskStatusPending TaskStatusType = "Pending"
-	// TaskStatusRunning means the build is running.
+	// TaskStatusQueued means the job is queued.
+	TaskStatusQueued TaskStatusType = "Queued"
+	// TaskStatusRunning means the job is running.
 	TaskStatusRunning TaskStatusType = "Running"
-	// TaskStatusComplete means the build has completed its execution.
+	// TaskStatusComplete means the job has completed its execution.
 	TaskStatusComplete TaskStatusType = "Complete"
 	// TaskStatusFailed means the job has failed its execution.
 	TaskStatusFailed TaskStatusType = "Failed"
@@ -40,16 +44,28 @@ const (
 	TaskStatusCancelled TaskStatusType = "Cancelled"
 )
 
+func (b TaskStatusType) String() string {
+	return string(b)
+}
+
+func (b TaskStatusType) ToLower() string {
+	return strings.ToLower(b.String())
+}
+
 // TaskType const for the status type
 type TaskType string
 
 // These are valid conditions of a job.
 const (
-	// TaskStatusRunning means the build is pending.
+	// TaskTypeStandard means the task is a standard task.
 	TaskTypeStandard TaskType = "standard"
-	// TaskStatusRunning means the build is running.
+	// TaskTypeAdvanced means the task is an advanced task.
 	TaskTypeAdvanced TaskType = "advanced"
 )
+
+func (b TaskType) String() string {
+	return string(b)
+}
 
 // LagoonTaskSpec defines the desired state of LagoonTask
 type LagoonTaskSpec struct {

@@ -170,10 +170,17 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			},
 		}
 		// add the actual build log message
-		msg.Message = fmt.Sprintf(`========================================
-Logs on pod %s
+		if jobPod.Spec.NodeName != "" {
+			msg.Message = fmt.Sprintf(`================================================================================
+Logs on pod %s, assigned to node %s on cluster %s
+================================================================================
+%s`, jobPod.ObjectMeta.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
+		} else {
+			msg.Message = fmt.Sprintf(`========================================
+Logs on pod %s, assigned to cluster %s
 ========================================
-%s`, jobPod.ObjectMeta.Name, logs)
+%s`, jobPod.ObjectMeta.Name, r.LagoonTargetName, logs)
+		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")

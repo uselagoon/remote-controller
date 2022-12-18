@@ -118,10 +118,17 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 				Key:         lagoonTask.Spec.Key,
 				Cluster:     r.LagoonTargetName,
 			},
-			Message: fmt.Sprintf(`========================================
-Logs on pod %s
-========================================
-%s`, jobPod.ObjectMeta.Name, logs),
+		}
+		if jobPod.Spec.NodeName != "" {
+			msg.Message = fmt.Sprintf(`================================================================================
+Logs on pod %s, assigned to node %s on cluster %s
+================================================================================
+%s`, jobPod.ObjectMeta.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
+		} else {
+			msg.Message = fmt.Sprintf(`================================================================================
+Logs on pod %s, assigned to cluster %s
+================================================================================
+%s`, jobPod.ObjectMeta.Name, r.LagoonTargetName, logs)
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {

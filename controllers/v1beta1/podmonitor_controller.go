@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
@@ -77,6 +78,20 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
+		}
+		// pod deletion request came through, check if this is an activestandby task, if it is, delete the activestandby role
+		if value, ok := jobPod.ObjectMeta.Labels["lagoon.sh/activeStandby"]; ok {
+			isActiveStandby, _ := strconv.ParseBool(value)
+			if isActiveStandby {
+				var destinationNamespace string
+				if value, ok := jobPod.ObjectMeta.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
+					destinationNamespace = value
+				}
+				err := r.deleteActiveStandbyRole(ctx, destinationNamespace)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			}
 		}
 	}
 	// if this is a lagoon build, then run the handle build monitoring process

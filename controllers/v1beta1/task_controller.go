@@ -336,9 +336,8 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 // createAdvancedTask allows running of more advanced tasks than the standard lagoon tasks
 // see notes in the docs for infomration about advanced tasks
 func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
-	serviceAccount := &corev1.ServiceAccount{}
-
 	additionalLabels := map[string]string{}
+
 	// check if this is an activestandby task, if it is, create the activestandby role
 	if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandby"]; ok {
 		isActiveStandby, _ := strconv.ParseBool(value)
@@ -350,6 +349,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
 				destinationNamespace = value
 			}
+			// create the role + binding to allow the service account to interact with both namespaces
 			err := r.createActiveStandbyRole(ctx, sourceNamespace, destinationNamespace)
 			if err != nil {
 				return err
@@ -360,22 +360,6 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		}
 	}
 
-	// get the service account from the namespace, this can be used by services in the custom task to perform work in kubernetes
-	err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
-	if err != nil {
-		return err
-	}
-	var serviceaccountTokenSecret string
-	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
-		if match {
-			serviceaccountTokenSecret = secret.Name
-			break
-		}
-	}
-	if serviceaccountTokenSecret == "" {
-		return fmt.Errorf("Could not find token secret for ServiceAccount lagoon-deployer")
-	}
 	// handle the volumes for sshkey
 	sshKeyVolume := corev1.Volume{
 		Name: "lagoon-sshkey",
@@ -436,7 +420,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	// once the pod spec has been defined, check if it isn't already created
 
 	newPod := &corev1.Pod{}
-	err = r.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonTask.ObjectMeta.Namespace,
 		Name:      lagoonTask.ObjectMeta.Name,
 	}, newPod)

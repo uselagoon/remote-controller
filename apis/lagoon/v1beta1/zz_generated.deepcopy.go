@@ -226,11 +226,6 @@ func (in *LagoonLogMeta) DeepCopyInto(out *LagoonLogMeta) {
 		*out = new(uint)
 		**out = **in
 	}
-	if in.MonitoringURLs != nil {
-		in, out := &in.MonitoringURLs, &out.MonitoringURLs
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.ProjectID != nil {
 		in, out := &in.ProjectID, &out.ProjectID
 		*out = new(uint)

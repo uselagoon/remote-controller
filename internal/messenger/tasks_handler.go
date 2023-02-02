@@ -15,6 +15,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+type ActiveStandbyPayload struct {
+	SourceNamespace      string `json:"sourceNamespace"`
+	DestinationNamespace string `json:"destinationNamespace"`
+}
+
 // CancelBuild handles cancelling builds or handling if a build no longer exists.
 func (m *Messenger) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
@@ -193,7 +198,24 @@ func (m *Messenger) IngressRouteMigration(namespace string, jobSpec *lagoonv1bet
 	// always set these to true for ingress migration tasks
 	jobSpec.AdvancedTask.DeployerToken = true
 	jobSpec.AdvancedTask.SSHKey = true
-	return createAdvancedTask(namespace, jobSpec, m)
+	return m.createAdvancedTask(namespace, jobSpec, nil)
+}
+
+// ActiveStandbySwitch handles running the active standby switch setup advanced task.
+func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+	// always set these to true for ingress migration tasks
+	jobSpec.AdvancedTask.DeployerToken = true
+	jobSpec.AdvancedTask.SSHKey = true
+	asPayload := &ActiveStandbyPayload{}
+	err := json.Unmarshal([]byte(jobSpec.AdvancedTask.JSONPayload), asPayload)
+	if err != nil {
+		return fmt.Errorf("Unable to unmarshal json payload: %v", err)
+	}
+	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
+		"lagoon.sh/activeStandby":                     "true",
+		"lagoon.sh/activeStandbyDestinationNamespace": asPayload.DestinationNamespace,
+		"lagoon.sh/activeStandbySourceNamespace":      asPayload.SourceNamespace,
+	})
 }
 
 // AdvancedTask handles running the ingress migrations.
@@ -204,11 +226,16 @@ func (m *Messenger) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.Lagoon
 	if m.AdvancedTaskDeployTokenInjection {
 		jobSpec.AdvancedTask.DeployerToken = true
 	}
-	return createAdvancedTask(namespace, jobSpec, m)
+	return m.createAdvancedTask(namespace, jobSpec, nil)
 }
 
 // CreateAdvancedTask takes care of creating actual advanced tasks
-func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, m *Messenger) error {
+func (m *Messenger) createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, additionalLabels map[string]string) error {
+	return createAdvancedTask(namespace, jobSpec, m, additionalLabels)
+}
+
+// CreateAdvancedTask takes care of creating actual advanced tasks
+func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, m *Messenger, additionalLabels map[string]string) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	// create the advanced task
 	task := lagoonv1beta1.LagoonTask{
@@ -222,6 +249,10 @@ func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec,
 			},
 		},
 		Spec: *jobSpec,
+	}
+	// add additional labels if required
+	for key, value := range additionalLabels {
+		task.ObjectMeta.Labels[key] = value
 	}
 	if err := m.Client.Create(context.Background(), &task); err != nil {
 		opLog.Error(err,

@@ -337,10 +337,6 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
 			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
-			}
 		}
 		msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 		msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
@@ -400,10 +396,6 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 			msg.Meta.Routes = []string{}
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
-			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
 		msgBytes, err := json.Marshal(msg)

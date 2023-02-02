@@ -211,10 +211,6 @@ spec:
                         type: string
                       logLink:
                         type: string
-                      monitoringUrls:
-                        items:
-                          type: string
-                        type: array
                       project:
                         type: string
                       projectId:
@@ -304,10 +300,6 @@ spec:
                         type: string
                       logLink:
                         type: string
-                      monitoringUrls:
-                        items:
-                          type: string
-                        type: array
                       project:
                         type: string
                       projectId:
@@ -399,10 +391,6 @@ spec:
                         type: string
                       logLink:
                         type: string
-                      monitoringUrls:
-                        items:
-                          type: string
-                        type: array
                       project:
                         type: string
                       projectId:
@@ -496,10 +484,6 @@ spec:
                         type: string
                       logLink:
                         type: string
-                      monitoringUrls:
-                        items:
-                          type: string
-                        type: array
                       project:
                         type: string
                       projectId:

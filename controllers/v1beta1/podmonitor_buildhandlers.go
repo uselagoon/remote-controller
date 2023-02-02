@@ -170,10 +170,17 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			},
 		}
 		// add the actual build log message
-		msg.Message = fmt.Sprintf(`========================================
-Logs on pod %s
+		if jobPod.Spec.NodeName != "" {
+			msg.Message = fmt.Sprintf(`================================================================================
+Logs on pod %s, assigned to node %s on cluster %s
+================================================================================
+%s`, jobPod.ObjectMeta.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
+		} else {
+			msg.Message = fmt.Sprintf(`========================================
+Logs on pod %s, assigned to cluster %s
 ========================================
-%s`, jobPod.ObjectMeta.Name, logs)
+%s`, jobPod.ObjectMeta.Name, r.LagoonTargetName, logs)
+		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")
@@ -287,10 +294,6 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
 			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
-			}
 		}
 		// we can add the build start time here
 		if jobPod.Status.StartTime != nil {
@@ -386,10 +389,6 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
 				addRoutes = fmt.Sprintf("\n%s", strings.Join(strings.Split(routes, ","), "\n"))
-			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
 		msg.Message = fmt.Sprintf("*[%s]* `%s` Build `%s` %s <%s|Logs>%s%s",

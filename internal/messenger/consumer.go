@@ -373,6 +373,19 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "deploytarget:task:activestandby":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received activestandy switch for project %s",
+						jobSpec.Project.Name,
+					),
+				)
+				err := m.ActiveStandbySwitch(namespace, jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			default:
 				// if we get something that we don't know about, spit out the entire message
 				opLog.Info(

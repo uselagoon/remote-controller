@@ -294,10 +294,6 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
 			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
-			}
 		}
 		// we can add the build start time here
 		if jobPod.Status.StartTime != nil {
@@ -393,10 +389,6 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
 				msg.Meta.Routes = strings.Split(routes, ",")
 				addRoutes = fmt.Sprintf("\n%s", strings.Join(strings.Split(routes, ","), "\n"))
-			}
-			msg.Meta.MonitoringURLs = []string{}
-			if monitoringUrls, ok := lagoonEnv.Data["LAGOON_MONITORING_URLS"]; ok {
-				msg.Meta.MonitoringURLs = strings.Split(monitoringUrls, ",")
 			}
 		}
 		msg.Message = fmt.Sprintf("*[%s]* `%s` Build `%s` %s <%s|Logs>%s%s",

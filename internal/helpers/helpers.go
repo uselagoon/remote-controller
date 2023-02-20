@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/go-version"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -217,6 +219,53 @@ func VariableExists(vars *[]LagoonEnvironmentVariable, name, value string) bool 
 		}
 	}
 	return exists
+}
+
+// GetLagoonVariable returns a given environment variable
+func GetLagoonVariable(name string, scope []string, variables []LagoonEnvironmentVariable) (*LagoonEnvironmentVariable, error) {
+	for _, v := range variables {
+		scoped := true
+		if scope != nil {
+			scoped = false
+			if Contains(scope, v.Scope) {
+				scoped = true
+			}
+		}
+		if v.Name == name && scoped {
+			return &v, nil
+		}
+	}
+	return nil, fmt.Errorf("variable %s not found", name)
+}
+
+// Contains checks if a string slice contains a specific string.
+func Contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Check if the version of lagoon provided in the internal_system scope variable is greater than or equal to the checked version
+func CheckLagoonVersion(build *lagoonv1beta1.LagoonBuild, checkVersion string) bool {
+	lagoonProjectVariables := &[]LagoonEnvironmentVariable{}
+	json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
+	lagoonVersion, err := GetLagoonVariable("LAGOON_SYSTEM_CORE_VERSION", []string{"internal_system"}, *lagoonProjectVariables)
+	if err != nil {
+		return false
+	}
+	aVer, err := version.NewSemver(lagoonVersion.Value)
+	if err != nil {
+		return false
+	}
+	bVer, err := version.NewSemver(checkVersion)
+	if err != nil {
+		return false
+	}
+	return aVer.GreaterThanOrEqual(bVer)
 }
 
 // CancelExtraBuilds cancels extra builds.

@@ -888,10 +888,17 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 		}
 	}
 	// send any messages to lagoon message queues
-	// update the deployment with the status
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
-	r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
+	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
+	if helpers.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
+	} else {
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
+
+	}
 	return nil
 }
 

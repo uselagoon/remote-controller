@@ -83,6 +83,11 @@ build_deploy_controller () {
     echo "==> Install CRDs and deploy controller"
     make install
 
+    # set the images into config.properties so that kustomize can read them
+    echo "OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$OVERRIDE_BUILD_DEPLOY_DIND_IMAGE" > config/default/config.properties
+    echo "HARBOR_URL=$HARBOR_URL" >> config/default/config.properties
+    echo "HARBOR_API=$HARBOR_API" >> config/default/config.properties
+
     kind load docker-image ${CONTROLLER_IMAGE} --name ${KIND_NAME}
     make deploy IMG=${CONTROLLER_IMAGE}
 

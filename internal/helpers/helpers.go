@@ -226,10 +226,7 @@ func GetLagoonVariable(name string, scope []string, variables []LagoonEnvironmen
 	for _, v := range variables {
 		scoped := true
 		if scope != nil {
-			scoped = false
-			if Contains(scope, v.Scope) {
-				scoped = true
-			}
+			scoped = containsStr(scope, v.Scope)
 		}
 		if v.Name == name && scoped {
 			return &v, nil
@@ -238,14 +235,13 @@ func GetLagoonVariable(name string, scope []string, variables []LagoonEnvironmen
 	return nil, fmt.Errorf("variable %s not found", name)
 }
 
-// Contains checks if a string slice contains a specific string.
-func Contains(s []string, str string) bool {
+// containsStr checks if a string slice contains a specific string.
+func containsStr(s []string, str string) bool {
 	for _, v := range s {
 		if v == str {
 			return true
 		}
 	}
-
 	return false
 }
 

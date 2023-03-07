@@ -6,6 +6,7 @@ require (
 	github.com/cheshir/go-mq v1.0.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/go-logr/logr v1.2.3
+	github.com/hashicorp/go-version v1.6.0
 	github.com/k8up-io/k8up/v2 v2.5.2
 	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/mittwald/goharbor-client/v5 v5.1.0

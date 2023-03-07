@@ -30,6 +30,10 @@ jobs:
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
     steps:
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 1
+      continue-on-error: true
     - name: Checkout
       uses: actions/checkout@v2
       with:

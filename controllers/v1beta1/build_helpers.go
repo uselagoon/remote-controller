@@ -864,6 +864,9 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	message string,
 	opLog logr.Logger,
 ) error {
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.ObjectMeta.Name, message))
+	}
 	var allContainerLogs []byte
 	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
 	// so just set the logs to be cancellation message

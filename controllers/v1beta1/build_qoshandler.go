@@ -29,7 +29,13 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	// so we should do the steps required for a lagoon build and then copy the build
 	// into the created namespace
 	if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; !ok {
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("Creating new build %s from message queue", lagoonBuild.ObjectMeta.Name))
+		}
 		return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
+	}
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("Checking which build next"))
 	}
 	// handle the QoS build process here
 	return ctrl.Result{}, r.whichBuildNext(ctx, opLog)
@@ -48,6 +54,9 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 	}
 	if len(runningBuilds.Items) >= r.BuildQoS.MaxBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("Currently %v running builds, no room for new builds to be started", len(runningBuilds.Items)))
+		}
 		return nil
 	}
 	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
@@ -90,6 +99,9 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 			})
 			for idx, pBuild := range pendingBuilds.Items {
 				if idx <= buildsToStart {
+					if r.EnableDebug {
+						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.ObjectMeta.Name))
+					}
 					// if we do have a `lagoon.sh/buildStatus` set, then process as normal
 					runningNSBuilds := &lagoonv1beta1.LagoonBuildList{}
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -106,7 +118,11 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
 						pendingNSBuilds := &lagoonv1beta1.LagoonBuildList{}
-						return helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running")
+						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
+							// only return if there is an error doing this operation
+							// continue on otherwise to allow the queued status updater to run
+							return err
+						}
 					}
 					// The object is not being deleted, so if it does not have our finalizer,
 					// then lets add the finalizer and update the object. This is equivalent

@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -266,18 +267,18 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 				Selector: labels.NewSelector().Add(*labelRequirements1),
 			},
 		})
-		podList := &corev1.PodList{}
+		depList := &appsv1.DeploymentList{}
 		serviceNames := []string{}
-		if err := r.List(context.TODO(), podList, listOption); err == nil {
+		if err := r.List(context.TODO(), depList, listOption); err == nil {
 			// generate the list of services to add to the environment
-			for _, pod := range podList.Items {
-				if _, ok := pod.ObjectMeta.Labels["lagoon.sh/service"]; ok {
-					for _, container := range pod.Spec.Containers {
+			for _, deployment := range depList.Items {
+				if _, ok := deployment.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+					for _, container := range deployment.Spec.Template.Spec.Containers {
 						serviceNames = append(serviceNames, container.Name)
 					}
 				}
-				if _, ok := pod.ObjectMeta.Labels["service"]; ok {
-					for _, container := range pod.Spec.Containers {
+				if _, ok := deployment.ObjectMeta.Labels["service"]; ok {
+					for _, container := range deployment.Spec.Template.Spec.Containers {
 						serviceNames = append(serviceNames, container.Name)
 					}
 				}

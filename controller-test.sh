@@ -270,6 +270,7 @@ kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '
 
 # install the k8upv1alpha1 crds for first test
 kubectl apply -f test-resources/k8upv1alpha1-crds.yaml
+sleep 5
 
 echo "==> Trigger a lagoon restore using rabbitmq"
 echo '
@@ -329,6 +330,7 @@ fi
 
 # install the k8upv1 crds for testing
 kubectl apply -f test-resources/k8upv1-crds.yaml
+sleep 5
 
 echo "==> Trigger a lagoon restore using rabbitmq"
 echo '

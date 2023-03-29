@@ -343,6 +343,13 @@ func (m *Messenger) Consumer(targetName string) { //error {
 				)
 				err := m.ResticRestore(namespace, jobSpec)
 				if err != nil {
+					opLog.Error(err,
+						fmt.Sprintf(
+							"Backup restoration for project %s, environment %s failed to be created",
+							jobSpec.Project.Name,
+							jobSpec.Environment.Name,
+						),
+					)
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
 					return

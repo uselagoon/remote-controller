@@ -39,6 +39,8 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta1.Lagoo
 		if err := helpers.IgnoreNotFound(err); err != nil {
 			return err
 		}
+	}
+	if crdv1alpha1.ObjectMeta.Name == "restores.backup.appuio.ch" {
 		k8upv1alpha1Exists = true
 	}
 	crdv1 := &apiextensionsv1.CustomResourceDefinition{}
@@ -46,6 +48,8 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta1.Lagoo
 		if err := helpers.IgnoreNotFound(err); err != nil {
 			return err
 		}
+	}
+	if crdv1.ObjectMeta.Name == "restores.k8up.io" {
 		k8upv1Exists = true
 	}
 	// check the version, if there is no version in the payload, assume it is k8up v2

@@ -47,6 +47,7 @@ import (
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -73,6 +74,7 @@ func init() {
 	_ = lagoonv1beta1.AddToScheme(scheme)
 	_ = k8upv1.AddToScheme(scheme)
 	_ = k8upv1alpha1.AddToScheme(scheme)
+	_ = apiextensionsv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

@@ -159,6 +159,8 @@ install-registry: install-ingress
 		registry \
 		harbor/harbor
 
+
+
 .PHONY: install-lagoon-remote
 install-lagoon-remote: install-registry install-ingress
 	$(HELM) upgrade \
@@ -169,6 +171,33 @@ install-lagoon-remote: install-registry install-ingress
 		--timeout $(TIMEOUT) \
 		--set dockerHost.image.repository=$(IMAGE_REGISTRY)/docker-host \
 		--set "lagoon-build-deploy.enabled=false" \
+		--set "dockerHost.registry=harbor.$$($(KUBECTL) get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080" \
+		--set "dockerHost.storage.size=10Gi" \
+		--set "dioscuri.enabled=false" \
+		--set "dbaas-operator.enabled=false" \
+		$$([ $(IMAGE_TAG) ] && echo '--set imageTag=$(IMAGE_TAG)') \
+		lagoon \
+		lagoon/lagoon-remote
+
+.PHONY: install-local-dev
+install-local-dev: install-registry install-ingress
+	$(HELM) upgrade \
+		--install \
+		--create-namespace \
+		--namespace lagoon \
+		--wait \
+		--timeout $(TIMEOUT) \
+		--set dockerHost.image.repository=$(IMAGE_REGISTRY)/docker-host \
+		--set "lagoon-build-deploy.lagoonTargetName=local" \
+		--set "lagoon-build-deploy.enabled=true" \
+		--set "lagoon-build-deploy.image.repository=bomoko/remote-controller" \
+		--set "lagoon-build-deploy.image.pullPolicy=Always" \
+		--set "lagoon-build-deploy.image.tag=test" \
+		--set "lagoon-build-deploy.rabbitMQHostname=test" \
+		--set "lagoon-build-deploy.rabbitMQPassword=test" \
+		--set "lagoon-build-deploy.rabbitMQUsername=test" \
+		--set "lagoon-build-deploy.harbor.enabled=true" \
+		--set "lagoon-build-deploy.harbor.host=http://harbor.$$($(KUBECTL) get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080" \
 		--set "dockerHost.registry=harbor.$$($(KUBECTL) get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080" \
 		--set "dockerHost.storage.size=10Gi" \
 		--set "dioscuri.enabled=false" \

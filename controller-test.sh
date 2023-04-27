@@ -112,6 +112,7 @@ build_deploy_controller () {
 }
 
 clean_task_test_resources() {
+  kubectl -n $NS delete -f test-resources/dynamic-secret-in-task-project1-secret.yaml
   kubectl -n $NS delete -f test-resources/dynamic-secret-in-task-project1.yaml
 }
 
@@ -202,11 +203,14 @@ check_lagoon_build lagoon-build-${LBUILD}
 
 echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
 
+kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1-secret.yaml
 kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1.yaml
+kubectl -n $NS patch lagoontasks.crd.lagoon.sh lagoon-advanced-task-example-task-project-1 --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+#kubectl get lagoontasks -A
 
 # wait on pod creation
-wait_for_task_pod_to_complete example-task-project-1
-VMDATA=$(kubectl get pod -n nginx-example-main example-task-project-1 -o jsonpath='{.spec.containers[0].volumeMounts}' | jq -r '.[] | select(.name == "dynamic-test-dynamic-secret") | .mountPath')
+wait_for_task_pod_to_complete lagoon-advanced-task-example-task-project-1
+VMDATA=$(kubectl get pod -n $NS lagoon-advanced-task-example-task-project-1 -o jsonpath='{.spec.containers[0].volumeMounts}' | jq -r '.[] | select(.name == "dynamic-test-dynamic-secret") | .mountPath')
 
 if [ ! "$VMDATA" = "/var/run/secrets/lagoon/dynamic/test-dynamic-secret" ]; then
     echo "==> Task failed to mount dynamic secret"

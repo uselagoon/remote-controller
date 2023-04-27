@@ -121,6 +121,8 @@ wait_for_task_pod_to_complete () {
     echo "==> Check task progress"
     until $(kubectl -n ${NS} get pods ${1} --no-headers | grep -iq "Completed")
     do
+    echo "=====> Pods in ns ${NS}:"
+    kubectl -n ${NS} get pods ${1} --no-headers
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1
         echo "==> Task not completed yet"

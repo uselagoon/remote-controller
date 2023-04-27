@@ -206,7 +206,8 @@ echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
 kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1-secret.yaml
 kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1.yaml
 kubectl -n $NS patch lagoontasks.crd.lagoon.sh lagoon-advanced-task-example-task-project-1 --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
-kubectl get lagoontasks lagoon-advanced-task-example-task-project-1 -n $NS -o yaml
+kubectl -n $NS patch lagoontasks.crd.lagoon.sh lagoon-advanced-task-example-task-project-1 --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+#kubectl get lagoontasks lagoon-advanced-task-example-task-project-1 -n $NS -o yaml
 
 # wait on pod creation
 wait_for_task_pod_to_complete lagoon-advanced-task-example-task-project-1

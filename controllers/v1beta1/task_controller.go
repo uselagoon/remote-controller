@@ -509,6 +509,40 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			newPod.Spec.ServiceAccountName = "lagoon-deployer"
 		}
 		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
+
+		//Decorate the pod spec with additional details
+
+		//dynamic secrets
+		secrets, err := getSecretsForNamespace(r.Client, lagoonTask.Namespace)
+		secrets = filterDynamicSecrets(secrets)
+		if err != nil {
+			return err
+		}
+
+		const dynamicSecretVolumeNamePrefex = "dynamic-"
+		for _, secret := range secrets {
+			volumeMountName := dynamicSecretVolumeNamePrefex + secret.Name
+			v := corev1.Volume{
+				Name: volumeMountName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName:  secret.Name,
+						DefaultMode: helpers.IntPtr(444),
+					},
+				},
+			}
+			newPod.Spec.Volumes = append(newPod.Spec.Volumes, v)
+
+			//now add the volume mount
+			vm := corev1.VolumeMount{
+				Name:      volumeMountName,
+				ReadOnly:  true,
+				MountPath: "/var/run/secrets/lagoon/dynamic/" + secret.Name,
+			}
+
+			newPod.Spec.Containers[0].VolumeMounts = append(newPod.Spec.Containers[0].VolumeMounts, vm)
+		}
+
 		if err := r.Create(ctx, newPod); err != nil {
 			opLog.Info(
 				fmt.Sprintf(
@@ -529,6 +563,33 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}
 	return nil
+}
+
+// getSecretsForNamespace is a convenience function to pull a list of secrets for a given namespace
+func getSecretsForNamespace(k8sClient client.Client, namespace string) (map[string]corev1.Secret, error) {
+	secretList := &corev1.SecretList{}
+	err := k8sClient.List(context.Background(), secretList, &client.ListOptions{Namespace: namespace})
+	if err != nil {
+		return nil, err
+	}
+
+	secrets := map[string]corev1.Secret{}
+	for _, secret := range secretList.Items {
+		secrets[secret.Name] = secret
+	}
+
+	return secrets, nil
+}
+
+// filterDynamicSecrets will, given a map of secrets, filter those that match the dynamic secret label
+func filterDynamicSecrets(secrets map[string]corev1.Secret) map[string]corev1.Secret {
+	filteredSecrets := map[string]corev1.Secret{}
+	for secretName, secret := range secrets {
+		if _, ok := secret.Labels["lagoon.sh/dynamic-secret"]; ok {
+			filteredSecrets[secretName] = secret
+		}
+	}
+	return filteredSecrets
 }
 
 // check for the API/SSH settings in the task spec first, if nothing there use the one from our settings.

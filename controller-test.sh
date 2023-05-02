@@ -111,6 +111,38 @@ build_deploy_controller () {
     echo "==> Controller is running"
 }
 
+clean_task_test_resources() {
+  kubectl -n $NS delete -f test-resources/dynamic-secret-in-task-project1-secret.yaml
+  kubectl -n $NS delete -f test-resources/dynamic-secret-in-task-project1.yaml
+}
+
+wait_for_task_pod_to_complete () {
+    POD_NAME=${1}
+    CHECK_COUNTER=1
+    echo "==> Check task progress"
+    until $(kubectl -n ${NS} get pods ${1} --no-headers | grep -iq "Completed")
+    do
+    echo "=====> Pods in ns ${NS}:"
+    kubectl -n ${NS} get pods ${1} --no-headers
+    if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+        let CHECK_COUNTER=CHECK_COUNTER+1
+        echo "==> Task not completed yet"
+        sleep 5
+    else
+        echo "Timeout of $CHECK_TIMEOUT waiting for task to complete"
+        echo "=========== TASK LOG ============"
+        kubectl -n ${NS} logs ${1} -f
+        clean_task_test_resources
+        check_controller_log ${1}
+        tear_down
+        echo "================ END ================"
+        echo "============== FAILED ==============="
+        exit 1
+    fi
+    done
+    echo "==> Task completed"
+}
+
 
 check_lagoon_build () {
     CHECK_COUNTER=1
@@ -168,6 +200,31 @@ kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-$
 kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-${LBUILD} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
 sleep 10
 check_lagoon_build lagoon-build-${LBUILD}
+
+echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
+
+kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1-secret.yaml
+kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1.yaml
+kubectl -n $NS patch lagoontasks.crd.lagoon.sh lagoon-advanced-task-example-task-project-1 --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+kubectl -n $NS patch lagoontasks.crd.lagoon.sh lagoon-advanced-task-example-task-project-1 --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+#kubectl get lagoontasks lagoon-advanced-task-example-task-project-1 -n $NS -o yaml
+
+# wait on pod creation
+wait_for_task_pod_to_complete lagoon-advanced-task-example-task-project-1
+VMDATA=$(kubectl get pod -n $NS lagoon-advanced-task-example-task-project-1 -o jsonpath='{.spec.containers[0].volumeMounts}' | jq -r '.[] | select(.name == "dynamic-test-dynamic-secret") | .mountPath')
+
+if [ ! "$VMDATA" = "/var/run/secrets/lagoon/dynamic/test-dynamic-secret" ]; then
+    echo "==> Task failed to mount dynamic secret"
+    clean_task_test_resources
+    check_controller_log ${1}
+    tear_down
+    echo "============== FAILED ==============="
+    exit 1
+  else
+    echo "==> Dynamic secret mounting into tasks good"
+    clean_task_test_resources
+fi
+
 
 echo "==> Trigger a lagoon build using rabbitmq"
 echo '

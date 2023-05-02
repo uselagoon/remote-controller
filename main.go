@@ -827,6 +827,21 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
 	}
+
+	// for now the namespace reconciler only needs to run if harbor is enabled so that we can watch the namespace for rotation label events
+	if lffHarborEnabled {
+		if err = (&lagoonv1beta1ctrl.HarborCredentialReconciler{
+			Client:              mgr.GetClient(),
+			Log:                 ctrl.Log.WithName("v1beta1").WithName("HarborCredentialReconciler"),
+			Scheme:              mgr.GetScheme(),
+			LFFHarborEnabled:    lffHarborEnabled,
+			ControllerNamespace: controllerNamespace,
+			Harbor:              harborConfig,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "HarborCredentialReconciler")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting lagoon metrics server")

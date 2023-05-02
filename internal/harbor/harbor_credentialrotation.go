@@ -71,67 +71,67 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 			}
 		}
 		if !runningBuilds {
-			// only continue if there isn't any running builds
-			robotCreds := &helpers.RegistryCredentials{}
-			curVer, err := h.GetHarborVersion(ctx)
+			rotated, err := h.RotateRobotCredential(ctx, cl, ns, false)
 			if err != nil {
-				// @TODO: resource unknown
-				opLog.Error(err, "error checking harbor version")
+				opLog.Error(err, "error")
 				continue
 			}
-			if h.UseV2Functions(curVer) {
-				hProject, err := h.CreateProjectV2(ctx, ns.Labels["lagoon.sh/project"])
-				if err != nil {
-					// @TODO: resource unknown
-					opLog.Error(err, "error getting or creating project")
-					break
-				}
-				time.Sleep(1 * time.Second) // wait 1 seconds
-				robotCreds, err = h.CreateOrRefreshRobotV2(ctx,
-					cl,
-					hProject,
-					ns.Labels["lagoon.sh/environment"],
-					ns.ObjectMeta.Name,
-					h.RobotAccountExpiry)
-				if err != nil {
-					opLog.Error(err, "error getting or creating robot account")
-					continue
-				}
-			} else {
-				hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
-				if err != nil {
-					// @TODO: resource unknown
-					opLog.Error(err, "error getting or creating project")
-					continue
-				}
-				time.Sleep(1 * time.Second) // wait 1 seconds
-				robotCreds, err = h.CreateOrRefreshRobot(ctx,
-					cl,
-					hProject,
-					ns.Labels["lagoon.sh/environment"],
-					ns.ObjectMeta.Name,
-					time.Now().Add(h.RobotAccountExpiry).Unix())
-				if err != nil {
-					opLog.Error(err, "error getting or creating robot account")
-					continue
-				}
-			}
-			time.Sleep(1 * time.Second) // wait 1 seconds
-			if robotCreds != nil {
-				// if we have robotcredentials to create, do that here
-				if err := UpsertHarborSecret(ctx,
-					cl,
-					ns.ObjectMeta.Name,
-					"lagoon-internal-registry-secret", //secret name in kubernetes
-					h.Hostname,
-					robotCreds); err != nil {
-					opLog.Error(err, "error creating or updating robot account credentials")
-					continue
-				}
+			if rotated {
 				opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))
 			}
 		} else {
 			opLog.Info(fmt.Sprintf("There are running or pending builds in %s, skipping", ns.ObjectMeta.Name))
 		}
 	}
+}
+
+// rotate a specific namespaces robot credential
+func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns corev1.Namespace, force bool) (bool, error) {
+	// only continue if there isn't any running builds
+	robotCreds := &helpers.RegistryCredentials{}
+	curVer, err := h.GetHarborVersion(ctx)
+	if err != nil {
+		return false, fmt.Errorf("error checking harbor version: %v", err)
+	}
+	if h.UseV2Functions(curVer) {
+		hProject, err := h.CreateProjectV2(ctx, ns.Labels["lagoon.sh/project"])
+		if err != nil {
+			return false, fmt.Errorf("error getting or creating project: %v", err)
+		}
+		time.Sleep(1 * time.Second) // wait 1 seconds
+		robotCreds, err = h.CreateOrRefreshRobotV2(ctx,
+			cl,
+			hProject,
+			ns.Labels["lagoon.sh/environment"],
+			ns.ObjectMeta.Name,
+			h.RobotAccountExpiry,
+			force)
+		if err != nil {
+			return false, fmt.Errorf("error getting or creating robot account: %v", err)
+		}
+	} else {
+		hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
+		if err != nil {
+			return false, fmt.Errorf("error getting or creating project: %v", err)
+		}
+		time.Sleep(1 * time.Second) // wait 1 seconds
+		robotCreds, err = h.CreateOrRefreshRobot(ctx,
+			cl,
+			hProject,
+			ns.Labels["lagoon.sh/environment"],
+			ns.ObjectMeta.Name,
+			time.Now().Add(h.RobotAccountExpiry).Unix(),
+			force)
+		if err != nil {
+			return false, fmt.Errorf("error getting or creating robot account: %v", err)
+		}
+	}
+	time.Sleep(1 * time.Second) // wait 1 seconds
+
+	// if we have robotcredentials to create, do that here
+	return h.UpsertHarborSecret(ctx,
+		cl,
+		ns.ObjectMeta.Name,
+		"lagoon-internal-registry-secret", //secret name in kubernetes
+		robotCreds)
 }

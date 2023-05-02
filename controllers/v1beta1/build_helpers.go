@@ -218,7 +218,8 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				hProject,
 				lagoonBuild.Spec.Project.Environment,
 				ns,
-				lagoonHarbor.RobotAccountExpiry)
+				lagoonHarbor.RobotAccountExpiry,
+				false)
 			if err != nil {
 				return fmt.Errorf("Error creating harbor robot account: %v", err)
 			}
@@ -233,21 +234,20 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				hProject,
 				lagoonBuild.Spec.Project.Environment,
 				ns,
-				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix())
+				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix(),
+				false)
 			if err != nil {
 				return fmt.Errorf("Error creating harbor robot account: %v", err)
 			}
 		}
-		if robotCreds != nil {
-			// if we have robotcredentials to create, do that here
-			if err := harbor.UpsertHarborSecret(ctx,
-				r.Client,
-				ns,
-				"lagoon-internal-registry-secret",
-				lagoonHarbor.Hostname,
-				robotCreds); err != nil {
-				return fmt.Errorf("Error upserting harbor robot account secret: %v", err)
-			}
+		// if we have robotcredentials to create, do that here
+		_, err = lagoonHarbor.UpsertHarborSecret(ctx,
+			r.Client,
+			ns,
+			"lagoon-internal-registry-secret",
+			robotCreds)
+		if err != nil {
+			return fmt.Errorf("Error upserting harbor robot account secret: %v", err)
 		}
 	}
 	return nil

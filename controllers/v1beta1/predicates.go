@@ -225,3 +225,49 @@ func (t TaskPredicates) Generic(e event.GenericEvent) bool {
 	}
 	return false
 }
+
+// SecretPredicates defines the funcs for predicates
+type SecretPredicates struct {
+	predicate.Funcs
+	ControllerNamespace string
+}
+
+// Create is used when a creation event is received by the controller.
+func (n SecretPredicates) Create(e event.CreateEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == n.ControllerNamespace {
+			return true
+		}
+	}
+	return false
+}
+
+// Delete is used when a deletion event is received by the controller.
+func (n SecretPredicates) Delete(e event.DeleteEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == n.ControllerNamespace {
+			return true
+		}
+	}
+	return false
+}
+
+// Update is used when an update event is received by the controller.
+func (n SecretPredicates) Update(e event.UpdateEvent) bool {
+	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == n.ControllerNamespace {
+			return true
+		}
+	}
+	return false
+}
+
+// Generic is used when any other event is received by the controller.
+func (n SecretPredicates) Generic(e event.GenericEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == n.ControllerNamespace {
+			return true
+		}
+	}
+	return false
+}

@@ -129,7 +129,8 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 				corev1.DockerConfigJsonKey: []byte(dcjBytes),
 			}
 			secret.ObjectMeta.Labels = map[string]string{
-				"lagoon.sh/controller": h.ControllerNamespace,
+				"lagoon.sh/controller":        h.ControllerNamespace,
+				"lagoon.sh/harbor-credential": "true",
 			}
 			err := cl.Create(ctx, secret)
 			if err != nil {
@@ -156,6 +157,7 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 				secret.ObjectMeta.Labels = map[string]string{}
 			}
 			secret.ObjectMeta.Labels["lagoon.sh/controller"] = h.ControllerNamespace
+			secret.ObjectMeta.Labels["lagoon.sh/harbor-credential"] = "true"
 		}
 		err = cl.Update(ctx, secret)
 		if err != nil {
@@ -168,7 +170,8 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 			mergePatch, _ := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
-						"lagoon.sh/controller": h.ControllerNamespace,
+						"lagoon.sh/controller":        h.ControllerNamespace,
+						"lagoon.sh/harbor-credential": "true",
 					},
 				},
 			})

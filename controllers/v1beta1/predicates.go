@@ -236,7 +236,11 @@ type SecretPredicates struct {
 func (n SecretPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == n.ControllerNamespace {
-			return true
+			if val, ok := e.Object.GetLabels()["lagoon.sh/harbor-credential"]; ok {
+				if val == "true" {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -246,7 +250,11 @@ func (n SecretPredicates) Create(e event.CreateEvent) bool {
 func (n SecretPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == n.ControllerNamespace {
-			return true
+			if val, ok := e.Object.GetLabels()["lagoon.sh/harbor-credential"]; ok {
+				if val == "true" {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -256,7 +264,11 @@ func (n SecretPredicates) Delete(e event.DeleteEvent) bool {
 func (n SecretPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == n.ControllerNamespace {
-			return true
+			if val, ok := e.ObjectOld.GetLabels()["lagoon.sh/harbor-credential"]; ok {
+				if val == "true" {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -266,7 +278,11 @@ func (n SecretPredicates) Update(e event.UpdateEvent) bool {
 func (n SecretPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == n.ControllerNamespace {
-			return true
+			if val, ok := e.Object.GetLabels()["lagoon.sh/harbor-credential"]; ok {
+				if val == "true" {
+					return true
+				}
+			}
 		}
 	}
 	return false

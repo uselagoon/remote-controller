@@ -339,7 +339,9 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 			}
 		}
 		msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-		msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+		if buildCondition.ToLower() == "failed" || buildCondition.ToLower() == "complete" || buildCondition.ToLower() == "cancelled" {
+			msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")

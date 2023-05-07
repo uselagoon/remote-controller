@@ -338,7 +338,6 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 				msg.Meta.Routes = strings.Split(routes, ",")
 			}
 		}
-		msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 		if buildCondition.ToLower() == "failed" || buildCondition.ToLower() == "complete" || buildCondition.ToLower() == "cancelled" {
 			msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 		}

@@ -104,7 +104,7 @@ func makeHarborSecret(credentials robotAccountCredential) helpers.RegistryCreden
 }
 
 // UpsertHarborSecret will create or update the secret in kubernetes.
-func UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL string, registryCreds *helpers.RegistryCredentials) error {
+func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name string, registryCreds *helpers.RegistryCredentials) (bool, error) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
@@ -120,31 +120,65 @@ func UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name, baseURL
 		Name:      name,
 	}, secret)
 	if err != nil {
-		// if the secret doesn't exist
-		// create it
-		dcj.Registries[baseURL] = *registryCreds
+		// if registryCreds are provided, and the secret doesn't exist
+		// then create the secret
+		if registryCreds != nil {
+			dcj.Registries[h.Hostname] = *registryCreds
+			dcjBytes, _ := json.Marshal(dcj)
+			secret.Data = map[string][]byte{
+				corev1.DockerConfigJsonKey: []byte(dcjBytes),
+			}
+			secret.ObjectMeta.Labels = map[string]string{
+				"lagoon.sh/controller":        h.ControllerNamespace,
+				"lagoon.sh/harbor-credential": "true",
+			}
+			err := cl.Create(ctx, secret)
+			if err != nil {
+				return false, fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
+			}
+			// return true that the credential was created
+			return true, nil
+		}
+		return false, nil
+	}
+	// if registryCreds are provided, and the secret exists, then update the secret
+	// with the provided credentials
+	if registryCreds != nil {
+		json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
+		// add or update the credential
+		dcj.Registries[h.Hostname] = *registryCreds
 		dcjBytes, _ := json.Marshal(dcj)
 		secret.Data = map[string][]byte{
 			corev1.DockerConfigJsonKey: []byte(dcjBytes),
 		}
-		err := cl.Create(ctx, secret)
-		if err != nil {
-			return fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
+		// add the controller label if it doesn't exist
+		if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
+			if secret.ObjectMeta.Labels == nil {
+				secret.ObjectMeta.Labels = map[string]string{}
+			}
+			secret.ObjectMeta.Labels["lagoon.sh/controller"] = h.ControllerNamespace
+			secret.ObjectMeta.Labels["lagoon.sh/harbor-credential"] = "true"
 		}
-		return nil
+		err = cl.Update(ctx, secret)
+		if err != nil {
+			return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+		}
+		return true, nil
+	} else {
+		// if the secret doesn't have the controller label, patch it it
+		if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
+			mergePatch, _ := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"labels": map[string]interface{}{
+						"lagoon.sh/controller":        h.ControllerNamespace,
+						"lagoon.sh/harbor-credential": "true",
+					},
+				},
+			})
+			if err := cl.Patch(ctx, secret, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+				return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+			}
+		}
 	}
-	// if the secret exists
-	// update the secret with the new credentials
-	json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
-	// add or update the credential
-	dcj.Registries[baseURL] = *registryCreds
-	dcjBytes, _ := json.Marshal(dcj)
-	secret.Data = map[string][]byte{
-		corev1.DockerConfigJsonKey: []byte(dcjBytes),
-	}
-	err = cl.Update(ctx, secret)
-	if err != nil {
-		return fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
-	}
-	return nil
+	return false, nil
 }

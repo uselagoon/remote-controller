@@ -129,6 +129,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	project *harborclientv5model.Project,
 	environmentName, namespace string,
 	expiry time.Duration,
+	force bool,
 ) (*helpers.RegistryCredentials, error) {
 
 	// create a cluster specific robot account name
@@ -197,7 +198,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
 			// if it is a new robot account, follow through here
 			exists = true
-			if forceRecreate {
+			if forceRecreate || force {
 				// if the secret doesn't exist in kubernetes, then force re-creation of the robot
 				// account is required, as there isn't a way to get the credentials after
 				// robot accounts are created
@@ -265,43 +266,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	if !exists || deleted {
 		// if it doesn't exist, or was deleted
 		// create a new robot account
-		robotf := harborclientv5model.RobotCreate{
-			Level:    "project",
-			Name:     robotName,
-			Duration: expiryDays,
-			Permissions: []*harborclientv5model.RobotPermission{
-				{
-					Kind:      "project",
-					Namespace: project.Name,
-					Access: []*harborclientv5model.Access{
-						{
-							Action:   "push",
-							Resource: "repository",
-						},
-						{
-							Action:   "pull",
-							Resource: "repository",
-						},
-					},
-				},
-			},
-			Disable:     false,
-			Description: fmt.Sprintf("Robot account created in %s", h.LagoonTargetName),
-		}
-		token, err := h.ClientV5.NewRobotAccount(ctx, &robotf)
-		if err != nil {
-			h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", project.Name, h.addPrefixV2(project.Name, environmentName)))
-			return nil, err
-		}
-		// then craft and return the harbor credential secret
-		harborRegistryCredentials := makeHarborSecret(
-			robotAccountCredential{
-				Token: token.Secret,
-				Name:  token.Name,
-			},
-		)
-		h.Log.Info(fmt.Sprintf("Created robot account %s", token.Name))
-		return &harborRegistryCredentials, nil
+		return h.CreateRobotAccountV2(ctx, robotName, environmentName, project.Name, expiryDays)
 	}
 	return nil, err
 }
@@ -347,4 +312,44 @@ func (h *Harbor) ListRepositories(ctx context.Context, projectName string, pageN
 		h.Log.Info(fmt.Sprintf("Error listing harbor repositories for project %s", projectName))
 	}
 	return listRepositories
+}
+
+func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, environmentName, projectName string, expiryDays int64) (*helpers.RegistryCredentials, error) {
+	robotf := harborclientv5model.RobotCreate{
+		Level:    "project",
+		Name:     robotName,
+		Duration: expiryDays,
+		Permissions: []*harborclientv5model.RobotPermission{
+			{
+				Kind:      "project",
+				Namespace: projectName,
+				Access: []*harborclientv5model.Access{
+					{
+						Action:   "push",
+						Resource: "repository",
+					},
+					{
+						Action:   "pull",
+						Resource: "repository",
+					},
+				},
+			},
+		},
+		Disable:     false,
+		Description: fmt.Sprintf("Robot account created in %s", h.LagoonTargetName),
+	}
+	token, err := h.ClientV5.NewRobotAccount(ctx, &robotf)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", projectName, h.addPrefixV2(projectName, environmentName)))
+		return nil, err
+	}
+	// then craft and return the harbor credential secret
+	harborRegistryCredentials := makeHarborSecret(
+		robotAccountCredential{
+			Token: token.Secret,
+			Name:  token.Name,
+		},
+	)
+	h.Log.Info(fmt.Sprintf("Created robot account %s", token.Name))
+	return &harborRegistryCredentials, nil
 }

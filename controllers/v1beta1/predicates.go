@@ -248,15 +248,6 @@ func (n SecretPredicates) Create(e event.CreateEvent) bool {
 
 // Delete is used when a deletion event is received by the controller.
 func (n SecretPredicates) Delete(e event.DeleteEvent) bool {
-	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
-		if controller == n.ControllerNamespace {
-			if val, ok := e.Object.GetLabels()["lagoon.sh/harbor-credential"]; ok {
-				if val == "true" {
-					return true
-				}
-			}
-		}
-	}
 	return false
 }
 

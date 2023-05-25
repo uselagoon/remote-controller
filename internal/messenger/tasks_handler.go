@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -42,13 +44,19 @@ func (m *Messenger) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 				"Unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
 				jobSpec.Misc.Name,
 			))
-			// if there is no pod or build, update the build in Lagoon to cancelled
-			m.updateLagoonBuild(opLog, namespace, *jobSpec)
+			// if there is no pod or build, update the build in Lagoon to cancelled, assume completely cancelled with no other information
+			m.updateLagoonBuild(opLog, namespace, *jobSpec, nil)
 			return nil
 		}
 		// as there is no build pod, but there is a lagoon build resource
 		// update it to cancelled so that the controller doesn't try to run it
-		lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
+		// check if the build has existing status or not though to consume it
+		if helpers.ContainsString(
+			helpers.BuildRunningPendingStatus,
+			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
+		) {
+			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
+		}
 		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
 		if err := m.Client.Update(context.Background(), &lagoonBuild); err != nil {
 			opLog.Error(err,
@@ -60,7 +68,7 @@ func (m *Messenger) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonT
 			return err
 		}
 		// and then send the response back to lagoon to say it was cancelled.
-		m.updateLagoonBuild(opLog, namespace, *jobSpec)
+		m.updateLagoonBuild(opLog, namespace, *jobSpec, &lagoonBuild)
 		return nil
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
@@ -132,24 +140,51 @@ func (m *Messenger) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTa
 	return nil
 }
 
-func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
+func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec, lagoonBuild *lagoonv1beta1.LagoonBuild) {
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
+	buildCondition := "cancelled"
+	if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+		// if the build isnt running,pending,queued, then set the buildcondition to the value failed/complete/cancelled
+		if !helpers.ContainsString(helpers.BuildRunningPendingStatus, val) {
+			buildCondition = strings.ToLower(val)
+		}
+	}
 	msg := lagoonv1beta1.LagoonMessage{
 		Type:      "build",
 		Namespace: namespace,
 		Meta: &lagoonv1beta1.LagoonLogMeta{
 			Environment: jobSpec.Environment.Name,
 			Project:     jobSpec.Project.Name,
-			BuildPhase:  "cancelled",
+			BuildPhase:  buildCondition,
 			BuildName:   jobSpec.Misc.Name,
 		},
 	}
-	// if the build isn't found at all, then set the start/end time to be now
+	// set the start/end time to be now as the default
 	// to stop the duration counter in the ui
 	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+
+	// if possible, get the start and end times from the build resource, these will be sent back to lagoon to update the api
+	if lagoonBuild.Status.Conditions != nil {
+		conditions := lagoonBuild.Status.Conditions
+		// sort the build conditions by time so the first and last can be extracted
+		sort.Slice(conditions, func(i, j int) bool {
+			iTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[i].LastTransitionTime)
+			jTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[j].LastTransitionTime)
+			return iTime.Before(jTime)
+		})
+		// get the starting time, or fallbac to default
+		sTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[0].LastTransitionTime)
+		if err == nil {
+			msg.Meta.StartTime = sTime.Format("2006-01-02 15:04:05")
+		}
+		eTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[len(conditions)-1].LastTransitionTime)
+		if err == nil {
+			msg.Meta.EndTime = eTime.Format("2006-01-02 15:04:05")
+		}
+	}
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		opLog.Error(err, "Unable to encode message as JSON")

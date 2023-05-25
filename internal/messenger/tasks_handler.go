@@ -175,11 +175,12 @@ func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSp
 			jTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[j].LastTransitionTime)
 			return iTime.Before(jTime)
 		})
-		// get the starting time, or fallbac to default
+		// get the starting time, or fallback to default
 		sTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[0].LastTransitionTime)
 		if err == nil {
 			msg.Meta.StartTime = sTime.Format("2006-01-02 15:04:05")
 		}
+		// get the ending time, or fallback to default
 		eTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[len(conditions)-1].LastTransitionTime)
 		if err == nil {
 			msg.Meta.EndTime = eTime.Format("2006-01-02 15:04:05")

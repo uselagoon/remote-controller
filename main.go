@@ -47,6 +47,7 @@ import (
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -73,6 +74,7 @@ func init() {
 	_ = lagoonv1beta1.AddToScheme(scheme)
 	_ = k8upv1.AddToScheme(scheme)
 	_ = k8upv1alpha1.AddToScheme(scheme)
+	_ = apiextensionsv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -824,6 +826,21 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
+	}
+
+	// for now the namespace reconciler only needs to run if harbor is enabled so that we can watch the namespace for rotation label events
+	if lffHarborEnabled {
+		if err = (&lagoonv1beta1ctrl.HarborCredentialReconciler{
+			Client:              mgr.GetClient(),
+			Log:                 ctrl.Log.WithName("v1beta1").WithName("HarborCredentialReconciler"),
+			Scheme:              mgr.GetScheme(),
+			LFFHarborEnabled:    lffHarborEnabled,
+			ControllerNamespace: controllerNamespace,
+			Harbor:              harborConfig,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "HarborCredentialReconciler")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

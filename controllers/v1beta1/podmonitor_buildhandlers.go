@@ -440,10 +440,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	switch jobPod.Status.Phase {
 	case corev1.PodFailed:
 		buildCondition = lagoonv1beta1.BuildStatusFailed
-		cancel = false // don't cancel failed builds
 	case corev1.PodSucceeded:
 		buildCondition = lagoonv1beta1.BuildStatusComplete
-		cancel = false // don't cancel complete builds
 	case corev1.PodPending:
 		buildCondition = lagoonv1beta1.BuildStatusPending
 	case corev1.PodRunning:
@@ -451,7 +449,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	}
 	collectLogs := true
 	if cancel {
-		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		// only set the status to cancelled if the pod is running/pending/queued
+		// otherwise send the existing status of complete/failed/cancelled
+		if helpers.ContainsString(
+			helpers.BuildRunningPendingStatus,
+			lagoonBuild.Labels["lagoon.sh/buildStatus"],
+		) {
+			buildCondition = lagoonv1beta1.BuildStatusCancelled
+		}
 		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
 			collectLogs = false
 		}

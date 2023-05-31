@@ -24,9 +24,6 @@ jobs:
           - kindest_node_version: v1.23.6
             harbor: "1.7.5"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
-          - kindest_node_version: v1.23.6
-            harbor: "1.11.1"
-            lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
           - kindest_node_version: v1.24.7
             harbor: "1.11.1"

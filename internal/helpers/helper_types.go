@@ -22,3 +22,12 @@ type RegistryCredentials struct {
 	Email    string `json:"email"`
 	Auth     string `json:"auth"`
 }
+
+// LagoonAPIConfiguration is for the settings for task API/SSH host/ports
+type LagoonAPIConfiguration struct {
+	APIHost   string
+	TokenHost string
+	TokenPort string
+	SSHHost   string
+	SSHPort   string
+}

@@ -161,6 +161,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog lo
 					"task_name":      lagoonTask.ObjectMeta.Name,
 				})
 			})
+			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "task",

@@ -238,7 +238,7 @@ func (h *Harbor) CreateOrRefreshRobot(ctx context.Context,
 	if !exists || deleted {
 		// if it doesn't exist, or was deleted
 		// create a new robot account
-		h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
+		h.Log.Info(fmt.Sprintf("Created robot account %s", h.generateRobotWithPrefix(robotName)))
 		return h.CreateRobotAccount(ctx, robotName, project, expiry)
 	}
 	return nil, err
@@ -266,9 +266,9 @@ func (h *Harbor) CreateRobotAccount(ctx context.Context, robotName string, proje
 	harborRegistryCredentials := makeHarborSecret(
 		robotAccountCredential{
 			Token: token,
-			Name:  h.addPrefix(robotName),
+			Name:  h.generateRobotWithPrefix(robotName),
 		},
 	)
-	h.Log.Info(fmt.Sprintf("Created robot account %s", h.addPrefix(robotName)))
+	h.Log.Info(fmt.Sprintf("Created robot account %s", h.generateRobotWithPrefix(robotName)))
 	return &harborRegistryCredentials, nil
 }

@@ -2,6 +2,7 @@ package harbor
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"context"
@@ -45,9 +46,8 @@ func (h *Harbor) UseV2Functions(version string) bool {
 	return !currentVersion.LessThan(*harborV2)
 }
 
-// addPrefix adds the robot account prefix to robot accounts
-// @TODO: Harbor 2.2.0 changes this behavior, see note below in `matchRobotAccount`
-func (h *Harbor) addPrefix(str string) string {
+// generateRobotWithPrefix adds the robot account prefix to robot accounts
+func (h *Harbor) generateRobotWithPrefix(str string) string {
 	return h.RobotPrefix + str
 }
 
@@ -57,10 +57,32 @@ func (h *Harbor) matchRobotAccount(robotName string,
 	environmentName string,
 ) bool {
 	// pre global-robot-accounts (2.2.0+)
-	if robotName == h.addPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])) {
+	if robotName == h.generateRobotWithPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])) {
 		return true
 	}
 	return false
+}
+
+// https://github.com/goharbor/harbor/pull/13685
+func harborRobotV2Regex(name string) string {
+	robotNameReg := `^[a-z0-9]+(?:[._-][a-z0-9]+)*$`
+	// check if the robot account matches the regex that harbor supports for robot account names
+	// if it is "legal" then let it through
+	legal := regexp.MustCompile(robotNameReg).MatchString(name)
+	if !legal {
+		// if it isn't legal, then hash the name
+		return helpers.HashString(name)[0:20]
+	}
+	return name
+}
+
+// generateRobotWithPrefix adds the robot account prefix to robot accounts
+func (h *Harbor) generateRobotWithPrefixV2(projectName, environmentName string) string {
+	return fmt.Sprintf("%s%s+%s", h.RobotPrefix, projectName, h.generateRobotName(environmentName))
+}
+
+func (h *Harbor) generateRobotName(environmentName string) string {
+	return fmt.Sprintf("%s-%s", harborRobotV2Regex(environmentName), helpers.HashString(h.LagoonTargetName)[0:8])
 }
 
 // matchRobotAccountV2 will check if the robotaccount exists or not
@@ -68,7 +90,7 @@ func (h *Harbor) matchRobotAccountV2(robotName string,
 	projectName string,
 	environmentName string,
 ) bool {
-	if robotName == h.addPrefixV2(projectName, environmentName) {
+	if robotName == h.generateRobotWithPrefixV2(projectName, environmentName) {
 		return true
 	}
 	return false

@@ -213,9 +213,9 @@ func main() {
 	flag.StringVar(&lagoonAPIHost, "lagoon-api-host", "http://10.0.2.2:3000",
 		"The host address for the lagoon API.")
 	flag.StringVar(&lagoonSSHHost, "lagoon-ssh-host", "ssh.lagoon.svc",
-		"The host address for the Lagoon SSH service.")
+		"The host address for the Lagoon SSH service, or ssh-portal service.")
 	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
-		"The port for the Lagoon SSH service.")
+		"The port for the Lagoon SSH service, or ssh-portal service.")
 	flag.StringVar(&lagoonTokenHost, "lagoon-token-host", "ssh.lagoon.svc",
 		"The host address for the Lagoon Token service.")
 	flag.StringVar(&lagoonTokenPort, "lagoon-token-port", "2020",
@@ -789,9 +789,11 @@ func main() {
 		LagoonTargetName:                 lagoonTargetName,
 		LagoonFeatureFlags:               helpers.GetLagoonFeatureFlags(),
 		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
-			APIHost: lagoonAPIHost,
-			SSHHost: lagoonSSHHost,
-			SSHPort: lagoonSSHPort,
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
 		},
 		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
 			HTTPProxy:  httpProxy,
@@ -825,9 +827,11 @@ func main() {
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
 		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
-			APIHost: lagoonAPIHost,
-			SSHHost: lagoonSSHHost,
-			SSHPort: lagoonSSHPort,
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
 		},
 		EnableDebug:      enableDebug,
 		LagoonTargetName: lagoonTargetName,

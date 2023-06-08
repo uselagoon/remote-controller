@@ -62,6 +62,8 @@ var (
 	lagoonAPIHost                   string
 	lagoonSSHHost                   string
 	lagoonSSHPort                   string
+	lagoonTokenHost                 string
+	lagoonTokenPort                 string
 	tlsSkipVerify                   bool
 	advancedTaskSSHKeyInjection     bool
 	advancedTaskDeployToken         bool
@@ -211,9 +213,13 @@ func main() {
 	flag.StringVar(&lagoonAPIHost, "lagoon-api-host", "http://10.0.2.2:3000",
 		"The host address for the lagoon API.")
 	flag.StringVar(&lagoonSSHHost, "lagoon-ssh-host", "ssh.lagoon.svc",
-		"The host address for the Lagoon SSH service.")
+		"The host address for the Lagoon SSH service, or ssh-portal service.")
 	flag.StringVar(&lagoonSSHPort, "lagoon-ssh-port", "2020",
-		"The port for the Lagoon SSH service.")
+		"The port for the Lagoon SSH service, or ssh-portal service.")
+	flag.StringVar(&lagoonTokenHost, "lagoon-token-host", "ssh.lagoon.svc",
+		"The host address for the Lagoon Token service.")
+	flag.StringVar(&lagoonTokenPort, "lagoon-token-port", "2020",
+		"The port for the Lagoon Token service.")
 	// @TODO: Nothing uses this at the moment, but could be use in the future by controllers
 	flag.BoolVar(&enableDebug, "enable-debug", false,
 		"Flag to enable more verbose debugging logs.")
@@ -387,9 +393,16 @@ func main() {
 		setupLog.Error(fmt.Errorf("controller-namespace is empty"), "unable to start manager")
 		os.Exit(1)
 	}
+	// LAGOON_CONFIG_X are the supported path now
+	lagoonAPIHost = helpers.GetEnv("LAGOON_CONFIG_API_HOST", lagoonAPIHost)
+	lagoonTokenHost = helpers.GetEnv("LAGOON_CONFIG_TOKEN_HOST", lagoonTokenHost)
+	lagoonTokenPort = helpers.GetEnv("LAGOON_CONFIG_TOKEN_PORT", lagoonTokenPort)
+	lagoonSSHHost = helpers.GetEnv("LAGOON_CONFIG_SSH_HOST", lagoonSSHHost)
+	lagoonSSHPort = helpers.GetEnv("LAGOON_CONFIG_SSH_PORT", lagoonSSHPort)
+	// TODO: deprecate TASK_X variables
 	lagoonAPIHost = helpers.GetEnv("TASK_API_HOST", lagoonAPIHost)
-	lagoonSSHHost = helpers.GetEnv("TASK_SSH_HOST", lagoonSSHHost)
-	lagoonSSHPort = helpers.GetEnv("TASK_SSH_PORT", lagoonSSHPort)
+	lagoonTokenHost = helpers.GetEnv("TASK_SSH_HOST", lagoonTokenHost)
+	lagoonTokenPort = helpers.GetEnv("TASK_SSH_PORT", lagoonTokenPort)
 
 	nativeCronPodMinFrequency = helpers.GetEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
 
@@ -775,10 +788,12 @@ func main() {
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
 		LagoonFeatureFlags:               helpers.GetLagoonFeatureFlags(),
-		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
-			APIHost: lagoonAPIHost,
-			SSHHost: lagoonSSHHost,
-			SSHPort: lagoonSSHPort,
+		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
 		},
 		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
 			HTTPProxy:  httpProxy,
@@ -811,10 +826,12 @@ func main() {
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
-		LagoonAPIConfiguration: lagoonv1beta1ctrl.LagoonAPIConfiguration{
-			APIHost: lagoonAPIHost,
-			SSHHost: lagoonSSHHost,
-			SSHPort: lagoonSSHPort,
+		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
 		},
 		EnableDebug:      enableDebug,
 		LagoonTargetName: lagoonTargetName,

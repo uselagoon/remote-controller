@@ -145,10 +145,12 @@ func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSp
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
 	buildCondition := "cancelled"
-	if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
-		// if the build isnt running,pending,queued, then set the buildcondition to the value failed/complete/cancelled
-		if !helpers.ContainsString(helpers.BuildRunningPendingStatus, val) {
-			buildCondition = strings.ToLower(val)
+	if lagoonBuild != nil {
+		if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+			// if the build isnt running,pending,queued, then set the buildcondition to the value failed/complete/cancelled
+			if !helpers.ContainsString(helpers.BuildRunningPendingStatus, val) {
+				buildCondition = strings.ToLower(val)
+			}
 		}
 	}
 	msg := lagoonv1beta1.LagoonMessage{
@@ -167,7 +169,7 @@ func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSp
 	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	// if possible, get the start and end times from the build resource, these will be sent back to lagoon to update the api
-	if lagoonBuild.Status.Conditions != nil {
+	if lagoonBuild != nil && lagoonBuild.Status.Conditions != nil {
 		conditions := lagoonBuild.Status.Conditions
 		// sort the build conditions by time so the first and last can be extracted
 		sort.Slice(conditions, func(i, j int) bool {

@@ -17,16 +17,20 @@ jobs:
       fail-fast: false
       matrix:
         kindest_node_version: [v1.21.12, v1.22.9]
-        harbor: ["1.5.6", "1.9.0"]
+        harbor: ["1.9.0","1.12.2"]
         lagoon_build_image: ["uselagoon/build-deploy-image:main"]
         experimental: [false]
         include:
           - kindest_node_version: v1.23.6
-            harbor: "1.9.0"
+            harbor: "1.12.2"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
           - kindest_node_version: v1.24.7
-            harbor: "1.9.0"
+            harbor: "1.12.2"
+            lagoon_build_image: "uselagoon/build-deploy-image:main"
+            experimental: true
+          - kindest_node_version: v1.25.3
+            harbor: "1.12.2"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
     steps:

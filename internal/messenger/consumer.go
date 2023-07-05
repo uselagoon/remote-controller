@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cheshir/go-mq"
+	"github.com/cheshir/go-mq/v2"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
@@ -21,7 +21,7 @@ import (
 func (m *Messenger) Consumer(targetName string) { //error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	ctx := context.Background()
-	var messageQueue mq.MQ
+	messageQueue := &mq.MessageQueue{}
 	// if no mq is found when the goroutine starts, retry a few times before exiting
 	// default is 10 retry with 30 second delay = 5 minutes
 	err := try.Do(func(attempt int) (bool, error) {

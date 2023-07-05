@@ -1,7 +1,7 @@
 package messenger
 
 import (
-	"github.com/cheshir/go-mq"
+	"github.com/cheshir/go-mq/v2"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

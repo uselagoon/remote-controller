@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cheshir/go-mq"
+	"github.com/cheshir/go-mq/v2"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

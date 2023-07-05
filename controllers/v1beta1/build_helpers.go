@@ -439,17 +439,24 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// add the API and SSH endpoint configuration to environments
 		{
 			Name:  "LAGOON_CONFIG_API_HOST",
-			Value: r.LagoonAPIConfiguration.APIHost,
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_API_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_PORT"),
 		},
 		{
 			Name:  "LAGOON_CONFIG_SSH_HOST",
-			Value: r.LagoonAPIConfiguration.SSHHost,
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_HOST"),
 		},
 		{
 			Name:  "LAGOON_CONFIG_SSH_PORT",
-			Value: r.LagoonAPIConfiguration.SSHPort,
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
 		},
-		// in the future, the SSH_HOST and SSH_PORT could also have regional variants
 	}
 	// add proxy variables to builds if they are defined
 	if r.ProxyConfig.HTTPProxy != "" {

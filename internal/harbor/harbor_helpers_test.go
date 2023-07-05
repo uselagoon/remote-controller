@@ -2,88 +2,37 @@ package harbor
 
 import (
 	"testing"
-	"time"
-
-	"github.com/go-logr/logr"
-	harborclientv3 "github.com/mittwald/goharbor-client/v3/apiv2"
-	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
-	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
 )
 
 func TestHarbor_matchRobotAccount(t *testing.T) {
-	type fields struct {
-		URL                   string
-		Hostname              string
-		API                   string
-		Username              string
-		Password              string
-		Log                   logr.Logger
-		ClientV3              *harborclientv3.RESTClient
-		ClientV5              *harborclientv5.RESTClient
-		DeleteDisabled        bool
-		WebhookAddition       bool
-		RobotPrefix           string
-		ExpiryInterval        time.Duration
-		RotateInterval        time.Duration
-		RobotAccountExpiry    time.Duration
-		ControllerNamespace   string
-		NamespacePrefix       string
-		RandomNamespacePrefix bool
-		WebhookURL            string
-		WebhookEventTypes     []string
-		LagoonTargetName      string
-		Config                *config.Options
-	}
 	type args struct {
+		harbor          Harbor
 		robotName       string
 		projectName     string
 		environmentName string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
+		name string
+		args args
+		want bool
 	}{
 		{
 			name: "test1",
-			fields: fields{
-				RobotPrefix:      "robot$",
-				LagoonTargetName: "ci-local-controller-kubernetes",
-			},
 			args: args{
 				robotName:       "robot$main-954f2d24",
 				projectName:     "example-com",
 				environmentName: "main",
+				harbor: Harbor{
+					RobotPrefix:      "robot$",
+					LagoonTargetName: "ci-local-controller-kubernetes",
+				},
 			},
 			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Harbor{
-				URL:                   tt.fields.URL,
-				Hostname:              tt.fields.Hostname,
-				API:                   tt.fields.API,
-				Username:              tt.fields.Username,
-				Password:              tt.fields.Password,
-				Log:                   tt.fields.Log,
-				ClientV3:              tt.fields.ClientV3,
-				ClientV5:              tt.fields.ClientV5,
-				DeleteDisabled:        tt.fields.DeleteDisabled,
-				WebhookAddition:       tt.fields.WebhookAddition,
-				RobotPrefix:           tt.fields.RobotPrefix,
-				ExpiryInterval:        tt.fields.ExpiryInterval,
-				RotateInterval:        tt.fields.RotateInterval,
-				RobotAccountExpiry:    tt.fields.RobotAccountExpiry,
-				ControllerNamespace:   tt.fields.ControllerNamespace,
-				NamespacePrefix:       tt.fields.NamespacePrefix,
-				RandomNamespacePrefix: tt.fields.RandomNamespacePrefix,
-				WebhookURL:            tt.fields.WebhookURL,
-				WebhookEventTypes:     tt.fields.WebhookEventTypes,
-				LagoonTargetName:      tt.fields.LagoonTargetName,
-				Config:                tt.fields.Config,
-			}
+			h := &tt.args.harbor
 			if got := h.matchRobotAccount(tt.args.robotName, tt.args.projectName, tt.args.environmentName); got != tt.want {
 				t.Errorf("Harbor.matchRobotAccount() = %v, want %v", got, tt.want)
 			}
@@ -92,81 +41,159 @@ func TestHarbor_matchRobotAccount(t *testing.T) {
 }
 
 func TestHarbor_matchRobotAccountV2(t *testing.T) {
-	type fields struct {
-		URL                   string
-		Hostname              string
-		API                   string
-		Username              string
-		Password              string
-		Log                   logr.Logger
-		ClientV3              *harborclientv3.RESTClient
-		ClientV5              *harborclientv5.RESTClient
-		DeleteDisabled        bool
-		WebhookAddition       bool
-		RobotPrefix           string
-		ExpiryInterval        time.Duration
-		RotateInterval        time.Duration
-		RobotAccountExpiry    time.Duration
-		ControllerNamespace   string
-		NamespacePrefix       string
-		RandomNamespacePrefix bool
-		WebhookURL            string
-		WebhookEventTypes     []string
-		LagoonTargetName      string
-		Config                *config.Options
-	}
 	type args struct {
+		harbor          Harbor
 		robotName       string
 		projectName     string
 		environmentName string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
+		name string
+		args args
+		want bool
 	}{
 		{
 			name: "test1",
-			fields: fields{
-				RobotPrefix:      "robot$",
-				LagoonTargetName: "ci-local-controller-kubernetes",
-			},
 			args: args{
 				robotName:       "robot$example-com+main-954f2d24",
 				projectName:     "example-com",
 				environmentName: "main",
+				harbor: Harbor{
+					RobotPrefix:      "robot$",
+					LagoonTargetName: "ci-local-controller-kubernetes",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "test2",
+			args: args{
+				robotName:       "robot$example-com+dbb0b39699dab6abc69f-954f2d24",
+				projectName:     "example-com",
+				environmentName: "dash--main",
+				harbor: Harbor{
+					RobotPrefix:      "robot$",
+					LagoonTargetName: "ci-local-controller-kubernetes",
+				},
 			},
 			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Harbor{
-				URL:                   tt.fields.URL,
-				Hostname:              tt.fields.Hostname,
-				API:                   tt.fields.API,
-				Username:              tt.fields.Username,
-				Password:              tt.fields.Password,
-				Log:                   tt.fields.Log,
-				ClientV3:              tt.fields.ClientV3,
-				ClientV5:              tt.fields.ClientV5,
-				DeleteDisabled:        tt.fields.DeleteDisabled,
-				WebhookAddition:       tt.fields.WebhookAddition,
-				RobotPrefix:           tt.fields.RobotPrefix,
-				ExpiryInterval:        tt.fields.ExpiryInterval,
-				RotateInterval:        tt.fields.RotateInterval,
-				RobotAccountExpiry:    tt.fields.RobotAccountExpiry,
-				ControllerNamespace:   tt.fields.ControllerNamespace,
-				NamespacePrefix:       tt.fields.NamespacePrefix,
-				RandomNamespacePrefix: tt.fields.RandomNamespacePrefix,
-				WebhookURL:            tt.fields.WebhookURL,
-				WebhookEventTypes:     tt.fields.WebhookEventTypes,
-				LagoonTargetName:      tt.fields.LagoonTargetName,
-				Config:                tt.fields.Config,
-			}
+			h := &tt.args.harbor
 			if got := h.matchRobotAccountV2(tt.args.robotName, tt.args.projectName, tt.args.environmentName); got != tt.want {
 				t.Errorf("Harbor.matchRobotAccountV2() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_harborRobotV2Regex(t *testing.T) {
+	type args struct {
+		name string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test1",
+			args: args{
+				name: "my-silly--double-dash-environment",
+			},
+			want: "688a0543ea9ccc77827e",
+		},
+		{
+			name: "test2",
+			args: args{
+				name: "my-valid-single-dash-environment",
+			},
+			want: "my-valid-single-dash-environment",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := harborRobotV2Regex(tt.args.name); got != tt.want {
+				t.Errorf("harborRobotV2Regex() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHarbor_generateRobotWithPrefixV2(t *testing.T) {
+	type args struct {
+		harbor          Harbor
+		projectName     string
+		environmentName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test1",
+			args: args{
+				projectName:     "my-project",
+				environmentName: "the-environment",
+				harbor: Harbor{
+					LagoonTargetName: "lagoon",
+					RobotPrefix:      "robot$",
+				},
+			},
+			want: "robot$my-project+the-environment-a30fb066",
+		},
+		{
+			name: "test1",
+			args: args{
+				projectName:     "my-project",
+				environmentName: "the-double--environment",
+				harbor: Harbor{
+					LagoonTargetName: "lagoon",
+					RobotPrefix:      "robot$",
+				},
+			},
+			want: "robot$my-project+734de25907e26b092014-a30fb066",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &tt.args.harbor
+			if got := h.generateRobotWithPrefixV2(tt.args.projectName, tt.args.environmentName); got != tt.want {
+				t.Errorf("Harbor.generateRobotWithPrefixV2() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHarbor_generateRobotName(t *testing.T) {
+	type args struct {
+		harbor          Harbor
+		environmentName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test1",
+			args: args{
+				environmentName: "the-environment",
+				harbor: Harbor{
+					LagoonTargetName: "lagoon",
+				},
+			},
+			want: "the-environment-a30fb066",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &tt.args.harbor
+			if got := h.generateRobotName(tt.args.environmentName); got != tt.want {
+				t.Errorf("Harbor.generateRobotName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

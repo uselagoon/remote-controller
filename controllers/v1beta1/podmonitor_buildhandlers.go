@@ -153,6 +153,10 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
 			projectID = helpers.UintPtr(uint(pID))
 		}
+		remoteId := string(jobPod.ObjectMeta.UID)
+		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
+			remoteId = value
+		}
 		msg := lagoonv1beta1.LagoonLog{
 			Severity: "info",
 			Project:  projectName,
@@ -165,7 +169,7 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
-				RemoteID:      string(jobPod.ObjectMeta.UID),
+				RemoteID:      remoteId,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
 				Cluster:       r.LagoonTargetName,
 			},
@@ -230,6 +234,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 					"build_name":      lagoonBuild.ObjectMeta.Name,
 				})
 			})
+			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		envName := lagoonBuild.Spec.Project.Environment
 		envID := lagoonBuild.Spec.Project.EnvironmentID
@@ -242,6 +247,10 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			projectName = namespace.ObjectMeta.Labels["lagoon.sh/environment"]
 			pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
 			projectID = helpers.UintPtr(uint(pID))
+		}
+		remoteId := string(jobPod.ObjectMeta.UID)
+		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
+			remoteId = value
 		}
 		msg := lagoonv1beta1.LagoonMessage{
 			Type:      "build",
@@ -256,7 +265,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
-				RemoteID:      string(jobPod.ObjectMeta.UID),
+				RemoteID:      remoteId,
 				Cluster:       r.LagoonTargetName,
 			},
 		}
@@ -440,10 +449,8 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	switch jobPod.Status.Phase {
 	case corev1.PodFailed:
 		buildCondition = lagoonv1beta1.BuildStatusFailed
-		cancel = false // don't cancel failed builds
 	case corev1.PodSucceeded:
 		buildCondition = lagoonv1beta1.BuildStatusComplete
-		cancel = false // don't cancel complete builds
 	case corev1.PodPending:
 		buildCondition = lagoonv1beta1.BuildStatusPending
 	case corev1.PodRunning:
@@ -451,7 +458,14 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	}
 	collectLogs := true
 	if cancel {
-		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		// only set the status to cancelled if the pod is running/pending/queued
+		// otherwise send the existing status of complete/failed/cancelled
+		if helpers.ContainsString(
+			helpers.BuildRunningPendingStatus,
+			lagoonBuild.Labels["lagoon.sh/buildStatus"],
+		) {
+			buildCondition = lagoonv1beta1.BuildStatusCancelled
+		}
 		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
 			collectLogs = false
 		}

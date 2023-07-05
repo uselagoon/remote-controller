@@ -119,31 +119,31 @@ type Build struct {
 
 // Project contains the project information from lagoon.
 type Project struct {
-	ID                    *uint      `json:"id,omitempty"`
-	Name                  string     `json:"name"`
-	Environment           string     `json:"environment"`
-	EnvironmentID         *uint      `json:"environmentId,omitempty"`
-	UILink                string     `json:"uiLink,omitempty"`
-	GitURL                string     `json:"gitUrl"`
-	NamespacePattern      string     `json:"namespacePattern,omitempty"`
-	RouterPattern         string     `json:"routerPattern,omitempty"`
-	EnvironmentType       string     `json:"environmentType"`
-	ProductionEnvironment string     `json:"productionEnvironment"`
-	StandbyEnvironment    string     `json:"standbyEnvironment"`
-	DeployTarget          string     `json:"deployTarget"`
-	ProjectSecret         string     `json:"projectSecret"`
-	SubFolder             string     `json:"subfolder,omitempty"`
-	Key                   []byte     `json:"key"`
-	Monitoring            Monitoring `json:"monitoring"`
-	Variables             Variables  `json:"variables"`
-	Registry              string     `json:"registry,omitempty"`
-	EnvironmentIdling     *int       `json:"environmentIdling,omitempty"`
-	ProjectIdling         *int       `json:"projectIdling,omitempty"`
-	StorageCalculator     *int       `json:"storageCalculator,omitempty"`
+	ID                    *uint           `json:"id,omitempty"`
+	Name                  string          `json:"name"`
+	Environment           string          `json:"environment"`
+	EnvironmentID         *uint           `json:"environmentId,omitempty"`
+	UILink                string          `json:"uiLink,omitempty"`
+	GitURL                string          `json:"gitUrl"`
+	NamespacePattern      string          `json:"namespacePattern,omitempty"`
+	RouterPattern         string          `json:"routerPattern,omitempty"`
+	EnvironmentType       string          `json:"environmentType"`
+	ProductionEnvironment string          `json:"productionEnvironment"`
+	StandbyEnvironment    string          `json:"standbyEnvironment"`
+	DeployTarget          string          `json:"deployTarget"`
+	ProjectSecret         string          `json:"projectSecret"`
+	SubFolder             string          `json:"subfolder,omitempty"`
+	Key                   []byte          `json:"key"`
+	Monitoring            Monitoring      `json:"monitoring"`
+	Variables             LagoonVariables `json:"variables"`
+	Registry              string          `json:"registry,omitempty"`
+	EnvironmentIdling     *int            `json:"environmentIdling,omitempty"`
+	ProjectIdling         *int            `json:"projectIdling,omitempty"`
+	StorageCalculator     *int            `json:"storageCalculator,omitempty"`
 }
 
 // Variables contains the project and environment variables from lagoon.
-type Variables struct {
+type LagoonVariables struct {
 	Project     []byte `json:"project,omitempty"`
 	Environment []byte `json:"environment,omitempty"`
 }

@@ -44,17 +44,10 @@ type LagoonTaskReconciler struct {
 	ControllerNamespace    string
 	NamespacePrefix        string
 	RandomNamespacePrefix  bool
-	LagoonAPIConfiguration LagoonAPIConfiguration
+	LagoonAPIConfiguration helpers.LagoonAPIConfiguration
 	EnableDebug            bool
 	LagoonTargetName       string
 	ProxyConfig            ProxyConfig
-}
-
-// LagoonAPIConfiguration is for the settings for task API/SSH host/ports
-type LagoonAPIConfiguration struct {
-	APIHost string
-	SSHHost string
-	SSHPort string
 }
 
 var (
@@ -152,31 +145,38 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 					// --- deprecate these at some point in favor of the `LAGOON_CONFIG_X` variants
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_API_HOST",
-						Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_API_HOST"),
 					})
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_SSH_HOST",
-						Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_HOST"),
 					})
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_SSH_PORT",
-						Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_PORT"),
 					})
 					// ^^ ---
 					// add the API and SSH endpoint configuration to environments
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "LAGOON_CONFIG_API_HOST",
-						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_API_HOST"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_API_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "LAGOON_CONFIG_TOKEN_HOST",
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_HOST"),
+					})
+					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+						Name:  "LAGOON_CONFIG_TOKEN_PORT",
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_PORT"),
 					})
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "LAGOON_CONFIG_SSH_HOST",
-						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_SSH_HOST"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_HOST"),
 					})
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "LAGOON_CONFIG_SSH_PORT",
-						Value: r.getTaskValue(lagoonTask, "LAGOON_CONFIG_SSH_PORT"),
+						Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
 					})
-					// in the future, the SSH_HOST and SSH_PORT could also have regional variants
 					dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
@@ -211,6 +211,26 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							Name:  "no_proxy",
 							Value: r.ProxyConfig.NoProxy,
 						})
+					}
+					if lagoonTask.Spec.Project.Variables.Project != nil {
+						// if this is 2 bytes long, then it means its just an empty json array
+						// we only want to add it if it is more than 2 bytes
+						if len(lagoonTask.Spec.Project.Variables.Project) > 2 {
+							dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+								Name:  "LAGOON_PROJECT_VARIABLES",
+								Value: string(lagoonTask.Spec.Project.Variables.Project),
+							})
+						}
+					}
+					if lagoonTask.Spec.Project.Variables.Environment != nil {
+						// if this is 2 bytes long, then it means its just an empty json array
+						// we only want to add it if it is more than 2 bytes
+						if len(lagoonTask.Spec.Project.Variables.Environment) > 2 {
+							dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+								Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+								Value: string(lagoonTask.Spec.Project.Variables.Environment),
+							})
+						}
 					}
 					for idx2, env := range depCon.Env {
 						// remove any cronjobs from the envvars
@@ -418,7 +438,84 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	}
 	opLog.Info(fmt.Sprintf("Checking advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
 	// once the pod spec has been defined, check if it isn't already created
-
+	podEnvs := []corev1.EnvVar{
+		{
+			Name:  "JSON_PAYLOAD",
+			Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
+		},
+		{
+			Name:  "NAMESPACE",
+			Value: lagoonTask.ObjectMeta.Namespace,
+		},
+		{
+			Name:  "PODNAME",
+			Value: lagoonTask.ObjectMeta.Name,
+		},
+		{
+			Name:  "LAGOON_PROJECT",
+			Value: lagoonTask.Spec.Project.Name,
+		},
+		{
+			Name:  "LAGOON_GIT_BRANCH",
+			Value: lagoonTask.Spec.Environment.Name,
+		},
+		{
+			Name:  "TASK_API_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_API_HOST"),
+		},
+		{
+			Name:  "TASK_SSH_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_HOST"),
+		},
+		{
+			Name:  "TASK_SSH_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_PORT"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_API_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_API_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_PORT"),
+		},
+		{
+			Name:  "TASK_DATA_ID",
+			Value: lagoonTask.Spec.Task.ID,
+		},
+	}
+	if lagoonTask.Spec.Project.Variables.Project != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonTask.Spec.Project.Variables.Project) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_PROJECT_VARIABLES",
+				Value: string(lagoonTask.Spec.Project.Variables.Project),
+			})
+		}
+	}
+	if lagoonTask.Spec.Project.Variables.Environment != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonTask.Spec.Project.Variables.Environment) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+				Value: string(lagoonTask.Spec.Project.Variables.Environment),
+			})
+		}
+	}
 	newPod := &corev1.Pod{}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonTask.ObjectMeta.Namespace,
@@ -461,44 +558,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 								},
 							},
 						},
-						Env: []corev1.EnvVar{
-							{
-								Name:  "JSON_PAYLOAD",
-								Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
-							},
-							{
-								Name:  "NAMESPACE",
-								Value: lagoonTask.ObjectMeta.Namespace,
-							},
-							{
-								Name:  "PODNAME",
-								Value: lagoonTask.ObjectMeta.Name,
-							},
-							{
-								Name:  "LAGOON_PROJECT",
-								Value: lagoonTask.Spec.Project.Name,
-							},
-							{
-								Name:  "LAGOON_GIT_BRANCH",
-								Value: lagoonTask.Spec.Environment.Name,
-							},
-							{
-								Name:  "TASK_API_HOST",
-								Value: r.getTaskValue(lagoonTask, "TASK_API_HOST"),
-							},
-							{
-								Name:  "TASK_SSH_HOST",
-								Value: r.getTaskValue(lagoonTask, "TASK_SSH_HOST"),
-							},
-							{
-								Name:  "TASK_SSH_PORT",
-								Value: r.getTaskValue(lagoonTask, "TASK_SSH_PORT"),
-							},
-							{
-								Name:  "TASK_DATA_ID",
-								Value: lagoonTask.Spec.Task.ID,
-							},
-						},
+						Env:          podEnvs,
 						VolumeMounts: volumeMounts,
 					},
 				},
@@ -590,43 +650,6 @@ func filterDynamicSecrets(secrets map[string]corev1.Secret) map[string]corev1.Se
 		}
 	}
 	return filteredSecrets
-}
-
-// check for the API/SSH settings in the task spec first, if nothing there use the one from our settings.
-func (r *LagoonTaskReconciler) getTaskValue(lagoonTask *lagoonv1beta1.LagoonTask, value string) string {
-	switch value {
-	case "TASK_API_HOST":
-		if lagoonTask.Spec.Task.APIHost == "" {
-			return r.LagoonAPIConfiguration.APIHost
-		}
-		return lagoonTask.Spec.Task.APIHost
-	case "TASK_SSH_HOST":
-		if lagoonTask.Spec.Task.SSHHost == "" {
-			return r.LagoonAPIConfiguration.SSHHost
-		}
-		return lagoonTask.Spec.Task.SSHHost
-	case "TASK_SSH_PORT":
-		if lagoonTask.Spec.Task.SSHPort == "" {
-			return r.LagoonAPIConfiguration.SSHPort
-		}
-		return lagoonTask.Spec.Task.SSHPort
-	case "LAGOON_CONFIG_API_HOST":
-		if lagoonTask.Spec.Task.APIHost == "" {
-			return r.LagoonAPIConfiguration.APIHost
-		}
-		return lagoonTask.Spec.Task.APIHost
-	case "LAGOON_CONFIG_SSH_HOST":
-		if lagoonTask.Spec.Task.SSHHost == "" {
-			return r.LagoonAPIConfiguration.SSHHost
-		}
-		return lagoonTask.Spec.Task.SSHHost
-	case "LAGOON_CONFIG_SSH_PORT":
-		if lagoonTask.Spec.Task.SSHPort == "" {
-			return r.LagoonAPIConfiguration.SSHPort
-		}
-		return lagoonTask.Spec.Task.SSHPort
-	}
-	return ""
 }
 
 // getServiceAccount will get the service account if it exists

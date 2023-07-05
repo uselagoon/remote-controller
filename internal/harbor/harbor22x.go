@@ -15,12 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// addPrefix adds the robot account prefix to robot accounts
-// @TODO: Harbor 2.2.0 changes this behavior, see note below in `matchRobotAccount`
-func (h *Harbor) addPrefixV2(projectName, environmentName string) string {
-	return fmt.Sprintf("%s%s+%s-%s", h.RobotPrefix, projectName, environmentName, helpers.HashString(h.LagoonTargetName)[0:8])
-}
-
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
 func (h *Harbor) CreateProjectV2(ctx context.Context, projectName string) (*harborclientv5model.Project, error) {
 	exists, err := h.ClientV5.ProjectExists(ctx, projectName)
@@ -133,7 +127,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 ) (*helpers.RegistryCredentials, error) {
 
 	// create a cluster specific robot account name
-	robotName := fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])
+	robotName := h.generateRobotName(environmentName)
 
 	expiryDays := int64(math.Ceil(expiry.Hours() / 24))
 	robots, err := h.ClientV5.ListProjectRobotsV1(
@@ -266,7 +260,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	if !exists || deleted {
 		// if it doesn't exist, or was deleted
 		// create a new robot account
-		return h.CreateRobotAccountV2(ctx, robotName, environmentName, project.Name, expiryDays)
+		return h.CreateRobotAccountV2(ctx, robotName, project.Name, expiryDays)
 	}
 	return nil, err
 }
@@ -314,7 +308,7 @@ func (h *Harbor) ListRepositories(ctx context.Context, projectName string, pageN
 	return listRepositories
 }
 
-func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, environmentName, projectName string, expiryDays int64) (*helpers.RegistryCredentials, error) {
+func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, projectName string, expiryDays int64) (*helpers.RegistryCredentials, error) {
 	robotf := harborclientv5model.RobotCreate{
 		Level:    "project",
 		Name:     robotName,
@@ -340,7 +334,7 @@ func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, environmen
 	}
 	token, err := h.ClientV5.NewRobotAccount(ctx, &robotf)
 	if err != nil {
-		h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", projectName, h.addPrefixV2(projectName, environmentName)))
+		h.Log.Info(fmt.Sprintf("Error adding project %s robot account %s", projectName, robotName))
 		return nil, err
 	}
 	// then craft and return the harbor credential secret

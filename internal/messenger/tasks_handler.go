@@ -215,6 +215,12 @@ func (m *Messenger) updateLagoonTask(opLog logr.Logger, namespace string, jobSpe
 			Project:     jobSpec.Project.Name,
 			JobName:     taskName,
 			JobStatus:   "cancelled",
+			Task: &lagoonv1beta1.LagoonTaskInfo{
+				TaskName: jobSpec.Task.TaskName,
+				ID:       jobSpec.Task.ID,
+				Name:     jobSpec.Task.Name,
+				Service:  jobSpec.Task.Service,
+			},
 		},
 	}
 	// if the task isn't found at all, then set the start/end time to be now

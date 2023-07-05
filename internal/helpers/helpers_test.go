@@ -275,7 +275,7 @@ func TestCheckLagoonVersion(t *testing.T) {
 				build: &lagoonv1beta1.LagoonBuild{
 					Spec: lagoonv1beta1.LagoonBuildSpec{
 						Project: lagoonv1beta1.Project{
-							Variables: lagoonv1beta1.Variables{
+							Variables: lagoonv1beta1.LagoonVariables{
 								Project: []byte(`[{"name":"LAGOON_SYSTEM_CORE_VERSION","value":"v2.12.0","scope":"internal_system"}]`),
 							},
 						},
@@ -291,7 +291,7 @@ func TestCheckLagoonVersion(t *testing.T) {
 				build: &lagoonv1beta1.LagoonBuild{
 					Spec: lagoonv1beta1.LagoonBuildSpec{
 						Project: lagoonv1beta1.Project{
-							Variables: lagoonv1beta1.Variables{
+							Variables: lagoonv1beta1.LagoonVariables{
 								Project: []byte(`[{"name":"LAGOON_SYSTEM_CORE_VERSION","value":"v2.11.0","scope":"internal_system"}]`),
 							},
 						},
@@ -307,7 +307,7 @@ func TestCheckLagoonVersion(t *testing.T) {
 				build: &lagoonv1beta1.LagoonBuild{
 					Spec: lagoonv1beta1.LagoonBuildSpec{
 						Project: lagoonv1beta1.Project{
-							Variables: lagoonv1beta1.Variables{
+							Variables: lagoonv1beta1.LagoonVariables{
 								Project: []byte(`[]`),
 							},
 						},
@@ -323,7 +323,7 @@ func TestCheckLagoonVersion(t *testing.T) {
 				build: &lagoonv1beta1.LagoonBuild{
 					Spec: lagoonv1beta1.LagoonBuildSpec{
 						Project: lagoonv1beta1.Project{
-							Variables: lagoonv1beta1.Variables{
+							Variables: lagoonv1beta1.LagoonVariables{
 								Project: []byte(`[{"name":"LAGOON_SYSTEM_CORE_VERSION","value":"v2.12.0","scope":"internal_system"}]`),
 							},
 						},
@@ -339,7 +339,7 @@ func TestCheckLagoonVersion(t *testing.T) {
 				build: &lagoonv1beta1.LagoonBuild{
 					Spec: lagoonv1beta1.LagoonBuildSpec{
 						Project: lagoonv1beta1.Project{
-							Variables: lagoonv1beta1.Variables{
+							Variables: lagoonv1beta1.LagoonVariables{
 								Project: []byte(`[{"name":"LAGOON_SYSTEM_CORE_VERSION","value":"v2.11.0","scope":"internal_system"}]`),
 							},
 						},

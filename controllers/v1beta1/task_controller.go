@@ -212,6 +212,26 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							Value: r.ProxyConfig.NoProxy,
 						})
 					}
+					if lagoonTask.Spec.Project.Variables.Project != nil {
+						// if this is 2 bytes long, then it means its just an empty json array
+						// we only want to add it if it is more than 2 bytes
+						if len(lagoonTask.Spec.Project.Variables.Project) > 2 {
+							dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+								Name:  "LAGOON_PROJECT_VARIABLES",
+								Value: string(lagoonTask.Spec.Project.Variables.Project),
+							})
+						}
+					}
+					if lagoonTask.Spec.Project.Variables.Environment != nil {
+						// if this is 2 bytes long, then it means its just an empty json array
+						// we only want to add it if it is more than 2 bytes
+						if len(lagoonTask.Spec.Project.Variables.Environment) > 2 {
+							dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+								Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+								Value: string(lagoonTask.Spec.Project.Variables.Environment),
+							})
+						}
+					}
 					for idx2, env := range depCon.Env {
 						// remove any cronjobs from the envvars
 						if env.Name == "CRONJOBS" {
@@ -418,7 +438,84 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	}
 	opLog.Info(fmt.Sprintf("Checking advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
 	// once the pod spec has been defined, check if it isn't already created
-
+	podEnvs := []corev1.EnvVar{
+		{
+			Name:  "JSON_PAYLOAD",
+			Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
+		},
+		{
+			Name:  "NAMESPACE",
+			Value: lagoonTask.ObjectMeta.Namespace,
+		},
+		{
+			Name:  "PODNAME",
+			Value: lagoonTask.ObjectMeta.Name,
+		},
+		{
+			Name:  "LAGOON_PROJECT",
+			Value: lagoonTask.Spec.Project.Name,
+		},
+		{
+			Name:  "LAGOON_GIT_BRANCH",
+			Value: lagoonTask.Spec.Environment.Name,
+		},
+		{
+			Name:  "TASK_API_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_API_HOST"),
+		},
+		{
+			Name:  "TASK_SSH_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_HOST"),
+		},
+		{
+			Name:  "TASK_SSH_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_PORT"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_API_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_API_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_SSH_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_HOST",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_HOST"),
+		},
+		{
+			Name:  "LAGOON_CONFIG_TOKEN_PORT",
+			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_PORT"),
+		},
+		{
+			Name:  "TASK_DATA_ID",
+			Value: lagoonTask.Spec.Task.ID,
+		},
+	}
+	if lagoonTask.Spec.Project.Variables.Project != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonTask.Spec.Project.Variables.Project) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_PROJECT_VARIABLES",
+				Value: string(lagoonTask.Spec.Project.Variables.Project),
+			})
+		}
+	}
+	if lagoonTask.Spec.Project.Variables.Environment != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonTask.Spec.Project.Variables.Environment) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_ENVIRONMENT_VARIABLES",
+				Value: string(lagoonTask.Spec.Project.Variables.Environment),
+			})
+		}
+	}
 	newPod := &corev1.Pod{}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: lagoonTask.ObjectMeta.Namespace,
@@ -461,64 +558,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 								},
 							},
 						},
-						Env: []corev1.EnvVar{
-							{
-								Name:  "JSON_PAYLOAD",
-								Value: string(lagoonTask.Spec.AdvancedTask.JSONPayload),
-							},
-							{
-								Name:  "NAMESPACE",
-								Value: lagoonTask.ObjectMeta.Namespace,
-							},
-							{
-								Name:  "PODNAME",
-								Value: lagoonTask.ObjectMeta.Name,
-							},
-							{
-								Name:  "LAGOON_PROJECT",
-								Value: lagoonTask.Spec.Project.Name,
-							},
-							{
-								Name:  "LAGOON_GIT_BRANCH",
-								Value: lagoonTask.Spec.Environment.Name,
-							},
-							{
-								Name:  "TASK_API_HOST",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_API_HOST"),
-							},
-							{
-								Name:  "TASK_SSH_HOST",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_HOST"),
-							},
-							{
-								Name:  "TASK_SSH_PORT",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "TASK_SSH_PORT"),
-							},
-							{
-								Name:  "LAGOON_CONFIG_API_HOST",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_API_HOST"),
-							},
-							{
-								Name:  "LAGOON_CONFIG_SSH_HOST",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_HOST"),
-							},
-							{
-								Name:  "LAGOON_CONFIG_SSH_PORT",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
-							},
-							{
-								Name:  "LAGOON_CONFIG_TOKEN_HOST",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_HOST"),
-							},
-							{
-								Name:  "LAGOON_CONFIG_TOKEN_PORT",
-								Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_TOKEN_PORT"),
-							},
-							{
-								Name:  "TASK_DATA_ID",
-								Value: lagoonTask.Spec.Task.ID,
-							},
-						},
+						Env:          podEnvs,
 						VolumeMounts: volumeMounts,
 					},
 				},

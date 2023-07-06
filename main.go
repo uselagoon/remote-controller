@@ -54,7 +54,6 @@ import (
 var (
 	scheme                          = runtime.NewScheme()
 	setupLog                        = ctrl.Log.WithName("setup")
-	lagoonAppID                     string
 	lagoonTargetName                string
 	mqUser                          string
 	mqPass                          string
@@ -178,8 +177,6 @@ func main() {
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
 		"The name of the target as it is in lagoon.")
-	flag.StringVar(&lagoonAppID, "lagoon-app-id", "builddeploymonitor",
-		"The appID to use that will be sent with messages.")
 	flag.StringVar(&mqUser, "rabbitmq-username", "guest",
 		"The username of the rabbitmq user.")
 	flag.StringVar(&mqPass, "rabbitmq-password", "guest",
@@ -373,7 +370,6 @@ func main() {
 	mqPass = helpers.GetEnv("RABBITMQ_PASSWORD", mqPass)
 	mqHost = helpers.GetEnv("RABBITMQ_HOSTNAME", mqHost)
 	lagoonTargetName = helpers.GetEnv("LAGOON_TARGET_NAME", lagoonTargetName)
-	lagoonAppID = helpers.GetEnv("LAGOON_APP_ID", lagoonAppID)
 	pendingMessageCron = helpers.GetEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 	overrideBuildDeployImage = helpers.GetEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
 	namespacePrefix = helpers.GetEnv("NAMESPACE_PREFIX", namespacePrefix)
@@ -578,7 +574,6 @@ func main() {
 				Name:     "lagoon-logs",
 				Exchange: "lagoon-logs",
 				Options: mq.Options{
-					"app_id":        lagoonAppID,
 					"delivery_mode": "2",
 					"headers":       "",
 					"content_type":  "",
@@ -589,7 +584,6 @@ func main() {
 				Exchange:   "lagoon-tasks",
 				RoutingKey: "controller",
 				Options: mq.Options{
-					"app_id":        lagoonAppID,
 					"delivery_mode": "2",
 					"headers":       "",
 					"content_type":  "",

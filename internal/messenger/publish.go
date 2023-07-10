@@ -3,7 +3,7 @@ package messenger
 import (
 	"fmt"
 
-	"github.com/cheshir/go-mq"
+	"github.com/cheshir/go-mq/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

@@ -116,7 +116,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	if lagoonBuild.Spec.Project.EnvironmentIdling != nil {
 		// eventually deprecate 'lagoon.sh/environmentAutoIdle' for 'lagoon.sh/environmentIdlingEnabled'
 		nsLabels["lagoon.sh/environmentAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentIdling)
-		if *lagoonBuild.Spec.Project.ProjectIdling == 1 {
+		if *lagoonBuild.Spec.Project.EnvironmentIdling == 1 {
 			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "true"
 		} else {
 			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "false"

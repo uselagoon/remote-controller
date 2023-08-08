@@ -52,18 +52,37 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 	}
+	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
 	if len(runningBuilds.Items) >= r.BuildQoS.MaxBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
 		if r.EnableDebug {
 			opLog.Info(fmt.Sprintf("Currently %v running builds, no room for new builds to be started", len(runningBuilds.Items)))
 		}
+		go r.processQueue(ctx, opLog, buildsToStart, true)
 		return nil
 	}
-	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
 	if buildsToStart > 0 {
 		opLog.Info(fmt.Sprintf("Currently %v running builds, room for %v builds to be started", len(runningBuilds.Items), buildsToStart))
 		// if there are any free slots to start a build, do that here
-		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		go r.processQueue(ctx, opLog, buildsToStart, false)
+	}
+	return nil
+}
+
+var runningProcessQueue bool
+
+func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Logger, buildsToStart int, limitHit bool) error {
+	// this should only ever be able to run one instance of at a time within a single controller
+	// this is because this process is quite heavy when it goes to submit the queue messages to the api
+	// the downside of this is that there can be delays with the messages it sends to the actual
+	// status of the builds, but build complete/fail/cancel will always win out on the lagoon-core side
+	// so this isn't that much of an issue if there are some delays in the messages
+	if !runningProcessQueue {
+		runningProcessQueue = true
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("Processing queue"))
+		}
+		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String(),
 				"lagoon.sh/controller":  r.ControllerNamespace,
@@ -98,7 +117,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 				return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
 			})
 			for idx, pBuild := range pendingBuilds.Items {
-				if idx <= buildsToStart {
+				if idx <= buildsToStart && !limitHit {
 					if r.EnableDebug {
 						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.ObjectMeta.Name))
 					}
@@ -146,6 +165,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 				r.updateQueuedBuild(ctx, pBuild, fmt.Sprintf("This build is currently queued in position %v/%v", (idx+1), len(pendingBuilds.Items)), opLog)
 			}
 		}
+		runningProcessQueue = false
 	}
 	return nil
 }

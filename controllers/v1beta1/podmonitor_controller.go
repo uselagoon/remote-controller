@@ -145,7 +145,6 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// if there are no running jobs, we check for any pending jobs
 		// sorted by their creation timestamp and set the first to running
 		opLog.Info(fmt.Sprintf("Checking for any pending builds."))
-		pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
 		runningBuilds := &lagoonv1beta1.LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.InNamespace(req.Namespace),
@@ -157,7 +156,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// if we have no running builds, then check for any pending builds
 		if len(runningBuilds.Items) == 0 {
-			return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, req.Namespace, "Running")
+			return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 		}
 	}
 	return ctrl.Result{}, nil

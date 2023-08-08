@@ -267,17 +267,7 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 	cancel bool,
 ) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	var taskCondition lagoonv1beta1.TaskStatusType
-	switch jobPod.Status.Phase {
-	case corev1.PodFailed:
-		taskCondition = lagoonv1beta1.TaskStatusFailed
-	case corev1.PodSucceeded:
-		taskCondition = lagoonv1beta1.TaskStatusComplete
-	case corev1.PodPending:
-		taskCondition = lagoonv1beta1.TaskStatusPending
-	case corev1.PodRunning:
-		taskCondition = lagoonv1beta1.TaskStatusRunning
-	}
+	taskCondition := helpers.GetTaskConditionFromPod(jobPod.Status.Phase)
 	collectLogs := true
 	if cancel {
 		taskCondition = lagoonv1beta1.TaskStatusCancelled

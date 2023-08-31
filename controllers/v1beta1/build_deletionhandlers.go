@@ -213,7 +213,7 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status of cancelled in lagoon
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
 		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
@@ -367,6 +367,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 	buildCondition lagoonv1beta1.BuildStatusType,
+	buildStep string,
 ) {
 	if r.EnableMQ {
 		msg := lagoonv1beta1.LagoonLog{
@@ -378,6 +379,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
 				BuildPhase:  buildCondition.ToLower(),
 				BuildName:   lagoonBuild.ObjectMeta.Name,
+				BuildStep:   buildStep,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				Cluster:     r.LagoonTargetName,
 			},

@@ -284,10 +284,11 @@ func main() {
 	flag.BoolVar(&tlsSkipVerify, "skip-tls-verify", false, "Flag to skip tls verification for http clients (harbor).")
 
 	// default the sshkey injection to true for now, eventually Lagoon should handle this for tasks that require it
+	// these are deprecated now and do nothing as the values are sourced from the lagoon task now
 	flag.BoolVar(&advancedTaskSSHKeyInjection, "advanced-task-sshkey-injection", true,
-		"Flag to specify injecting the sshkey for the environment into any advanced tasks.")
+		"DEPRECATED: Flag to specify injecting the sshkey for the environment into any advanced tasks.")
 	flag.BoolVar(&advancedTaskDeployToken, "advanced-task-deploytoken-injection", false,
-		"Flag to specify injecting the deploy token for the environment into any advanced tasks.")
+		"DEPRECATED: Flag to specify injecting the deploy token for the environment into any advanced tasks.")
 
 	flag.BoolVar(&cleanupHarborRepositoryOnDelete, "cleanup-harbor-repository-on-delete", false,
 		"Flag to specify if when deleting an environment, the associated harbor repository/images should be removed too.")

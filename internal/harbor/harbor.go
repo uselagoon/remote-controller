@@ -46,6 +46,7 @@ func New(harbor Harbor) (*Harbor, error) {
 	}
 	harbor.ClientV3 = c
 	harbor.Config = &config.Options{
+		Page:     1,
 		PageSize: 100,
 	}
 	c2, err := harborclientv5.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, harbor.Config)

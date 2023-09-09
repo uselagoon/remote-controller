@@ -190,6 +190,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	robots = tempRobots
 	for _, robot := range robots {
 		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
+			h.Log.Info(fmt.Sprintf("Harbor robot account %s matched", robot.Name))
 			// if it is a new robot account, follow through here
 			exists = true
 			if forceRecreate || force {

@@ -125,7 +125,6 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	expiry time.Duration,
 	force bool,
 ) (*helpers.RegistryCredentials, error) {
-
 	// create a cluster specific robot account name
 	robotName := h.generateRobotName(environmentName)
 
@@ -190,6 +189,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	robots = tempRobots
 	for _, robot := range robots {
 		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
+			h.Log.Info(fmt.Sprintf("Harbor robot account %s matched", robot.Name))
 			// if it is a new robot account, follow through here
 			exists = true
 			if forceRecreate || force {
@@ -270,7 +270,7 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 	environmentName := helpers.ShortenEnvironment(projectName, helpers.MakeSafe(branch))
 	h.Config.PageSize = 100
 	pageCount := int64(1)
-	listRepositories := h.ListRepositories(ctx, projectName, pageCount)
+	listRepositories := h.ListRepositories(ctx, projectName)
 	for _, repo := range listRepositories {
 		if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
 			repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
@@ -285,7 +285,7 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 		pageCount = int64(len(listRepositories) / 100)
 		var page int64
 		for page = 2; page <= pageCount; page++ {
-			listRepositories := h.ListRepositories(ctx, projectName, page)
+			listRepositories := h.ListRepositories(ctx, projectName)
 			for _, repo := range listRepositories {
 				if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
 					repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
@@ -299,8 +299,34 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 	}
 }
 
+// DeleteRobotAccount will delete robot account related to an environment
+func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectName, branch string) {
+	environmentName := helpers.ShortenEnvironment(projectName, helpers.MakeSafe(branch))
+	robots, err := h.ClientV5.ListProjectRobotsV1(
+		ctx,
+		projectName,
+	)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", projectName))
+		return
+	}
+	for _, robot := range robots {
+		if h.matchRobotAccountV2(robot.Name, projectName, environmentName) {
+			err := h.ClientV5.DeleteProjectRobotV1(
+				ctx,
+				projectName,
+				int64(robot.ID),
+			)
+			if err != nil {
+				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", projectName, robot.Name))
+				return
+			}
+		}
+	}
+}
+
 // ListRepositories .
-func (h *Harbor) ListRepositories(ctx context.Context, projectName string, pageNumber int64) []*harborclientv5model.Repository {
+func (h *Harbor) ListRepositories(ctx context.Context, projectName string) []*harborclientv5model.Repository {
 	listRepositories, err := h.ClientV5.ListRepositories(ctx, projectName)
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error listing harbor repositories for project %s", projectName))

@@ -7,15 +7,12 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/uselagoon/remote-controller/internal/harbor"
 )
 
 func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace) error {
-	cleanupHarbor := false
-	if val, ok := namespace.Labels[HarborCleanup]; ok {
-		cleanupHarbor, _ = strconv.ParseBool(val)
-	}
 	// get the namespace project and environment labels
 	project := ""
 	if val, ok := namespace.Labels["lagoon.sh/project"]; ok {
@@ -30,10 +27,31 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 	}
 
 	/*
-		get any deployments/statefulsets/daemonsets
-		then delete them
+		clean up associated harbor resources
 	*/
-	if d.CleanupHarborRepositoryOnDelete && cleanupHarbor {
+	if d.CleanupHarborRepositoryOnDelete {
+		// always clean up if the flag is enabled
+		cleanupRepo := true
+		cleanupRobot := true
+		// but if the secret is labeled with cleanup labels, use these
+		secret := &corev1.Secret{}
+		err := d.Client.Get(ctx, types.NamespacedName{
+			Namespace: namespace.Name,
+			Name:      "lagoon-internal-registry-secret",
+		}, secret)
+		if err != nil {
+			return err
+		}
+		// these can be used on the `lagoon-internal-registry-secret` to prevent the resources
+		// being cleaned up in harbor by setting them to `false`
+		// this is useful for migrating environments, where the source or destination can have these added
+		// so that when the migration is complete the resulting images aren't also removed
+		if val, ok := secret.Labels["harbor.lagoon.sh/cleanup-repositories"]; ok {
+			cleanupRepo, _ = strconv.ParseBool(val)
+		}
+		if val, ok := secret.Labels["harbor.lagoon.sh/cleanup-robotaccount"]; ok {
+			cleanupRobot, _ = strconv.ParseBool(val)
+		}
 		lagoonHarbor, err := harbor.New(d.Harbor)
 		if err != nil {
 			return err
@@ -43,9 +61,18 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 			return err
 		}
 		if lagoonHarbor.UseV2Functions(curVer) {
-			lagoonHarbor.DeleteRepository(ctx, project, environment)
+			if cleanupRepo {
+				lagoonHarbor.DeleteRepository(ctx, project, environment)
+			}
+			if cleanupRobot {
+				lagoonHarbor.DeleteRobotAccount(ctx, project, environment)
+			}
 		}
 	}
+	/*
+		get any deployments/statefulsets/daemonsets
+		then delete them
+	*/
 	if del := d.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), namespace.ObjectMeta.Name, project, environment); del == false {
 		return fmt.Errorf("error deleting tasks")
 	}

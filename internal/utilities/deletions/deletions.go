@@ -6,8 +6,6 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 )
 
-const HarborCleanup = "lagoon.sh/cleanup-harbor"
-
 type DeleteConfig struct {
 	PVCRetryAttempts int `json:"pvcRetryAttempts"`
 	PVCRetryInterval int `json:"pvcRetryInterval"`

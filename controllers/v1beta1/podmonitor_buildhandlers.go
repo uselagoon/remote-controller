@@ -138,6 +138,11 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
@@ -224,6 +229,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 ) (bool, lagoonv1beta1.LagoonMessage) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
@@ -355,6 +365,11 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}

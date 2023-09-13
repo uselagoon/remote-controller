@@ -136,8 +136,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
-						pendingNSBuilds := &lagoonv1beta1.LagoonBuildList{}
-						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
+						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
 							// only return if there is an error doing this operation
 							// continue on otherwise to allow the queued status updater to run
 							return err
@@ -162,7 +161,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 				// update the build to be queued, and add a log message with the build log with the current position in the queue
 				// this position will update as builds are created/processed, so the position of a build could change depending on
 				// higher or lower priority builds being created
-				r.updateQueuedBuild(ctx, pBuild, fmt.Sprintf("This build is currently queued in position %v/%v", (idx+1), len(pendingBuilds.Items)), opLog)
+				r.updateQueuedBuild(ctx, pBuild, (idx + 1), len(pendingBuilds.Items), opLog)
 			}
 		}
 		runningProcessQueue = false

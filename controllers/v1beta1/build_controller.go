@@ -259,9 +259,58 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	// so end this reconcile process
-	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
-	return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingBuilds, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
+	err = helpers.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// as this is a new build coming through, check if there are any running builds in the namespace
+	// if there are, then check the status of that build. if the build pod is missing then the build running will block
+	// if the pod exists, attempt to get the status of it (only if its complete or failed) and ship the status
+	runningBuilds := &lagoonv1beta1.LagoonBuildList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.InNamespace(namespace.ObjectMeta.Name),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String()}),
+	})
+	// list all builds in the namespace that have the running buildstatus
+	if err := r.List(ctx, runningBuilds, listOption); err != nil {
+		return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+	}
+	// if there are running builds still, check if the pod exists or if the pod is complete/failed and attempt to get the status
+	for _, rBuild := range runningBuilds.Items {
+		runningBuild := rBuild.DeepCopy()
+		lagoonBuildPod := corev1.Pod{}
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: rBuild.ObjectMeta.Namespace,
+			Name:      rBuild.ObjectMeta.Name,
+		}, &lagoonBuildPod)
+		buildCondition := lagoonv1beta1.BuildStatusCancelled
+		if err != nil {
+			// cancel the build as there is no pod available
+			opLog.Info(fmt.Sprintf("Setting build %s as cancelled", runningBuild.ObjectMeta.Name))
+			runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
+		} else {
+			// get the status from the pod and update the build
+			if lagoonBuildPod.Status.Phase == corev1.PodFailed || lagoonBuildPod.Status.Phase == corev1.PodSucceeded {
+				buildCondition = helpers.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
+				opLog.Info(fmt.Sprintf("Setting build %s as %s", runningBuild.ObjectMeta.Name, buildCondition.String()))
+				runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
+			} else {
+				// drop out, don't do anything else
+				continue
+			}
+		}
+		if err := r.Update(ctx, runningBuild); err != nil {
+			// log the error and drop out
+			opLog.Error(err, fmt.Sprintf("Error setting build %s as cancelled", runningBuild.ObjectMeta.Name))
+			continue
+		}
+		// send the status change to lagoon
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, runningBuild, nil, buildCondition, "cancelled")
+		continue
+	}
+	// handle processing running but no pod/failed pod builds
+	return ctrl.Result{}, nil
 }
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace

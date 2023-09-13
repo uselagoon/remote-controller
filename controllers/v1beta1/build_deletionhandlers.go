@@ -213,8 +213,8 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status of cancelled in lagoon
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	return nil
@@ -279,6 +279,7 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 	buildCondition lagoonv1beta1.BuildStatusType,
+	buildStep string,
 ) {
 	namespace := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -296,6 +297,7 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 				Environment: lagoonBuild.Spec.Project.Environment,
 				Project:     lagoonBuild.Spec.Project.Name,
 				BuildPhase:  buildCondition.ToLower(),
+				BuildStep:   buildStep,
 				BuildName:   lagoonBuild.ObjectMeta.Name,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
@@ -367,6 +369,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
 	buildCondition lagoonv1beta1.BuildStatusType,
+	buildStep string,
 ) {
 	if r.EnableMQ {
 		msg := lagoonv1beta1.LagoonLog{
@@ -378,6 +381,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
 				BuildPhase:  buildCondition.ToLower(),
 				BuildName:   lagoonBuild.ObjectMeta.Name,
+				BuildStep:   buildStep,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				Cluster:     r.LagoonTargetName,
 			},

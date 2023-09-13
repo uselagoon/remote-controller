@@ -868,11 +868,11 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 func (r *LagoonBuildReconciler) updateQueuedBuild(
 	ctx context.Context,
 	lagoonBuild lagoonv1beta1.LagoonBuild,
-	message string,
+	queuePosition, queueLength int,
 	opLog logr.Logger,
 ) error {
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.ObjectMeta.Name, message))
+		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.ObjectMeta.Name, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
 	}
 	var allContainerLogs []byte
 	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
@@ -881,7 +881,7 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 ========================================
 %s
 ========================================
-`, message))
+`, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
 	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
 	var lagoonEnv corev1.ConfigMap
 	err := r.Get(ctx, types.NamespacedName{
@@ -900,12 +900,12 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
 	if helpers.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
 	} else {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
 
 	}
@@ -960,8 +960,8 @@ Build cancelled
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
 	if cancelled {
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}

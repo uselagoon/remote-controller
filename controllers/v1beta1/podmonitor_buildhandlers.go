@@ -138,6 +138,11 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
@@ -224,6 +229,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 ) (bool, lagoonv1beta1.LagoonMessage) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
@@ -355,6 +365,11 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 ) (bool, lagoonv1beta1.LagoonLog) {
 	if r.EnableMQ {
 		buildStep := "running"
+		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			// set build step to anything other than running if the condition isn't running
+			buildStep = condition
+		}
+		// then check the resource to see if the buildstep exists, this bit we care about so we can see where it maybe failed if its available
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
@@ -445,17 +460,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	cancel bool,
 ) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	var buildCondition lagoonv1beta1.BuildStatusType
-	switch jobPod.Status.Phase {
-	case corev1.PodFailed:
-		buildCondition = lagoonv1beta1.BuildStatusFailed
-	case corev1.PodSucceeded:
-		buildCondition = lagoonv1beta1.BuildStatusComplete
-	case corev1.PodPending:
-		buildCondition = lagoonv1beta1.BuildStatusPending
-	case corev1.PodRunning:
-		buildCondition = lagoonv1beta1.BuildStatusRunning
-	}
+	buildCondition := helpers.GetBuildConditionFromPod(jobPod.Status.Phase)
 	collectLogs := true
 	if cancel {
 		// only set the status to cancelled if the pod is running/pending/queued

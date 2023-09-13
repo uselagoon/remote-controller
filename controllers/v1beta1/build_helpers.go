@@ -901,11 +901,11 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
 	if helpers.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
 		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
 	} else {
 		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending)
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
 
 	}
@@ -961,7 +961,7 @@ Build cancelled
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
 	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled)
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
 	if cancelled {
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}

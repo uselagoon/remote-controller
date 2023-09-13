@@ -18,6 +18,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-version"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -265,7 +266,8 @@ func CheckLagoonVersion(build *lagoonv1beta1.LagoonBuild, checkVersion string) b
 }
 
 // CancelExtraBuilds cancels extra builds.
-func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
+func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, ns string, status string) error {
+	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
 		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
@@ -296,6 +298,36 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		}
 	}
 	return nil
+}
+
+func GetBuildConditionFromPod(phase corev1.PodPhase) lagoonv1beta1.BuildStatusType {
+	var buildCondition lagoonv1beta1.BuildStatusType
+	switch phase {
+	case corev1.PodFailed:
+		buildCondition = lagoonv1beta1.BuildStatusFailed
+	case corev1.PodSucceeded:
+		buildCondition = lagoonv1beta1.BuildStatusComplete
+	case corev1.PodPending:
+		buildCondition = lagoonv1beta1.BuildStatusPending
+	case corev1.PodRunning:
+		buildCondition = lagoonv1beta1.BuildStatusRunning
+	}
+	return buildCondition
+}
+
+func GetTaskConditionFromPod(phase corev1.PodPhase) lagoonv1beta1.TaskStatusType {
+	var taskCondition lagoonv1beta1.TaskStatusType
+	switch phase {
+	case corev1.PodFailed:
+		taskCondition = lagoonv1beta1.TaskStatusFailed
+	case corev1.PodSucceeded:
+		taskCondition = lagoonv1beta1.TaskStatusComplete
+	case corev1.PodPending:
+		taskCondition = lagoonv1beta1.TaskStatusPending
+	case corev1.PodRunning:
+		taskCondition = lagoonv1beta1.TaskStatusRunning
+	}
+	return taskCondition
 }
 
 // GenerateNamespaceName handles the generation of the namespace name from environment and project name with prefixes and patterns

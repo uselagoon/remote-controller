@@ -117,8 +117,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
-						pendingNSBuilds := &lagoonv1beta1.LagoonBuildList{}
-						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pendingNSBuilds, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
+						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
 							// only return if there is an error doing this operation
 							// continue on otherwise to allow the queued status updater to run
 							return err

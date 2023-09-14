@@ -71,6 +71,10 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 
 var runningProcessQueue bool
 
+// this is a processor for any builds that are currently `queued` status. all normal build activity will still be performed
+// this just allows the controller to update any builds that are in the queue periodically
+// if this ran on every single event, it would flood the queue with messages, so it is restricted using `runningProcessQueue` global
+// to only run the process at any one time til it is complete
 func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Logger, buildsToStart int, limitHit bool) error {
 	// this should only ever be able to run one instance of at a time within a single controller
 	// this is because this process is quite heavy when it goes to submit the queue messages to the api

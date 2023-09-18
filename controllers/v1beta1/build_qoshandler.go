@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 
 	"github.com/go-logr/logr"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
@@ -103,24 +102,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 			}
 			// if we have any pending builds, then grab the latest one and make it running
 			// if there are any other pending builds, cancel them so only the latest one runs
-			sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-				// sort by priority, then creation timestamp
-				iPriority := r.BuildQoS.DefaultValue
-				jPriority := r.BuildQoS.DefaultValue
-				if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
-					iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
-				}
-				if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
-					jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
-				}
-				// better sorting based on priority then creation timestamp
-				switch {
-				case iPriority != jPriority:
-					return iPriority < jPriority
-				default:
-					return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
-				}
-			})
+			sortBuilds(r.BuildQoS.DefaultValue, pendingBuilds)
 			for idx, pBuild := range pendingBuilds.Items {
 				// need to +1 to index because 0
 				if idx+1 <= buildsToStart && !limitHit {

@@ -105,7 +105,15 @@ func TaskContainsStatus(slice []lagoonv1beta1.LagoonTaskConditions, s lagoonv1be
 }
 
 // IntPtr .
-func IntPtr(i int32) *int32 {
+func IntPtr(i int) *int {
+	var iPtr *int
+	iPtr = new(int)
+	*iPtr = i
+	return iPtr
+}
+
+// Int32Ptr .
+func Int32Ptr(i int32) *int32 {
 	var iPtr *int32
 	iPtr = new(int32)
 	*iPtr = i

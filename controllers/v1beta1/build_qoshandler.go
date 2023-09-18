@@ -81,6 +81,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 	// the downside of this is that there can be delays with the messages it sends to the actual
 	// status of the builds, but build complete/fail/cancel will always win out on the lagoon-core side
 	// so this isn't that much of an issue if there are some delays in the messages
+	opLog = opLog.WithName("QueueProcessor")
 	if !runningProcessQueue {
 		runningProcessQueue = true
 		if r.EnableDebug {
@@ -112,16 +113,17 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 				if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
 					jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
 				}
-				if iPriority < jPriority {
-					return false
+				// better sorting based on priority then creation timestamp
+				switch {
+				case iPriority != jPriority:
+					return iPriority < jPriority
+				default:
+					return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
 				}
-				if iPriority > jPriority {
-					return true
-				}
-				return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
 			})
 			for idx, pBuild := range pendingBuilds.Items {
-				if idx <= buildsToStart && !limitHit {
+				// need to +1 to index because 0
+				if idx+1 <= buildsToStart && !limitHit {
 					if r.EnableDebug {
 						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.ObjectMeta.Name))
 					}
@@ -145,6 +147,8 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 							// continue on otherwise to allow the queued status updater to run
 							return err
 						}
+						// don't handle the queued process for this build, continue to next in the list
+						continue
 					}
 					// The object is not being deleted, so if it does not have our finalizer,
 					// then lets add the finalizer and update the object. This is equivalent

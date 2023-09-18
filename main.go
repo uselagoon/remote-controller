@@ -810,6 +810,8 @@ func main() {
 		RandomNamespacePrefix: randomPrefix,
 		EnableDebug:           enableDebug,
 		LagoonTargetName:      lagoonTargetName,
+		LFFQoSEnabled:         lffQoSEnabled,
+		BuildQoS:              buildQoSConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)

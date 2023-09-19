@@ -38,12 +38,20 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	cancel := false
 	if cancelBuild, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"]; ok {
-		cancel, _ := strconv.ParseBool(cancelBuild)
-		if cancel {
-			opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.ObjectMeta.Name))
-			return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
-		}
+		cancel, _ = strconv.ParseBool(cancelBuild)
+	}
+	_, ok := r.Cache.Get(lagoonBuild.ObjectMeta.Name)
+	if ok {
+		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonBuild.ObjectMeta.Name))
+		// this object exists in the cache meaning the task has been cancelled, set cancel to true and remove from cache
+		r.Cache.Remove(lagoonBuild.ObjectMeta.Name)
+		cancel = true
+	}
+	if cancel {
+		opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.ObjectMeta.Name))
+		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
 	}
 	// check if the build pod is in pending, a container in the pod could be failed in this state
 	if jobPod.Status.Phase == corev1.PodPending {

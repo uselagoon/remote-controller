@@ -312,6 +312,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						namespace,
 					),
 				)
+				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
 				err := m.CancelBuild(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
@@ -327,6 +328,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						namespace,
 					),
 				)
+				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
 				err := m.CancelTask(namespace, jobSpec)
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?

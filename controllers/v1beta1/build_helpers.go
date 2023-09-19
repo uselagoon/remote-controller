@@ -731,7 +731,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  "lagoon-sshkey",
-					DefaultMode: helpers.IntPtr(420),
+					DefaultMode: helpers.Int32Ptr(420),
 				},
 			},
 		},
@@ -751,7 +751,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  serviceaccountTokenSecret,
-					DefaultMode: helpers.IntPtr(420),
+					DefaultMode: helpers.Int32Ptr(420),
 				},
 			},
 		})
@@ -1014,4 +1014,25 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 		}
 	}
 	return nil
+}
+
+func sortBuilds(defaultPriority int, pendingBuilds *lagoonv1beta1.LagoonBuildList) {
+	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+		// sort by priority, then creation timestamp
+		iPriority := defaultPriority
+		jPriority := defaultPriority
+		if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
+			iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
+		}
+		if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
+			jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
+		}
+		// better sorting based on priority then creation timestamp
+		switch {
+		case iPriority != jPriority:
+			return iPriority < jPriority
+		default:
+			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
+		}
+	})
 }

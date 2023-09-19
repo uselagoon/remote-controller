@@ -48,6 +48,8 @@ type LagoonMonitorReconciler struct {
 	RandomNamespacePrefix bool
 	EnableDebug           bool
 	LagoonTargetName      string
+	LFFQoSEnabled         bool
+	BuildQoS              BuildQoS
 }
 
 // slice of the different failure states of pods that we care about
@@ -144,19 +146,27 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// we check all `LagoonBuild` in the requested namespace
 		// if there are no running jobs, we check for any pending jobs
 		// sorted by their creation timestamp and set the first to running
-		opLog.Info(fmt.Sprintf("Checking for any pending builds."))
-		runningBuilds := &lagoonv1beta1.LagoonBuildList{}
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(req.Namespace),
-			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String()}),
-		})
-		// list all builds in the namespace that have the running buildstatus
-		if err := r.List(ctx, runningBuilds, listOption); err != nil {
-			return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-		}
-		// if we have no running builds, then check for any pending builds
-		if len(runningBuilds.Items) == 0 {
-			return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+		if !r.LFFQoSEnabled {
+			// if qos is not enabled, then handle the check for pending builds here
+			opLog.Info(fmt.Sprintf("Checking for any pending builds."))
+			runningBuilds := &lagoonv1beta1.LagoonBuildList{}
+			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.InNamespace(req.Namespace),
+				client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusRunning.String()}),
+			})
+			// list all builds in the namespace that have the running buildstatus
+			if err := r.List(ctx, runningBuilds, listOption); err != nil {
+				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+			}
+			// if we have no running builds, then check for any pending builds
+			if len(runningBuilds.Items) == 0 {
+				return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+			}
+		} else {
+			// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("No pending build check in namespaces when QoS is enabled"))
+			}
 		}
 	}
 	return ctrl.Result{}, nil

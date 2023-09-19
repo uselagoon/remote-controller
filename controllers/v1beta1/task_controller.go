@@ -386,7 +386,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName:  "lagoon-sshkey",
-				DefaultMode: helpers.IntPtr(420),
+				DefaultMode: helpers.Int32Ptr(420),
 			},
 		},
 	}
@@ -423,7 +423,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName:  serviceaccountTokenSecret,
-						DefaultMode: helpers.IntPtr(420),
+						DefaultMode: helpers.Int32Ptr(420),
 					},
 				},
 			})
@@ -587,7 +587,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName:  secret.Name,
-						DefaultMode: helpers.IntPtr(444),
+						DefaultMode: helpers.Int32Ptr(444),
 					},
 				},
 			}

@@ -74,6 +74,8 @@ var runningProcessQueue bool
 // this just allows the controller to update any builds that are in the queue periodically
 // if this ran on every single event, it would flood the queue with messages, so it is restricted using `runningProcessQueue` global
 // to only run the process at any one time til it is complete
+// buildsToStart is the number of builds that can be started at the time the process is called
+// limitHit is used to determine if the build limit has been hit, this is used to prevent new builds from being started inside this process
 func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Logger, buildsToStart int, limitHit bool) error {
 	// this should only ever be able to run one instance of at a time within a single controller
 	// this is because this process is quite heavy when it goes to submit the queue messages to the api
@@ -94,6 +96,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 		})
 		pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
+			runningProcessQueue = false
 			return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 		}
 		if len(pendingBuilds.Items) > 0 {
@@ -120,6 +123,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					})
 					// list any builds that are running
 					if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
+						runningProcessQueue = false
 						return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
@@ -127,6 +131,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
 							// only return if there is an error doing this operation
 							// continue on otherwise to allow the queued status updater to run
+							runningProcessQueue = false
 							return err
 						}
 						// don't handle the queued process for this build, continue to next in the list
@@ -144,6 +149,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 							},
 						})
 						if err := r.Patch(ctx, &pBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+							runningProcessQueue = false
 							return err
 						}
 					}
@@ -151,7 +157,10 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 				// update the build to be queued, and add a log message with the build log with the current position in the queue
 				// this position will update as builds are created/processed, so the position of a build could change depending on
 				// higher or lower priority builds being created
-				r.updateQueuedBuild(ctx, pBuild, (idx + 1), len(pendingBuilds.Items), opLog)
+				if err := r.updateQueuedBuild(ctx, pBuild, (idx + 1), len(pendingBuilds.Items), opLog); err != nil {
+					runningProcessQueue = false
+					return nil
+				}
 			}
 		}
 		runningProcessQueue = false

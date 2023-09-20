@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"github.com/cheshir/go-mq/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -35,6 +36,7 @@ type Messenger struct {
 	AdvancedTaskDeployTokenInjection bool
 	DeletionHandler                  *deletions.Deletions
 	EnableDebug                      bool
+	Cache                            *expirable.LRU[string, string]
 }
 
 // New returns a messaging with config and controller-runtime client.
@@ -49,6 +51,7 @@ func New(config mq.Config,
 	advancedTaskDeployTokenInjection bool,
 	deletionHandler *deletions.Deletions,
 	enableDebug bool,
+	cache *expirable.LRU[string, string],
 ) *Messenger {
 	return &Messenger{
 		Config:                           config,
@@ -62,5 +65,6 @@ func New(config mq.Config,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		DeletionHandler:                  deletionHandler,
 		EnableDebug:                      enableDebug,
+		Cache:                            cache,
 	}
 }

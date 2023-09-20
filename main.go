@@ -42,6 +42,7 @@ import (
 
 	cron "gopkg.in/robfig/cron.v2"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
@@ -470,6 +471,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// create the cache
+	cache := expirable.NewLRU[string, string](1000, nil, time.Minute*60)
+
 	config := mq.Config{
 		ReconnectDelay: time.Duration(rabbitRetryInterval) * time.Second,
 		Exchanges: mq.Exchanges{
@@ -640,10 +644,12 @@ func main() {
 		advancedTaskDeployToken,
 		deletion,
 		enableDebug,
+		cache,
 	)
 
 	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
+
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
 		go messaging.Consumer(lagoonTargetName)
@@ -812,6 +818,7 @@ func main() {
 		LagoonTargetName:      lagoonTargetName,
 		LFFQoSEnabled:         lffQoSEnabled,
 		BuildQoS:              buildQoSConfig,
+		Cache:                 cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
 		os.Exit(1)

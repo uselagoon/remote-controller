@@ -8,6 +8,7 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/go-version v1.6.0
+	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/k8up-io/k8up/v2 v2.7.1
 	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/mittwald/goharbor-client/v5 v5.3.1

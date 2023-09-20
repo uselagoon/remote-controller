@@ -315,8 +315,8 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 // getOrCreateBuildResource will deepcopy the lagoon build into a new resource and push it to the new namespace
 // then clean up the old one.
-func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, build *lagoonv1beta1.LagoonBuild, ns string) error {
-	newBuild := build.DeepCopy()
+func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, lagoonBuild *lagoonv1beta1.LagoonBuild, ns string) error {
+	newBuild := lagoonBuild.DeepCopy()
 	newBuild.SetNamespace(ns)
 	newBuild.SetResourceVersion("")
 	newBuild.SetLabels(
@@ -334,7 +334,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, bu
 			return err
 		}
 	}
-	err = r.Delete(ctx, build)
+	err = r.Delete(ctx, lagoonBuild)
 	if err != nil {
 		return err
 	}

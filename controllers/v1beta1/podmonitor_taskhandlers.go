@@ -31,11 +31,20 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 	if err != nil {
 		return err
 	}
+	cancel := false
 	if cancelTask, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"]; ok {
-		cancel, _ := strconv.ParseBool(cancelTask)
-		if cancel {
-			return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, cancel)
-		}
+		cancel, _ = strconv.ParseBool(cancelTask)
+	}
+	_, ok := r.Cache.Get(lagoonTask.ObjectMeta.Name)
+	if ok {
+		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonTask.ObjectMeta.Name))
+		// this object exists in the cache meaning the task has been cancelled, set cancel to true and remove from cache
+		r.Cache.Remove(lagoonTask.ObjectMeta.Name)
+		cancel = true
+	}
+	if cancel {
+		opLog.Info(fmt.Sprintf("Attempting to cancel task %s", lagoonTask.ObjectMeta.Name))
+		return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, cancel)
 	}
 	if jobPod.Status.Phase == corev1.PodPending {
 		for _, container := range jobPod.Status.ContainerStatuses {

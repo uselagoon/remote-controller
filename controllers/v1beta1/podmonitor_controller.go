@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/messenger"
@@ -50,6 +51,7 @@ type LagoonMonitorReconciler struct {
 	LagoonTargetName      string
 	LFFQoSEnabled         bool
 	BuildQoS              BuildQoS
+	Cache                 *expirable.LRU[string, string]
 }
 
 // slice of the different failure states of pods that we care about

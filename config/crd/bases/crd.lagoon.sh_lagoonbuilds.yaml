@@ -268,14 +268,10 @@ spec:
                             type: string
                           command:
                             type: string
-                          deployTokenInjection:
-                            type: boolean
                           id:
                             type: string
                           name:
                             type: string
-                          projectKeyInjection:
-                            type: boolean
                           service:
                             type: string
                           sshHost:
@@ -361,14 +357,10 @@ spec:
                             type: string
                           command:
                             type: string
-                          deployTokenInjection:
-                            type: boolean
                           id:
                             type: string
                           name:
                             type: string
-                          projectKeyInjection:
-                            type: boolean
                           service:
                             type: string
                           sshHost:
@@ -456,14 +448,10 @@ spec:
                             type: string
                           command:
                             type: string
-                          deployTokenInjection:
-                            type: boolean
                           id:
                             type: string
                           name:
                             type: string
-                          projectKeyInjection:
-                            type: boolean
                           service:
                             type: string
                           sshHost:
@@ -553,14 +541,10 @@ spec:
                             type: string
                           command:
                             type: string
-                          deployTokenInjection:
-                            type: boolean
                           id:
                             type: string
                           name:
                             type: string
-                          projectKeyInjection:
-                            type: boolean
                           service:
                             type: string
                           sshHost:

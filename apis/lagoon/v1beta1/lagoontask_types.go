@@ -16,6 +16,10 @@ limitations under the License.
 package v1beta1
 
 import (
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -81,16 +85,14 @@ type LagoonTaskSpec struct {
 
 // LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.
 type LagoonTaskInfo struct {
-	ID                   string `json:"id"` // should be int, but the api sends it as a string :\
-	Name                 string `json:"name,omitempty"`
-	TaskName             string `json:"taskName,omitempty"`
-	Service              string `json:"service,omitempty"`
-	Command              string `json:"command,omitempty"`
-	SSHHost              string `json:"sshHost,omitempty"`
-	SSHPort              string `json:"sshPort,omitempty"`
-	APIHost              string `json:"apiHost,omitempty"`
-	DeployTokenInjection bool   `json:"deployTokenInjection,omitempty"`
-	ProjectKeyInjection  bool   `json:"projectKeyInjection,omitempty"`
+	ID       string `json:"id"` // should be int, but the api sends it as a string :\
+	Name     string `json:"name,omitempty"`
+	TaskName string `json:"taskName,omitempty"`
+	Service  string `json:"service,omitempty"`
+	Command  string `json:"command,omitempty"`
+	SSHHost  string `json:"sshHost,omitempty"`
+	SSHPort  string `json:"sshPort,omitempty"`
+	APIHost  string `json:"apiHost,omitempty"`
 }
 
 // LagoonAdvancedTaskInfo defines what an advanced task can use for the creation of the pod.
@@ -171,4 +173,43 @@ type LagoonTaskList struct {
 
 func init() {
 	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
+}
+
+// this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript
+// this converts them from floats to bools
+func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["deployerToken"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.Float64 {
+			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))
+			if err == nil {
+				a.DeployerToken = vBool
+			}
+		}
+		if reflect.TypeOf(value).Kind() == reflect.Bool {
+			a.DeployerToken = value.(bool)
+		}
+	}
+	if value, ok := tmpMap["sshKey"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.Float64 {
+			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))
+			if err == nil {
+				a.SSHKey = vBool
+			}
+		}
+		if reflect.TypeOf(value).Kind() == reflect.Bool {
+			a.SSHKey = value.(bool)
+		}
+	}
+	if value, ok := tmpMap["RunnerImage"]; ok {
+		a.RunnerImage = value.(string)
+	}
+	if value, ok := tmpMap["runnerImage"]; ok {
+		a.RunnerImage = value.(string)
+	}
+	if value, ok := tmpMap["JSONPayload"]; ok {
+		a.JSONPayload = value.(string)
+	}
+	return nil
 }

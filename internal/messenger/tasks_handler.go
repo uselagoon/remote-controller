@@ -264,12 +264,6 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1
 
 // AdvancedTask handles running the ingress migrations.
 func (m *Messenger) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	if jobSpec.Task.DeployTokenInjection {
-		jobSpec.AdvancedTask.DeployerToken = jobSpec.Task.DeployTokenInjection
-	}
-	if jobSpec.Task.ProjectKeyInjection {
-		jobSpec.AdvancedTask.SSHKey = jobSpec.Task.ProjectKeyInjection
-	}
 	return m.createAdvancedTask(namespace, jobSpec, nil)
 }
 

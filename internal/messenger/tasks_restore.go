@@ -53,20 +53,28 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta1.Lagoo
 		k8upv1Exists = true
 	}
 	// check the version, if there is no version in the payload, assume it is k8up v2
-	if vers == "backup.appuio.ch/v1alpha1" {
-		if k8upv1alpha1Exists {
-			return m.createv1alpha1Restore(opLog, namespace, jobSpec)
-		}
-	} else {
-		if k8upv1Exists {
-			if err := m.createv1Restore(opLog, namespace, jobSpec); err != nil {
-				return err
+	if m.SupportK8upV2 {
+		if vers == "backup.appuio.ch/v1alpha1" {
+			if k8upv1alpha1Exists {
+				return m.createv1alpha1Restore(opLog, namespace, jobSpec)
 			}
 		} else {
-			if k8upv1alpha1Exists {
-				if err := m.createv1alpha1Restore(opLog, namespace, jobSpec); err != nil {
+			if k8upv1Exists {
+				if err := m.createv1Restore(opLog, namespace, jobSpec); err != nil {
 					return err
 				}
+			} else {
+				if k8upv1alpha1Exists {
+					if err := m.createv1alpha1Restore(opLog, namespace, jobSpec); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	} else {
+		if k8upv1alpha1Exists {
+			if err := m.createv1alpha1Restore(opLog, namespace, jobSpec); err != nil {
+				return err
 			}
 		}
 	}

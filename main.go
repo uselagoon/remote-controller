@@ -136,6 +136,7 @@ func main() {
 	var taskPodsToKeep int
 	var lffBackupWeeklyRandom bool
 	var lffHarborEnabled bool
+	var lffSupportK8UPv2 bool
 	var harborURL string
 	var harborAPI string
 	var harborUsername string
@@ -281,6 +282,8 @@ func main() {
 	flag.IntVar(&taskPodsToKeep, "num-task-pods-to-keep", 1, "The number of task pods to keep per namespace.")
 	flag.BoolVar(&lffBackupWeeklyRandom, "lagoon-feature-flag-backup-weekly-random", false,
 		"Tells Lagoon whether or not to use the \"weekly-random\" schedule for k8up backups.")
+	flag.BoolVar(&lffSupportK8UPv2, "lagoon-feature-flag-support-k8upv2", false,
+		"Tells Lagoon whether or not it can support k8up v2.")
 
 	flag.BoolVar(&tlsSkipVerify, "skip-tls-verify", false, "Flag to skip tls verification for http clients (harbor).")
 
@@ -644,6 +647,7 @@ func main() {
 		advancedTaskDeployToken,
 		deletion,
 		enableDebug,
+		lffSupportK8UPv2,
 		cache,
 	)
 

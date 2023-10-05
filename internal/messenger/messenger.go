@@ -36,6 +36,7 @@ type Messenger struct {
 	AdvancedTaskDeployTokenInjection bool
 	DeletionHandler                  *deletions.Deletions
 	EnableDebug                      bool
+	SupportK8upV2                    bool
 	Cache                            *expirable.LRU[string, string]
 }
 
@@ -51,6 +52,7 @@ func New(config mq.Config,
 	advancedTaskDeployTokenInjection bool,
 	deletionHandler *deletions.Deletions,
 	enableDebug bool,
+	supportK8upV2 bool,
 	cache *expirable.LRU[string, string],
 ) *Messenger {
 	return &Messenger{
@@ -65,6 +67,7 @@ func New(config mq.Config,
 		AdvancedTaskDeployTokenInjection: advancedTaskDeployTokenInjection,
 		DeletionHandler:                  deletionHandler,
 		EnableDebug:                      enableDebug,
+		SupportK8upV2:                    supportK8upV2,
 		Cache:                            cache,
 	}
 }

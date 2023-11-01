@@ -276,9 +276,13 @@ func (m *Messenger) createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.
 func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, m *Messenger, additionalLabels map[string]string) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	// create the advanced task
+	taskName := fmt.Sprintf("lagoon-advanced-task-%s", helpers.RandString(6))
+	if jobSpec.Task.TaskName != "" {
+		taskName = jobSpec.Task.TaskName
+	}
 	task := lagoonv1beta1.LagoonTask{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "lagoon-advanced-task-" + helpers.RandString(6),
+			Name:      taskName,
 			Namespace: namespace,
 			Labels: map[string]string{
 				"lagoon.sh/taskType":   lagoonv1beta1.TaskTypeAdvanced.String(),

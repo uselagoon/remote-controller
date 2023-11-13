@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -251,7 +252,11 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1
 	jobSpec.AdvancedTask.DeployerToken = true
 	jobSpec.AdvancedTask.SSHKey = true
 	asPayload := &ActiveStandbyPayload{}
-	err := json.Unmarshal([]byte(jobSpec.AdvancedTask.JSONPayload), asPayload)
+	asPayloadDecoded, err := base64.StdEncoding.DecodeString(jobSpec.AdvancedTask.JSONPayload)
+	if err != nil {
+		return fmt.Errorf("Unable to base64 decode payload: %v", err)
+	}
+	err = json.Unmarshal([]byte(asPayloadDecoded), asPayload)
 	if err != nil {
 		return fmt.Errorf("Unable to unmarshal json payload: %v", err)
 	}

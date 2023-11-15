@@ -271,6 +271,11 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						},
 						Spec: dep.Spec.Template.Spec,
 					}
+					// set the organization labels on task pods
+					if lagoonTask.Spec.Project.Organization != nil {
+						taskPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
+						taskPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+					}
 					return taskPod, nil
 				}
 			}
@@ -563,6 +568,10 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					},
 				},
 			},
+		}
+		if lagoonTask.Spec.Project.Organization != nil {
+			newPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
+			newPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
 		}
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it

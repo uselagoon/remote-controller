@@ -17,6 +17,7 @@ CHECK_TIMEOUT=20
 NS=nginx-example-main
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
+LBUILD3=9m5zypx
 
 HARBOR_VERSION=${HARBOR_VERSION:-1.6.4}
 
@@ -201,6 +202,37 @@ kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-$
 sleep 10
 check_lagoon_build lagoon-build-${LBUILD}
 
+echo "==> Trigger a lagoon build using kubectl apply and check organization labels exist"
+kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project2.yaml
+# patch the resource with the controller namespace
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-${LBUILD2} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+# patch the resource with a random label to bump the controller event filter
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.crd.lagoon.sh lagoon-build-${LBUILD2} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+sleep 10
+check_lagoon_build lagoon-build-${LBUILD2}
+echo "==> Check organization.lagoon.sh/name label exists on namespace"
+if ! $(kubectl get namespace -l 'organization.lagoon.sh/name=test-org' --no-headers 2> /dev/null | grep -q ${NS}); then 
+    echo "==> Build failed to set organization name label on namespace"
+    clean_task_test_resources
+    check_controller_log ${1}
+    tear_down
+    echo "============== FAILED ==============="
+    exit 1
+else
+    echo "===> label exists"
+fi
+echo "==> Check organization.lagoon.sh/id label exists on namespace"
+if ! $(kubectl get namespace -l 'organization.lagoon.sh/id=123' --no-headers 2> /dev/null | grep -q ${NS}); then 
+    echo "==> Build failed to set organization id label on namespace"
+    clean_task_test_resources
+    check_controller_log ${1}
+    tear_down
+    echo "============== FAILED ==============="
+    exit 1
+else
+    echo "===> label exists"
+fi
+
 echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
 
 kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1-secret.yaml
@@ -235,7 +267,7 @@ echo '
     "routing_key":"ci-local-controller-kubernetes:builddeploy",
     "payload":"{
         \"metadata\": {
-            \"name\": \"lagoon-build-8m5zypx\"
+            \"name\": \"lagoon-build-9m5zypx\"
         },
         \"spec\": {
             \"build\": {
@@ -246,7 +278,7 @@ echo '
             \"project\": {
                 \"name\": \"nginx-example\",
                 \"environment\": \"main\",
-                \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-8m5zypx\",
+                \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-9m5zypx\",
                 \"routerPattern\": \"main-nginx-example\",
                 \"environmentType\": \"production\",
                 \"productionEnvironment\": \"main\",
@@ -274,11 +306,29 @@ echo '
 curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
 echo ""
 sleep 10
-check_lagoon_build lagoon-build-${LBUILD2}
+check_lagoon_build lagoon-build-${LBUILD3}
 
 echo "==> Check pod cleanup worked"
 CHECK_COUNTER=1
-until ! $(kubectl -n nginx-example-main get pods lagoon-build-7m5zypx &> /dev/null)
+# wait for first build pod to clean up
+until ! $(kubectl -n nginx-example-main get pods lagoon-build-${LBUILD} &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Build pod not deleted yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for build pod clean up check"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
+CHECK_COUNTER=1
+# wait for second build pod to clean up
+until ! $(kubectl -n nginx-example-main get pods lagoon-build-${LBUILD2} &> /dev/null)
 do
 if [ $CHECK_COUNTER -lt 14 ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1

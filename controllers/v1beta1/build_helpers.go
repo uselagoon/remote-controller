@@ -106,6 +106,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		"lagoon.sh/environmentType": lagoonBuild.Spec.Project.EnvironmentType,
 		"lagoon.sh/controller":      r.ControllerNamespace,
 	}
+	if lagoonBuild.Spec.Project.Organization != nil {
+		nsLabels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
+		nsLabels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
+	}
 	if lagoonBuild.Spec.Project.ID != nil {
 		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ID)
 	}
@@ -712,6 +716,19 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: r.LFFDefaultRWX2RWO,
 		})
 	}
+
+	// set the organization variables into the build pod so they're available to builds for consumption
+	if lagoonBuild.Spec.Project.Organization != nil {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_ORGANIZATION_ID",
+			Value: fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID),
+		})
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "LAGOON_ORGANIZATION_NAME",
+			Value: lagoonBuild.Spec.Project.Organization.Name,
+		})
+	}
+
 	// add any LAGOON_FEATURE_FLAG_ variables in the controller into the build pods
 	for fName, fValue := range r.LagoonFeatureFlags {
 		podEnvs = append(podEnvs, corev1.EnvVar{
@@ -819,6 +836,12 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				},
 			},
 		},
+	}
+
+	// set the organization labels on build pods
+	if lagoonBuild.Spec.Project.Organization != nil {
+		newPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
+		newPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
 	}
 
 	// set the pod security context, if defined to a non-default value

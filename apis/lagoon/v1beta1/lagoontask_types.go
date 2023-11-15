@@ -124,6 +124,7 @@ type LagoonTaskProject struct {
 	Name             string          `json:"name"`
 	NamespacePattern string          `json:"namespacePattern,omitempty"`
 	Variables        LagoonVariables `json:"variables,omitempty"`
+	Organization     *Organization   `json:"organization,omitempty"`
 }
 
 // LagoonTaskEnvironment defines the lagoon environment information.

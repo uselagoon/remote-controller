@@ -10,7 +10,6 @@ require (
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/k8up-io/k8up/v2 v2.7.1
-	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/mittwald/goharbor-client/v5 v5.3.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.7
@@ -102,6 +101,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-// includes page_size 100 for listing projects
-replace github.com/mittwald/goharbor-client/v3 v3.3.0 => github.com/shreddedbacon/goharbor-client/v3 v3.0.0-20210618042159-ceb1f437ad75

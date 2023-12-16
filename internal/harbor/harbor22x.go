@@ -16,7 +16,8 @@ import (
 )
 
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
-func (h *Harbor) CreateProjectV2(ctx context.Context, projectName string) (*harborclientv5model.Project, error) {
+func (h *Harbor) CreateProjectV2(ctx context.Context, namespace corev1.Namespace) (*harborclientv5model.Project, error) {
+	projectName := namespace.Labels["lagoon.sh/project"]
 	exists, err := h.ClientV5.ProjectExists(ctx, projectName)
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error checking project %s exists, err: %v", projectName, err))
@@ -63,6 +64,45 @@ func (h *Harbor) CreateProjectV2(ctx context.Context, projectName string) (*harb
 	// for _, x := range w {
 	// 	fmt.Println(x)
 	// }
+
+	// get the retention policy from the namespace annotations if the annotation exists
+	projectRetention := h.retentionOverrides(namespace)
+	// handle the creation and updating of retention policies as required
+	// generate a somewhat random schedule from the retention schedule template, using the harbor projectname as the seed
+	schedule, err := helpers.ConvertCrontab(projectName, projectRetention.Schedule)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error generating retention schedule %s: %v", project.Name, err))
+	}
+	schedule = fmt.Sprintf("0 %s", schedule) // harbor needs seconds :\
+	// create the retention policy as required
+	retentionPolicy := h.generateEmptyRetentionPolicy(int64(project.ProjectID))
+	if projectRetention.Enabled {
+		// if a retention policy is enabled, configure it here
+		retentionPolicy = h.generateRetentionPolicy(int64(project.ProjectID), projectRetention)
+	}
+	// get the existing one if one exists
+	existingPolicy, err := h.ClientV5.GetRetentionPolicyByProject(ctx, projectName)
+	if err != nil {
+		h.Log.Info(fmt.Sprintf("Error getting retention policy %s: %v", project.Name, err))
+	}
+	if existingPolicy != nil {
+		retentionPolicy.ID = existingPolicy.ID
+		r1, _ := json.Marshal(existingPolicy)
+		r2, _ := json.Marshal(retentionPolicy)
+		// if the policy differs, then we need to update it with our new policy
+		if string(r1) != string(r2) {
+			err := h.ClientV5.UpdateRetentionPolicy(ctx, retentionPolicy)
+			if err != nil {
+				f, _ := json.Marshal(err)
+				h.Log.Info(fmt.Sprintf("Error updating retention policy %s: %v", project.Name, string(f)))
+			}
+		}
+	} else {
+		// create it if it doesn't
+		if err := h.ClientV5.NewRetentionPolicy(ctx, retentionPolicy); err != nil {
+			h.Log.Info(fmt.Sprintf("Error creating retention policy %s: %v", project.Name, err))
+		}
+	}
 
 	if h.WebhookAddition {
 		wps, err := h.ClientV5.ListProjectWebhookPolicies(ctx, int(project.ProjectID))
@@ -278,6 +318,14 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 			if err != nil {
 				h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
 			}
+			h.Log.Info(
+				fmt.Sprintf(
+					"Deleted harbor repository %s in  project %s, environment %s",
+					repo.Name,
+					projectName,
+					environmentName,
+				),
+			)
 		}
 	}
 	if len(listRepositories) > 100 {
@@ -293,6 +341,14 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 					if err != nil {
 						h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
 					}
+					h.Log.Info(
+						fmt.Sprintf(
+							"Deleted harbor repository %s in  project %s, environment %s",
+							repo.Name,
+							projectName,
+							environmentName,
+						),
+					)
 				}
 			}
 		}
@@ -321,6 +377,14 @@ func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectName, branch str
 				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", projectName, robot.Name))
 				return
 			}
+			h.Log.Info(
+				fmt.Sprintf(
+					"Deleted harbor robot account %s in  project %s, environment %s",
+					robot.Name,
+					projectName,
+					environmentName,
+				),
+			)
 		}
 	}
 }

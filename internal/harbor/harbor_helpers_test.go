@@ -1,7 +1,11 @@
 package harbor
 
 import (
+	"reflect"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestHarbor_matchRobotAccount(t *testing.T) {
@@ -194,6 +198,58 @@ func TestHarbor_generateRobotName(t *testing.T) {
 			h := &tt.args.harbor
 			if got := h.generateRobotName(tt.args.environmentName); got != tt.want {
 				t.Errorf("Harbor.generateRobotName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHarbor_retentionOverrides(t *testing.T) {
+	type fields struct {
+		TagRetention TagRetention
+	}
+	type args struct {
+		namespace corev1.Namespace
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   TagRetention
+	}{
+		{
+			name: "test1",
+			fields: fields{
+				TagRetention: TagRetention{
+					Enabled:              false,
+					Schedule:             "M H(22-2) D(5-25) * *",
+					PullRequestRetention: 2,
+					BranchRetention:      5,
+				},
+			},
+			args: args{
+				namespace: corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							"harbor.lagoon.sh/retention-policy": "{\"enabled\":true,\"schedule\":\"M H(2-15) D(5-15) * *\", \"pullrequestRetention\": 3, \"branchRetention\": 6}",
+						},
+					},
+				},
+			},
+			want: TagRetention{
+				Enabled:              true,
+				Schedule:             "M H(2-15) D(5-15) * *",
+				PullRequestRetention: 3,
+				BranchRetention:      6,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Harbor{
+				TagRetention: tt.fields.TagRetention,
+			}
+			if got := h.retentionOverrides(tt.args.namespace); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Harbor.retentionOverrides() = %v, want %v", got, tt.want)
 			}
 		})
 	}

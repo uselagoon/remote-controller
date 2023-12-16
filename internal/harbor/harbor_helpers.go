@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"time"
 
+	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 
 	corev1 "k8s.io/api/core/v1"
@@ -203,4 +204,96 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 		}
 	}
 	return false, nil
+}
+
+func (h *Harbor) generateRetentionPolicy(projectID int64, policy TagRetention) *harborclientv5model.RetentionPolicy {
+	return &harborclientv5model.RetentionPolicy{
+		Algorithm: "or",
+		Rules: []*harborclientv5model.RetentionRule{
+			{ // create a retention policy for all images
+				Action: "retain",
+				Params: map[string]interface{}{
+					"latestPulledN": policy.BranchRetention,
+				},
+				ScopeSelectors: map[string][]harborclientv5model.RetentionSelector{
+					"repository": {
+						{
+							Decoration: "repoMatches",
+							Kind:       "doublestar",
+							Pattern:    "[^pr\\-]*/*", // exclude pullrequest repository images https://github.com/bmatcuk/doublestar#patterns
+						},
+					},
+				},
+				TagSelectors: []*harborclientv5model.RetentionSelector{
+					{
+						Decoration: "matches",
+						Extras:     "{\"untagged\":true}",
+						Kind:       "doublestar",
+						Pattern:    "**",
+					},
+				},
+				Template: "latestPulledN",
+			},
+			{ // create a retention policy specifically for pullrequests
+				Action: "retain",
+				Params: map[string]interface{}{
+					"latestPulledN": policy.BranchRetention,
+				},
+				ScopeSelectors: map[string][]harborclientv5model.RetentionSelector{
+					"repository": {
+						{
+							Decoration: "repoMatches",
+							Kind:       "doublestar",
+							Pattern:    "pr-*",
+						},
+					},
+				},
+				TagSelectors: []*harborclientv5model.RetentionSelector{
+					{
+						Decoration: "matches",
+						Extras:     "{\"untagged\":true}",
+						Kind:       "doublestar",
+						Pattern:    "**",
+					},
+				},
+				Template: "latestPulledN",
+			},
+		},
+		Scope: &harborclientv5model.RetentionPolicyScope{
+			Level: "project",
+			Ref:   projectID,
+		},
+		Trigger: &harborclientv5model.RetentionRuleTrigger{
+			Kind: "Schedule",
+			Settings: map[string]string{
+				"cron": policy.Schedule,
+			},
+		},
+	}
+}
+
+func (h *Harbor) generateEmptyRetentionPolicy(projectID int64) *harborclientv5model.RetentionPolicy {
+	return &harborclientv5model.RetentionPolicy{
+		Algorithm: "or",
+		Rules:     []*harborclientv5model.RetentionRule{},
+		Scope: &harborclientv5model.RetentionPolicyScope{
+			Level: "project",
+			Ref:   projectID,
+		},
+		Trigger: &harborclientv5model.RetentionRuleTrigger{
+			Kind: "Schedule",
+			Settings: map[string]string{
+				"cron": "",
+			},
+		}}
+}
+
+func (h *Harbor) retentionOverrides(namespace corev1.Namespace) TagRetention {
+	// set the default retention policy
+	retention := h.TagRetention
+	// check if the annotation is set on the namespace
+	if ret, ok := namespace.ObjectMeta.Annotations["harbor.lagoon.sh/retention-policy"]; ok {
+		json.Unmarshal([]byte(ret), &retention)
+	}
+	return retention
 }

@@ -654,6 +654,7 @@ func main() {
 		deletion,
 		enableDebug,
 		lffSupportK8UPv2,
+		harborConfig,
 		cache,
 	)
 

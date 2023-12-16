@@ -3,6 +3,7 @@ package messenger
 import (
 	"github.com/cheshir/go-mq/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,6 +38,7 @@ type Messenger struct {
 	DeletionHandler                  *deletions.Deletions
 	EnableDebug                      bool
 	SupportK8upV2                    bool
+	Harbor                           harbor.Harbor
 	Cache                            *expirable.LRU[string, string]
 }
 
@@ -53,6 +55,7 @@ func New(config mq.Config,
 	deletionHandler *deletions.Deletions,
 	enableDebug bool,
 	supportK8upV2 bool,
+	harbor harbor.Harbor,
 	cache *expirable.LRU[string, string],
 ) *Messenger {
 	return &Messenger{
@@ -68,6 +71,7 @@ func New(config mq.Config,
 		DeletionHandler:                  deletionHandler,
 		EnableDebug:                      enableDebug,
 		SupportK8upV2:                    supportK8upV2,
+		Harbor:                           harbor,
 		Cache:                            cache,
 	}
 }

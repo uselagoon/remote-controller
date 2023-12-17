@@ -71,6 +71,21 @@ spec:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 type: string
+              lagoonIdling:
+                properties:
+                  forceScale:
+                    type: boolean
+                  idle:
+                    type: boolean
+                type: object
+              lagoonService:
+                properties:
+                  name:
+                    type: string
+                  state:
+                    description: TaskType const for the status type
+                    type: string
+                type: object
               misc:
                 description: LagoonMiscInfo defines the resource or backup information
                   for a misc task.
@@ -284,6 +299,8 @@ spec:
                 description: LagoonMessage is used for sending build info back to
                   Lagoon messaging queue to update the environment or deployment
                 properties:
+                  idled:
+                    type: boolean
                   meta:
                     description: LagoonLogMeta is the metadata that is used by logging
                       in Lagoon.

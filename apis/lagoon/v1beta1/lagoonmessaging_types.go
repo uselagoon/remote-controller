@@ -47,6 +47,7 @@ type LagoonMessage struct {
 	Type      string         `json:"type,omitempty"`
 	Namespace string         `json:"namespace,omitempty"`
 	Meta      *LagoonLogMeta `json:"meta,omitempty"`
+	Idled     bool           `json:"idled,omitempty"`
 	// BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
 }
 

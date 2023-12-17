@@ -302,6 +302,8 @@ spec:
                 description: LagoonMessage is used for sending build info back to
                   Lagoon messaging queue to update the environment or deployment
                 properties:
+                  idled:
+                    type: boolean
                   meta:
                     description: LagoonLogMeta is the metadata that is used by logging
                       in Lagoon.

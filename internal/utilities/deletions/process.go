@@ -46,26 +46,50 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		// being cleaned up in harbor by setting them to `false`
 		// this is useful for migrating environments, where the source or destination can have these added
 		// so that when the migration is complete the resulting images aren't also removed
+		// @deprecate these two labels in favour for the `retain` ones
 		if val, ok := secret.Labels["harbor.lagoon.sh/cleanup-repositories"]; ok {
+			opLog.WithName("DeleteNamespace").Info("Secret label 'harbor.lagoon.sh/cleanup-repositories' is deprecated, use 'harbor.lagoon.sh/retain-repositories' instead")
 			cleanupRepo, _ = strconv.ParseBool(val)
 		}
 		if val, ok := secret.Labels["harbor.lagoon.sh/cleanup-robotaccount"]; ok {
+			opLog.WithName("DeleteNamespace").Info("Secret label 'harbor.lagoon.sh/cleanup-robotaccount' is deprecated, use 'harbor.lagoon.sh/retain-robotaccount' instead")
 			cleanupRobot, _ = strconv.ParseBool(val)
 		}
-		lagoonHarbor, err := harbor.New(d.Harbor)
-		if err != nil {
-			return err
+		// use a retain label for "retain=true", this is clearer than "cleanup"
+		if val, ok := secret.Labels["harbor.lagoon.sh/retain-repositories"]; ok {
+			retain, _ := strconv.ParseBool(val)
+			cleanupRepo = !retain
 		}
-		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
-		if err != nil {
-			return err
+		if val, ok := secret.Labels["harbor.lagoon.sh/retain-robotaccount"]; ok {
+			retain, _ := strconv.ParseBool(val)
+			cleanupRobot = !retain
 		}
-		if lagoonHarbor.UseV2Functions(curVer) {
-			if cleanupRepo {
-				lagoonHarbor.DeleteRepository(ctx, project, environment)
+		// also check the namespace for the retain labels
+		if val, ok := namespace.Labels["harbor.lagoon.sh/retain-repositories"]; ok {
+			retain, _ := strconv.ParseBool(val)
+			cleanupRepo = !retain
+		}
+		if val, ok := namespace.Labels["harbor.lagoon.sh/retain-robotaccount"]; ok {
+			retain, _ := strconv.ParseBool(val)
+			cleanupRobot = !retain
+		}
+		if cleanupRepo || cleanupRobot {
+			// either of the repo or the robot need cleaning up when the namespace is terminated, then perform the required actions here
+			lagoonHarbor, err := harbor.New(d.Harbor)
+			if err != nil {
+				return err
 			}
-			if cleanupRobot {
-				lagoonHarbor.DeleteRobotAccount(ctx, project, environment)
+			curVer, err := lagoonHarbor.GetHarborVersion(ctx)
+			if err != nil {
+				return err
+			}
+			if lagoonHarbor.UseV2Functions(curVer) {
+				if cleanupRepo {
+					lagoonHarbor.DeleteRepository(ctx, project, environment)
+				}
+				if cleanupRobot {
+					lagoonHarbor.DeleteRobotAccount(ctx, project, environment)
+				}
 			}
 		}
 	}

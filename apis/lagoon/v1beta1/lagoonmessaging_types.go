@@ -47,13 +47,4 @@ type LagoonMessage struct {
 	Type      string         `json:"type,omitempty"`
 	Namespace string         `json:"namespace,omitempty"`
 	Meta      *LagoonLogMeta `json:"meta,omitempty"`
-	// BuildInfo *LagoonBuildInfo `json:"buildInfo,omitempty"`
-}
-
-// LagoonStatusMessages is where unsent messages are stored for re-sending.
-type LagoonStatusMessages struct {
-	StatusMessage      *LagoonLog     `json:"statusMessage,omitempty"`
-	BuildLogMessage    *LagoonLog     `json:"buildLogMessage,omitempty"`
-	TaskLogMessage     *LagoonLog     `json:"taskLogMessage,omitempty"`
-	EnvironmentMessage *LagoonMessage `json:"environmentMessage,omitempty"`
 }

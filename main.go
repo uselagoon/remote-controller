@@ -85,7 +85,6 @@ func main() {
 	var enableLeaderElection bool
 	var enableMQ bool
 	var leaderElectionID string
-	var pendingMessageCron string
 	var mqWorkers int
 	var rabbitRetryInterval int
 	var startupConnectionAttempts int
@@ -191,8 +190,7 @@ func main() {
 		"The retry interval for rabbitmq.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "lagoon-builddeploy-leader-election-helper",
 		"The ID to use for leader election.")
-	flag.StringVar(&pendingMessageCron, "pending-message-cron", "15,45 * * * *",
-		"The cron definition for pending messages.")
+	flag.String("pending-message-cron", "", "This does nothing and will be removed in a future version.")
 	flag.IntVar(&startupConnectionAttempts, "startup-connection-attempts", 10,
 		"The number of startup attempts before exiting.")
 	flag.IntVar(&startupConnectionInterval, "startup-connection-interval-seconds", 30,
@@ -375,7 +373,6 @@ func main() {
 	mqPass = helpers.GetEnv("RABBITMQ_PASSWORD", mqPass)
 	mqHost = helpers.GetEnv("RABBITMQ_HOSTNAME", mqHost)
 	lagoonTargetName = helpers.GetEnv("LAGOON_TARGET_NAME", lagoonTargetName)
-	pendingMessageCron = helpers.GetEnv("PENDING_MESSAGE_CRON", pendingMessageCron)
 	overrideBuildDeployImage = helpers.GetEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
 	namespacePrefix = helpers.GetEnv("NAMESPACE_PREFIX", namespacePrefix)
 	if len(namespacePrefix) > 8 {
@@ -657,13 +654,6 @@ func main() {
 	if enableMQ {
 		setupLog.Info("starting messaging handler")
 		go messaging.Consumer(lagoonTargetName)
-
-		// use cron to run a pending message task
-		// this will check any `LagoonBuild` resources for the pendingMessages label
-		// and attempt to re-publish them
-		c.AddFunc(pendingMessageCron, func() {
-			messaging.GetPendingMessages()
-		})
 	}
 
 	buildQoSConfig := lagoonv1beta1ctrl.BuildQoS{

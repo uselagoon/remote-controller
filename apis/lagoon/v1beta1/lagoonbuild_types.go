@@ -90,9 +90,8 @@ type LagoonBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
-	Status         LagoonBuildStatus     `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+	Spec   LagoonBuildSpec   `json:"spec,omitempty"`
+	Status LagoonBuildStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

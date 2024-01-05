@@ -265,6 +265,18 @@ spec:
                         items:
                           type: string
                         type: array
+                      servicesv2:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - name
+                          - type
+                          type: object
+                        type: array
                       startTime:
                         type: string
                       task:
@@ -353,6 +365,18 @@ spec:
                       services:
                         items:
                           type: string
+                        type: array
+                      servicesv2:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - name
+                          - type
+                          type: object
                         type: array
                       startTime:
                         type: string
@@ -444,6 +468,18 @@ spec:
                       services:
                         items:
                           type: string
+                        type: array
+                      servicesv2:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - name
+                          - type
+                          type: object
                         type: array
                       startTime:
                         type: string
@@ -537,6 +573,18 @@ spec:
                       services:
                         items:
                           type: string
+                        type: array
+                      servicesv2:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - name
+                          - type
+                          type: object
                         type: array
                       startTime:
                         type: string

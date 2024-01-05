@@ -35,10 +35,16 @@ type LagoonLogMeta struct {
 	Routes        []string        `json:"routes,omitempty"`
 	StartTime     string          `json:"startTime,omitempty"`
 	Services      []string        `json:"services,omitempty"`
+	ServicesV2    []LagoonService `json:"servicesv2,omitempty"`
 	Task          *LagoonTaskInfo `json:"task,omitempty"`
 	Key           string          `json:"key,omitempty"`
 	AdvancedData  string          `json:"advancedData,omitempty"`
 	Cluster       string          `json:"clusterName,omitempty"`
+}
+
+type LagoonService struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // LagoonMessage is used for sending build info back to Lagoon

@@ -1,9 +1,7 @@
 kind: LagoonBuild
-apiVersion: crd.lagoon.sh/v1beta2
+apiVersion: crd.lagoon.sh/v1beta1
 metadata:
-    name: lagoon-build-7m5zypx
-    labels:
-        crd.lagoon.sh/version: v1beta2
+    name: lagoon-build-1m5zypx
 spec:
     build:
         ci: 'true' #to make sure that readwritemany is changed to readwriteonce
@@ -12,6 +10,9 @@ spec:
     project:
         name: nginx-example
         environment: main
+        organization:
+            id: 123
+            name: test-org
         uiLink: https://dashboard.amazeeio.cloud/projects/project/project-environment/deployments/lagoon-build-7m5zypx
         routerPattern: 'main-nginx-example'
         environmentType: production

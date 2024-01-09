@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
@@ -50,7 +51,7 @@ type LagoonTaskReconciler struct {
 }
 
 var (
-	taskFinalizer = "finalizer.lagoontask.crd.lagoon.sh/v1beta1"
+	taskFinalizer = "finalizer.lagoontask.crd.lagoon.sh/v1beta2"
 )
 
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -61,7 +62,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	opLog := r.Log.WithValues("lagoontask", req.NamespacedName)
 
 	// your logic here
-	var lagoonTask lagoonv1beta1.LagoonTask
+	var lagoonTask lagooncrd.LagoonTask
 	if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err != nil {
 		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
@@ -69,12 +70,12 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
 		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagoonv1beta1.TaskStatusPending.String() &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagoonv1beta1.TaskTypeStandard.String() {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusPending.String() &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
 			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagoonv1beta1.TaskStatusPending.String() &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagoonv1beta1.TaskTypeAdvanced.String() {
+		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusPending.String() &&
+			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeAdvanced.String() {
 			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
 		}
 	} else {
@@ -106,20 +107,20 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // SetupWithManager sets up the controller with the given manager
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&lagoonv1beta1.LagoonTask{}).
+		For(&lagooncrd.LagoonTask{}).
 		WithEventFilter(TaskPredicates{
 			ControllerNamespace: r.ControllerNamespace,
 		}).
 		Complete(r)
 }
 
-func (r *LagoonTaskReconciler) deleteExternalResources(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, namespace string) error {
+func (r *LagoonTaskReconciler) deleteExternalResources(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, namespace string) error {
 	// delete any external resources if required
 	return nil
 }
 
 // get the task pod information for kubernetes
-func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask) (*corev1.Pod, error) {
+func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagooncrd.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(lagoonTask.ObjectMeta.Namespace),
@@ -254,14 +255,14 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							Name:      lagoonTask.ObjectMeta.Name,
 							Namespace: lagoonTask.ObjectMeta.Namespace,
 							Labels: map[string]string{
-								"lagoon.sh/jobType":    "task",
-								"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
-								"lagoon.sh/crdVersion": crdVersion,
-								"lagoon.sh/controller": r.ControllerNamespace,
+								"lagoon.sh/jobType":     "task",
+								"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
+								"crd.lagoon.sh/version": crdVersion,
+								"lagoon.sh/controller":  r.ControllerNamespace,
 							},
 							OwnerReferences: []metav1.OwnerReference{
 								{
-									APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
+									APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 									Kind:       "LagoonTask",
 									Name:       lagoonTask.ObjectMeta.Name,
 									UID:        lagoonTask.UID,
@@ -299,7 +300,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	)
 }
 
-func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
+func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, opLog logr.Logger) error {
 	newTaskPod := &corev1.Pod{}
 	var err error
 
@@ -331,6 +332,11 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 			//@TODO: send msg back and update task to failed?
 			return nil
 		}
+		taskRunningStatus.With(prometheus.Labels{
+			"task_namespace": lagoonTask.ObjectMeta.Namespace,
+			"task_name":      lagoonTask.ObjectMeta.Name,
+		}).Set(1)
+		tasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}
@@ -354,7 +360,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 
 // createAdvancedTask allows running of more advanced tasks than the standard lagoon tasks
 // see notes in the docs for infomration about advanced tasks
-func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagoonv1beta1.LagoonTask, opLog logr.Logger) error {
+func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, opLog logr.Logger) error {
 	additionalLabels := map[string]string{}
 
 	// check if this is an activestandby task, if it is, create the activestandby role
@@ -526,14 +532,14 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 				Name:      lagoonTask.ObjectMeta.Name,
 				Namespace: lagoonTask.ObjectMeta.Namespace,
 				Labels: map[string]string{
-					"lagoon.sh/jobType":    "task",
-					"lagoon.sh/taskName":   lagoonTask.ObjectMeta.Name,
-					"lagoon.sh/crdVersion": crdVersion,
-					"lagoon.sh/controller": r.ControllerNamespace,
+					"lagoon.sh/jobType":     "task",
+					"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
+					"crd.lagoon.sh/version": crdVersion,
+					"lagoon.sh/controller":  r.ControllerNamespace,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
+						APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 						Kind:       "LagoonTask",
 						Name:       lagoonTask.ObjectMeta.Name,
 						UID:        lagoonTask.UID,
@@ -617,6 +623,11 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			)
 			return err
 		}
+		taskRunningStatus.With(prometheus.Labels{
+			"task_namespace": lagoonTask.ObjectMeta.Namespace,
+			"task_name":      lagoonTask.ObjectMeta.Name,
+		}).Set(1)
+		tasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}

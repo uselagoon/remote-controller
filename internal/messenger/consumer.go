@@ -11,6 +11,7 @@ import (
 	"github.com/cheshir/go-mq/v2"
 	"github.com/uselagoon/machinery/api/schema"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
@@ -67,7 +68,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 	err = messageQueue.SetConsumerHandler("builddeploy-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshal the body into a lagoonbuild
-			newBuild := &lagoonv1beta1.LagoonBuild{}
+			newBuild := &lagoonv1beta2.LagoonBuild{}
 			json.Unmarshal(message.Body(), newBuild)
 			// new builds that come in should initially get created in the controllers own
 			// namespace before being handled and re-created in the correct namespace
@@ -75,7 +76,8 @@ func (m *Messenger) Consumer(targetName string) { //error {
 			newBuild.ObjectMeta.Namespace = m.ControllerNamespace
 			newBuild.SetLabels(
 				map[string]string{
-					"lagoon.sh/controller": m.ControllerNamespace,
+					"lagoon.sh/controller":  m.ControllerNamespace,
+					"crd.lagoon.sh/version": "v1beta2",
 				},
 			)
 			opLog.Info(
@@ -234,7 +236,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 	err = messageQueue.SetConsumerHandler("jobs-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshall the message into a remove task to be processed
-			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
+			jobSpec := &lagoonv1beta2.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			namespace := helpers.GenerateNamespaceName(
 				jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -252,14 +254,14 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					namespace,
 				),
 			)
-			job := &lagoonv1beta1.LagoonTask{}
+			job := &lagoonv1beta2.LagoonTask{}
 			job.Spec = *jobSpec
 			// set the namespace to the `openshiftProjectName` from the environment
 			job.ObjectMeta.Namespace = namespace
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   lagoonv1beta1.TaskTypeStandard.String(),
-					"lagoon.sh/taskStatus": lagoonv1beta1.TaskStatusPending.String(),
+					"lagoon.sh/taskType":   lagoonv1beta2.TaskTypeStandard.String(),
+					"lagoon.sh/taskStatus": lagoonv1beta2.TaskStatusPending.String(),
 					"lagoon.sh/controller": m.ControllerNamespace,
 				},
 			)
@@ -292,7 +294,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		if err == nil {
 			opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 			// unmarshall the message into a remove task to be processed
-			jobSpec := &lagoonv1beta1.LagoonTaskSpec{}
+			jobSpec := &lagoonv1beta2.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
 			namespace := helpers.GenerateNamespaceName(
@@ -314,18 +316,43 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					),
 				)
 				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
-				_, v1beta1Bytes, err := lagoonv1beta1.CancelBuild(ctx, m.Client, namespace, message.Body())
+				// check if there is a v1beta2 task to cancel
+				hasv1beta2Build, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, namespace, message.Body())
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+				hasv1beta1Build, v1beta1Bytes, err := lagoonv1beta1.CancelBuild(ctx, m.Client, namespace, message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update build to failed?
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-				if v1beta1Bytes != nil {
-					// if v1beta1 has a build, send its response
-					if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
-						opLog.Error(err, "Unable to publish message.")
-						message.Ack(false) // ack to remove from queue
-						return
+				if v1beta1Bytes != nil && v1beta2Bytes != nil {
+					// check if either v1beta2 or v1beta1 have a matching build
+					if hasv1beta2Build && !hasv1beta1Build {
+						// if v1beta2 has a build, send its response
+						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+					} else if !hasv1beta2Build && hasv1beta1Build {
+						// if v1beta1 has a build, send its response
+						if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+					} else {
+						// if both v1beta2 and v1beta1 say there is no associated build
+						// then respond with the v1beta2 response
+						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
 					}
 				}
 			case "deploytarget:task:cancel", "kubernetes:task:cancel":
@@ -338,17 +365,43 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					),
 				)
 				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
-				_, v1beta1Bytes, err := lagoonv1beta1.CancelTask(ctx, m.Client, namespace, message.Body())
+				// check if there is a v1beta2 task to cancel
+				hasv1beta2Task, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, namespace, message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-				if v1beta1Bytes != nil {
-					if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
-						opLog.Error(err, "Unable to publish message.")
-						message.Ack(false) // ack to remove from queue
-						return
+				hasv1beta1Task, v1beta1Bytes, err := lagoonv1beta1.CancelTask(ctx, m.Client, namespace, message.Body())
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+				if v1beta1Bytes != nil && v1beta2Bytes != nil {
+					// check if either v1beta2 or v1beta1 have a matching task
+					if hasv1beta2Task && !hasv1beta1Task {
+						// if v1beta2 has a task, send its response
+						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+					} else if !hasv1beta2Task && hasv1beta1Task {
+						// if v1beta1 has a task, send its response
+						if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
+					} else {
+						// if both v1beta2 and v1beta1 say there is no associated task
+						// then respond with the v1beta2 response
+						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+							opLog.Error(err, "Unable to publish message.")
+							message.Ack(false) // ack to remove from queue
+							return
+						}
 					}
 				}
 			case "deploytarget:restic:backup:restore", "kubernetes:restic:backup:restore":

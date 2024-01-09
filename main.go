@@ -45,8 +45,10 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	harborctrl "github.com/uselagoon/remote-controller/controllers/harbor"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
+	lagoonv1beta2ctrl "github.com/uselagoon/remote-controller/controllers/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -75,6 +77,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = lagoonv1beta1.AddToScheme(scheme)
+	_ = lagoonv1beta2.AddToScheme(scheme)
 	_ = k8upv1.AddToScheme(scheme)
 	_ = k8upv1alpha1.AddToScheme(scheme)
 	_ = apiextensionsv1.AddToScheme(scheme)
@@ -663,6 +666,11 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
+	buildQoSConfigv1beta2 := lagoonv1beta2ctrl.BuildQoS{
+		MaxBuilds:    qosMaxBuilds,
+		DefaultValue: qosDefaultValue,
+	}
+
 	resourceCleanup := pruner.New(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
@@ -680,6 +688,7 @@ func main() {
 		// use cron to run a lagoonbuild cleanup task
 		// this will check any Lagoon builds and attempt to delete them
 		c.AddFunc(buildsCleanUpCron, func() {
+			lagoonv1beta2.LagoonBuildPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildsToKeep)
 			lagoonv1beta1.LagoonBuildPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildsToKeep)
 		})
 	}
@@ -689,6 +698,7 @@ func main() {
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
 		c.AddFunc(buildPodCleanUpCron, func() {
+			lagoonv1beta2.BuildPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildPodsToKeep)
 			lagoonv1beta1.BuildPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildPodsToKeep)
 		})
 	}
@@ -698,6 +708,7 @@ func main() {
 		// use cron to run a lagoontask cleanup task
 		// this will check any Lagoon tasks and attempt to delete them
 		c.AddFunc(taskCleanUpCron, func() {
+			lagoonv1beta2.LagoonTaskPruner(context.Background(), mgr.GetClient(), controllerNamespace, tasksToKeep)
 			lagoonv1beta1.LagoonTaskPruner(context.Background(), mgr.GetClient(), controllerNamespace, tasksToKeep)
 		})
 	}
@@ -707,6 +718,7 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		c.AddFunc(taskPodCleanUpCron, func() {
+			lagoonv1beta2.TaskPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, taskPodsToKeep)
 			lagoonv1beta1.TaskPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, taskPodsToKeep)
 		})
 	}
@@ -837,6 +849,112 @@ func main() {
 		EnableDebug:      enableDebug,
 		LagoonTargetName: lagoonTargetName,
 		ProxyConfig: lagoonv1beta1ctrl.ProxyConfig{
+			HTTPProxy:  httpProxy,
+			HTTPSProxy: httpsProxy,
+			NoProxy:    noProxy,
+		},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
+		os.Exit(1)
+	}
+
+	// v1beta2 is the latest version
+	if err = (&lagoonv1beta2ctrl.LagoonBuildReconciler{
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuild"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		BuildImage:            overrideBuildDeployImage,
+		Messaging:             messaging,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		ControllerNamespace:   controllerNamespace,
+		EnableDebug:           enableDebug,
+		FastlyServiceID:       fastlyServiceID,
+		FastlyWatchStatus:     fastlyWatchStatus,
+		BuildPodRunAsUser:     int64(buildPodRunAsUser),
+		BuildPodRunAsGroup:    int64(buildPodRunAsGroup),
+		BuildPodFSGroup:       int64(buildPodFSGroup),
+		BackupConfig: lagoonv1beta2ctrl.BackupConfig{
+			BackupDefaultSchedule:             backupDefaultSchedule,
+			BackupDefaultDevelopmentSchedule:  backupDefaultDevelopmentSchedule,
+			BackupDefaultPullrequestSchedule:  backupDefaultPullrequestSchedule,
+			BackupDefaultDevelopmentRetention: backupDefaultDevelopmentRetention,
+			BackupDefaultPullrequestRetention: backupDefaultPullrequestRetention,
+			BackupDefaultMonthlyRetention:     backupDefaultMonthlyRetention,
+			BackupDefaultWeeklyRetention:      backupDefaultWeeklyRetention,
+			BackupDefaultDailyRetention:       backupDefaultDailyRetention,
+			BackupDefaultHourlyRetention:      backupDefaultHourlyRetention,
+		},
+		// Lagoon feature flags
+		LFFForceRootlessWorkload:         lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload:       lffDefaultRootlessWorkload,
+		LFFForceIsolationNetworkPolicy:   lffForceIsolationNetworkPolicy,
+		LFFDefaultIsolationNetworkPolicy: lffDefaultIsolationNetworkPolicy,
+		LFFForceInsights:                 lffForceInsights,
+		LFFDefaultInsights:               lffDefaultInsights,
+		LFFForceRWX2RWO:                  lffForceRWX2RWO,
+		LFFDefaultRWX2RWO:                lffDefaultRWX2RWO,
+		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
+		LFFRouterURL:                     lffRouterURL,
+		LFFHarborEnabled:                 lffHarborEnabled,
+		Harbor:                           harborConfig,
+		LFFQoSEnabled:                    lffQoSEnabled,
+		BuildQoS:                         buildQoSConfigv1beta2,
+		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
+		LagoonTargetName:                 lagoonTargetName,
+		LagoonFeatureFlags:               helpers.GetLagoonFeatureFlags(),
+		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
+		},
+		ProxyConfig: lagoonv1beta2ctrl.ProxyConfig{
+			HTTPProxy:  httpProxy,
+			HTTPSProxy: httpsProxy,
+			NoProxy:    noProxy,
+		},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
+		os.Exit(1)
+	}
+	if err = (&lagoonv1beta2ctrl.LagoonMonitorReconciler{
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonMonitor"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		Messaging:             messaging,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		EnableDebug:           enableDebug,
+		LagoonTargetName:      lagoonTargetName,
+		LFFQoSEnabled:         lffQoSEnabled,
+		BuildQoS:              buildQoSConfigv1beta2,
+		Cache:                 cache,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
+		os.Exit(1)
+	}
+	if err = (&lagoonv1beta2ctrl.LagoonTaskReconciler{
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonTask"),
+		Scheme:                mgr.GetScheme(),
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		LagoonAPIConfiguration: helpers.LagoonAPIConfiguration{
+			APIHost:   lagoonAPIHost,
+			TokenHost: lagoonTokenHost,
+			TokenPort: lagoonTokenPort,
+			SSHHost:   lagoonSSHHost,
+			SSHPort:   lagoonSSHPort,
+		},
+		EnableDebug:      enableDebug,
+		LagoonTargetName: lagoonTargetName,
+		ProxyConfig: lagoonv1beta2ctrl.ProxyConfig{
 			HTTPProxy:  httpProxy,
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,

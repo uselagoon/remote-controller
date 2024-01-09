@@ -241,8 +241,8 @@ func (in *LagoonLogMeta) DeepCopyInto(out *LagoonLogMeta) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.ServicesV2 != nil {
-		in, out := &in.ServicesV2, &out.ServicesV2
+	if in.EnvironmentServices != nil {
+		in, out := &in.EnvironmentServices, &out.EnvironmentServices
 		*out = make([]LagoonService, len(*in))
 		copy(*out, *in)
 	}

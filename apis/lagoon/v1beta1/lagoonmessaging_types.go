@@ -15,36 +15,46 @@ type LagoonLog struct {
 
 // LagoonLogMeta is the metadata that is used by logging in Lagoon.
 type LagoonLogMeta struct {
-	BranchName    string          `json:"branchName,omitempty"`
-	BuildName     string          `json:"buildName,omitempty"`
-	BuildPhase    string          `json:"buildPhase,omitempty"` // @TODO: deprecate once controller-handler is fixed
-	BuildStatus   string          `json:"buildStatus,omitempty"`
-	BuildStep     string          `json:"buildStep,omitempty"`
-	EndTime       string          `json:"endTime,omitempty"`
-	Environment   string          `json:"environment,omitempty"`
-	EnvironmentID *uint           `json:"environmentId,omitempty"`
-	JobName       string          `json:"jobName,omitempty"`   // used by tasks/jobs
-	JobStatus     string          `json:"jobStatus,omitempty"` // used by tasks/jobs
-	JobStep       string          `json:"jobStep,omitempty"`   // used by tasks/jobs
-	LogLink       string          `json:"logLink,omitempty"`
-	Project       string          `json:"project,omitempty"`
-	ProjectID     *uint           `json:"projectId,omitempty"`
-	ProjectName   string          `json:"projectName,omitempty"`
-	RemoteID      string          `json:"remoteId,omitempty"`
-	Route         string          `json:"route,omitempty"`
-	Routes        []string        `json:"routes,omitempty"`
-	StartTime     string          `json:"startTime,omitempty"`
-	Services      []string        `json:"services,omitempty"`
-	ServicesV2    []LagoonService `json:"servicesv2,omitempty"`
-	Task          *LagoonTaskInfo `json:"task,omitempty"`
-	Key           string          `json:"key,omitempty"`
-	AdvancedData  string          `json:"advancedData,omitempty"`
-	Cluster       string          `json:"clusterName,omitempty"`
+	BranchName          string          `json:"branchName,omitempty"`
+	BuildName           string          `json:"buildName,omitempty"`
+	BuildPhase          string          `json:"buildPhase,omitempty"` // @TODO: deprecate once controller-handler is fixed
+	BuildStatus         string          `json:"buildStatus,omitempty"`
+	BuildStep           string          `json:"buildStep,omitempty"`
+	EndTime             string          `json:"endTime,omitempty"`
+	Environment         string          `json:"environment,omitempty"`
+	EnvironmentID       *uint           `json:"environmentId,omitempty"`
+	JobName             string          `json:"jobName,omitempty"`   // used by tasks/jobs
+	JobStatus           string          `json:"jobStatus,omitempty"` // used by tasks/jobs
+	JobStep             string          `json:"jobStep,omitempty"`   // used by tasks/jobs
+	LogLink             string          `json:"logLink,omitempty"`
+	Project             string          `json:"project,omitempty"`
+	ProjectID           *uint           `json:"projectId,omitempty"`
+	ProjectName         string          `json:"projectName,omitempty"`
+	RemoteID            string          `json:"remoteId,omitempty"`
+	Route               string          `json:"route,omitempty"`
+	Routes              []string        `json:"routes,omitempty"`
+	StartTime           string          `json:"startTime,omitempty"`
+	Services            []string        `json:"services,omitempty"`
+	EnvironmentServices []LagoonService `json:"environmentServices,omitempty"`
+	Task                *LagoonTaskInfo `json:"task,omitempty"`
+	Key                 string          `json:"key,omitempty"`
+	AdvancedData        string          `json:"advancedData,omitempty"`
+	Cluster             string          `json:"clusterName,omitempty"`
 }
 
+// LagoonService is the same as EnvironmentService type from the lagoon Schema
 type LagoonService struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	ID         int                    `json:"id,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	Type       string                 `json:"type,omitempty"`
+	Updated    string                 `json:"updated,omitempty"`
+	Containers []EnvironmentContainer `json:"containers,omitempty"`
+	Created    string                 `json:"created,omitempty"`
+}
+
+// EnvironmentService  is based on the Lagoon API type.
+type EnvironmentContainer struct {
+	Name string `json:"name,omitempty"`
 }
 
 // LagoonMessage is used for sending build info back to Lagoon

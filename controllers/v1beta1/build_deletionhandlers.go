@@ -318,29 +318,26 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 			// generate the list of services to add to the environment
 			for _, pod := range podList.Items {
 				var serviceName, serviceType string
-				if _, ok := pod.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+				containers := []lagoonv1beta1.EnvironmentContainer{}
+				if name, ok := pod.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+					serviceName = name
+					serviceNames = append(serviceNames, serviceName)
 					for _, container := range pod.Spec.Containers {
-						serviceNames = append(serviceNames, container.Name)
-						serviceName = container.Name
-					}
-				}
-				if _, ok := pod.ObjectMeta.Labels["service"]; ok {
-					// @TODO: remove this as this label shouldn't exist by now
-					for _, container := range pod.Spec.Containers {
-						serviceNames = append(serviceNames, container.Name)
-						serviceName = container.Name
+						containers = append(containers, lagoonv1beta1.EnvironmentContainer{Name: container.Name})
 					}
 				}
 				if sType, ok := pod.ObjectMeta.Labels["lagoon.sh/service-type"]; ok {
 					serviceType = sType
 				}
+				// probably need to collect dbaas consumers too at some stage
 				services = append(services, lagoonv1beta1.LagoonService{
-					Name: serviceName,
-					Type: serviceType,
+					Name:       serviceName,
+					Type:       serviceType,
+					Containers: containers,
 				})
 			}
 			msg.Meta.Services = serviceNames
-			msg.Meta.ServicesV2 = services
+			msg.Meta.EnvironmentServices = services
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if lagoonEnv != nil {

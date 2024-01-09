@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	"strings"
@@ -23,16 +23,15 @@ import (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta2"
+//+kubebuilder:storageversion
 
 // LagoonBuild is the Schema for the lagoonbuilds API
 type LagoonBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
-	Status         LagoonBuildStatus     `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+	Spec   LagoonBuildSpec   `json:"spec,omitempty"`
+	Status LagoonBuildStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -73,8 +72,6 @@ func (b BuildStatusType) ToLower() string {
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-//+kubebuilder:subresource:status
 
 // LagoonBuildSpec defines the desired state of LagoonBuild
 type LagoonBuildSpec struct {

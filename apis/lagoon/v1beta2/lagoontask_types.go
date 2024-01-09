@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	"encoding/json"
@@ -31,16 +31,15 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // +kubebuilder:object:root=true
-// +kubebuilder:deprecatedversion:warning="use lagoontasks.crd.lagoon.sh/v1beta2"
+//+kubebuilder:storageversion
 
 // LagoonTask is the Schema for the lagoontasks API
 type LagoonTask struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
-	Status         LagoonTaskStatus      `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+	Spec   LagoonTaskSpec   `json:"spec,omitempty"`
+	Status LagoonTaskStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -104,18 +103,6 @@ type LagoonTaskSpec struct {
 	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
 	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`
 	AdvancedTask *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
-}
-
-// LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.
-type LagoonTaskInfo struct {
-	ID       string `json:"id"` // should be int, but the api sends it as a string :\
-	Name     string `json:"name,omitempty"`
-	TaskName string `json:"taskName,omitempty"`
-	Service  string `json:"service,omitempty"`
-	Command  string `json:"command,omitempty"`
-	SSHHost  string `json:"sshHost,omitempty"`
-	SSHPort  string `json:"sshPort,omitempty"`
-	APIHost  string `json:"apiHost,omitempty"`
 }
 
 // LagoonAdvancedTaskInfo defines what an advanced task can use for the creation of the pod.

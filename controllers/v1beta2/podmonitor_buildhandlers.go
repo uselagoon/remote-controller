@@ -1,4 +1,4 @@
-package v1beta1
+package v1beta2
 
 // this file is used by the `lagoonmonitor` controller
 
@@ -11,8 +11,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uselagoon/machinery/api/schema"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,7 +31,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	jobPod corev1.Pod,
 ) error {
 	// get the build associated to this pod, we wil need update it at some point
-	var lagoonBuild lagoonv1beta1.LagoonBuild
+	var lagoonBuild lagooncrd.LagoonBuild
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: jobPod.ObjectMeta.Namespace,
 		Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
@@ -64,11 +65,11 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 				if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 					// if we have a failure state, then fail the build and get the logs from the container
 					opLog.Info(fmt.Sprintf("Build failed, container exit reason was: %v", container.State.Waiting.Reason))
-					lagoonBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusFailed.String()
+					lagoonBuild.Labels["lagoon.sh/buildStatus"] = lagooncrd.BuildStatusFailed.String()
 					if err := r.Update(ctx, &lagoonBuild); err != nil {
 						return err
 					}
-					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, lagoonv1beta1.BuildStatusFailed.String()))
+					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, lagooncrd.BuildStatusFailed.String()))
 					if err := r.Delete(ctx, &jobPod); err != nil {
 						return err
 					}
@@ -106,7 +107,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 		// if the pod is running and detects a change to the pod (eg, detecting an updated lagoon.sh/buildStep label)
 		// then ship or store the logs
 		// get the build associated to this pod, the information in the resource is used for shipping the logs
-		var lagoonBuild lagoonv1beta1.LagoonBuild
+		var lagoonBuild lagooncrd.LagoonBuild
 		err := r.Get(ctx,
 			types.NamespacedName{
 				Namespace: jobPod.ObjectMeta.Namespace,
@@ -120,7 +121,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	// mark the build accordingly and ship the information back to lagoon
 	if jobPod.Status.Phase == corev1.PodFailed || jobPod.Status.Phase == corev1.PodSucceeded {
 		// get the build associated to this pod, we wil need update it at some point
-		var lagoonBuild lagoonv1beta1.LagoonBuild
+		var lagoonBuild lagooncrd.LagoonBuild
 		err := r.Get(ctx,
 			types.NamespacedName{
 				Namespace: jobPod.ObjectMeta.Namespace,
@@ -138,7 +139,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
 func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
 	namespace *corev1.Namespace,
 	condition string,
@@ -179,7 +180,6 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
 				ProjectID:     projectID,
 				BuildName:     jobPod.ObjectMeta.Name,
 				BranchName:    envName,
-				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				RemoteID:      remoteId,
@@ -229,7 +229,7 @@ Logs on pod %s, assigned to cluster %s
 // this is for the handler in lagoon to process.
 func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
 	namespace *corev1.Namespace,
@@ -246,6 +246,12 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 			buildStep = value
 		}
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
+			time.AfterFunc(31*time.Second, func() {
+				buildRunningStatus.Delete(prometheus.Labels{
+					"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+					"build_name":      lagoonBuild.ObjectMeta.Name,
+				})
+			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		envName := lagoonBuild.Spec.Project.Environment
@@ -273,7 +279,6 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 				Project:       projectName,
 				ProjectID:     projectID,
 				BuildName:     jobPod.ObjectMeta.Name,
-				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
@@ -359,7 +364,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
+	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
 	lagoonEnv *corev1.ConfigMap,
 	namespace *corev1.Namespace,
@@ -397,7 +402,6 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 				ProjectName:   projectName,
 				BranchName:    envName,
 				BuildName:     jobPod.ObjectMeta.Name,
-				BuildPhase:    condition, // @TODO: same as buildstatus label, remove once lagoon is corrected in controller-handler
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
@@ -456,22 +460,22 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Contex
 func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
-	lagoonBuild lagoonv1beta1.LagoonBuild,
+	lagoonBuild lagooncrd.LagoonBuild,
 	jobPod corev1.Pod,
 	logs []byte,
 	cancel bool,
 ) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	buildCondition := lagoonv1beta1.GetBuildConditionFromPod(jobPod.Status.Phase)
+	buildCondition := lagooncrd.GetBuildConditionFromPod(jobPod.Status.Phase)
 	collectLogs := true
 	if cancel {
 		// only set the status to cancelled if the pod is running/pending/queued
 		// otherwise send the existing status of complete/failed/cancelled
 		if helpers.ContainsString(
-			lagoonv1beta1.BuildRunningPendingStatus,
+			lagooncrd.BuildRunningPendingStatus,
 			lagoonBuild.Labels["lagoon.sh/buildStatus"],
 		) {
-			buildCondition = lagoonv1beta1.BuildStatusCancelled
+			buildCondition = lagooncrd.BuildStatusCancelled
 		}
 		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
 			collectLogs = false
@@ -491,7 +495,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 	// if the buildstatus is pending or running, or the cancel flag is provided
 	// send the update status to lagoon
 	if helpers.ContainsString(
-		lagoonv1beta1.BuildRunningPendingStatus,
+		lagooncrd.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) || cancel {
 		opLog.Info(
@@ -539,12 +543,12 @@ Build %s
 			"statusMessages": map[string]interface{}{},
 		}
 
-		condition := lagoonv1beta1.LagoonBuildConditions{
+		condition := lagooncrd.LagoonBuildConditions{
 			Type:               buildCondition,
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: time.Now().UTC().Format(time.RFC3339),
 		}
-		if !lagoonv1beta1.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
+		if !lagooncrd.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
 			lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
 			mergeMap["status"] = map[string]interface{}{
 				"conditions": lagoonBuild.Status.Conditions,

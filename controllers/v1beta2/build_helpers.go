@@ -1,4 +1,4 @@
-package v1beta1
+package v1beta2
 
 import (
 	"bytes"
@@ -18,13 +18,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/prometheus/client_golang/prometheus"
+	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
 var (
-	crdVersion string = "v1beta1"
+	crdVersion string = "v1beta2"
 )
 
 const (
@@ -89,7 +90,7 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 }
 
 // getOrCreateNamespace will create the namespace if it doesn't exist.
-func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagoonv1beta1.LagoonBuild, opLog logr.Logger) error {
+func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagooncrd.LagoonBuild, opLog logr.Logger) error {
 	// parse the project/env through the project pattern, or use the default
 	ns := helpers.GenerateNamespaceName(
 		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
@@ -259,7 +260,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 // getCreateOrUpdateSSHKeySecret will create or update the ssh key.
 func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Context,
 	sshKey *corev1.Secret,
-	spec lagoonv1beta1.LagoonBuildSpec,
+	spec lagooncrd.LagoonBuildSpec,
 	ns string) error {
 	sshKey.ObjectMeta = metav1.ObjectMeta{
 		Name:      "lagoon-sshkey",
@@ -307,7 +308,7 @@ func (r *LagoonBuildReconciler) getOrCreateConfigMap(ctx context.Context, cmName
 }
 
 // processBuild will actually process the build.
-func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagoonv1beta1.LagoonBuild) error {
+func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagooncrd.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
 	opLog.Info(fmt.Sprintf("Checking and preparing namespace and associated resources for build: %s", lagoonBuild.ObjectMeta.Name))
 	// create the lagoon-sshkey secret
@@ -506,7 +507,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	})
 	podEnvs = append(podEnvs, corev1.EnvVar{
 		Name:  "REGISTRY",
-		Value: r.UnauthenticatedRegistry,
+		Value: lagoonBuild.Spec.Project.Registry,
 	})
 	// this is enabled by default for now
 	// eventually will be disabled by default because support for the generation/modification of this will
@@ -787,12 +788,12 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				"lagoon.sh/jobType":       "build",
 				"lagoon.sh/buildName":     lagoonBuild.ObjectMeta.Name,
 				"lagoon.sh/controller":    r.ControllerNamespace,
-				"lagoon.sh/crdVersion":    crdVersion,
+				"crd.lagoon.sh/version":   crdVersion,
 				"lagoon.sh/buildRemoteID": string(lagoonBuild.ObjectMeta.UID),
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: fmt.Sprintf("%v", lagoonv1beta1.GroupVersion),
+					APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 					Kind:       "LagoonBuild",
 					Name:       lagoonBuild.ObjectMeta.Name,
 					UID:        lagoonBuild.UID,
@@ -870,6 +871,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// @TODO: should update the build to failed
 			return nil
 		}
+		buildRunningStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+		}).Set(1)
+		buildStatus.With(prometheus.Labels{
+			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
+			"build_name":      lagoonBuild.ObjectMeta.Name,
+			"build_step":      "running",
+		}).Set(1)
+		buildsStartedCounter.Inc()
 		// then break out of the build
 	}
 	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))
@@ -879,7 +890,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 // updateQueuedBuild will update a build if it is queued
 func (r *LagoonBuildReconciler) updateQueuedBuild(
 	ctx context.Context,
-	lagoonBuild lagoonv1beta1.LagoonBuild,
+	lagoonBuild lagooncrd.LagoonBuild,
 	queuePosition, queueLength int,
 	opLog logr.Logger,
 ) error {
@@ -911,14 +922,14 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
-	if lagoonv1beta1.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
+	if lagooncrd.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued)
 	} else {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
 
 	}
 	return nil
@@ -927,7 +938,7 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 // cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod, pending in queue)
 func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 	ctx context.Context,
-	lagoonBuild lagoonv1beta1.LagoonBuild,
+	lagoonBuild lagooncrd.LagoonBuild,
 	message string,
 	opLog logr.Logger,
 	cancelled bool,
@@ -941,8 +952,8 @@ func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 Build cancelled
 ========================================
 %s`, message))
-		var buildCondition lagoonv1beta1.BuildStatusType
-		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		var buildCondition lagooncrd.BuildStatusType
+		buildCondition = lagooncrd.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -972,10 +983,10 @@ Build cancelled
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
 	if cancelled {
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
+		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
@@ -985,10 +996,10 @@ Build cancelled
 	return nil
 }
 
-func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
+func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagooncrd.LagoonBuildList, ns string, status string) error {
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
+		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagooncrd.BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
@@ -1009,12 +1020,12 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 			} else {
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Attempting to cancel build %s", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
+				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagooncrd.BuildStatusCancelled.String()
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return fmt.Errorf("There was an error updating the pending build. Error was: %v", err)
 			}
-			var lagoonBuild lagoonv1beta1.LagoonBuild
+			var lagoonBuild lagooncrd.LagoonBuild
 			if err := r.Get(ctx, types.NamespacedName{
 				Namespace: pendingBuild.ObjectMeta.Namespace,
 				Name:      pendingBuild.ObjectMeta.Name,
@@ -1028,7 +1039,7 @@ func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog log
 	return nil
 }
 
-func sortBuilds(defaultPriority int, pendingBuilds *lagoonv1beta1.LagoonBuildList) {
+func sortBuilds(defaultPriority int, pendingBuilds *lagooncrd.LagoonBuildList) {
 	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
 		// sort by priority, then creation timestamp
 		iPriority := defaultPriority

@@ -1,10 +1,12 @@
-package v1beta1
+package v1beta2
 
 // contains all the event watch conditions for secret and ingresses
 
 import (
 	"regexp"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -20,7 +22,7 @@ type PodPredicates struct {
 func (p PodPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 						match, _ := regexp.MatchString("^lagoon-build", value)
@@ -42,7 +44,7 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 						match, _ := regexp.MatchString("^lagoon-build", value)
@@ -64,10 +66,32 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 func (p PodPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/crdVersion"]; ok {
+			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/buildName"]; okOld {
 						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildName"]; ok {
+							oldBuildStep := "running"
+							newBuildStep := "running"
+							if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/buildStep"]; ok {
+								newBuildStep = value
+							}
+							if value, ok := e.ObjectOld.GetLabels()["lagoon.sh/buildStep"]; ok {
+								oldBuildStep = value
+							}
+							if newBuildStep != oldBuildStep {
+								buildStatus.With(prometheus.Labels{
+									"build_namespace": e.ObjectOld.GetNamespace(),
+									"build_name":      e.ObjectOld.GetName(),
+									"build_step":      newBuildStep,
+								}).Set(1)
+							}
+							time.AfterFunc(31*time.Second, func() {
+								buildStatus.Delete(prometheus.Labels{
+									"build_namespace": e.ObjectOld.GetNamespace(),
+									"build_name":      e.ObjectOld.GetName(),
+									"build_step":      oldBuildStep,
+								})
+							})
 							match, _ := regexp.MatchString("^lagoon-build", value)
 							return match
 						}
@@ -90,7 +114,7 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 func (p PodPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
-			if value, ok := e.Object.GetLabels()["lagoon.sh/crdVersion"]; ok {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 						match, _ := regexp.MatchString("^lagoon-build", value)
@@ -119,8 +143,10 @@ type BuildPredicates struct {
 func (b BuildPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -131,8 +157,10 @@ func (b BuildPredicates) Create(e event.CreateEvent) bool {
 func (b BuildPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -143,8 +171,10 @@ func (b BuildPredicates) Delete(e event.DeleteEvent) bool {
 func (b BuildPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
-			if _, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -155,8 +185,10 @@ func (b BuildPredicates) Update(e event.UpdateEvent) bool {
 func (b BuildPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == b.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -174,8 +206,10 @@ type TaskPredicates struct {
 func (t TaskPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -186,8 +220,10 @@ func (t TaskPredicates) Create(e event.CreateEvent) bool {
 func (t TaskPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -198,8 +234,10 @@ func (t TaskPredicates) Delete(e event.DeleteEvent) bool {
 func (t TaskPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
-			if _, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}
@@ -210,8 +248,10 @@ func (t TaskPredicates) Update(e event.UpdateEvent) bool {
 func (t TaskPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == t.ControllerNamespace {
-			if _, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; !ok {
-				return true
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					return true
+				}
 			}
 		}
 	}

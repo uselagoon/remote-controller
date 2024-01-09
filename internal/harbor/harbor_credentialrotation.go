@@ -2,7 +2,6 @@ package harbor
 
 import (
 	"fmt"
-	"sort"
 
 	"context"
 	"time"
@@ -45,32 +44,8 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		}
 		opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 		// check for running builds!
-		lagoonBuilds := &lagoonv1beta1.LagoonBuildList{}
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
-			client.MatchingLabels(map[string]string{
-				"lagoon.sh/controller": h.ControllerNamespace, // created by this controller
-			}),
-		})
-		if err := cl.List(context.Background(), lagoonBuilds, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
-			continue
-		}
-		runningBuilds := false
-		sort.Slice(lagoonBuilds.Items, func(i, j int) bool {
-			return lagoonBuilds.Items[i].ObjectMeta.CreationTimestamp.After(lagoonBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
-		})
-		// if there are any builds pending or running, don't try and refresh the credentials as this
-		// could break the build
-		if len(lagoonBuilds.Items) > 0 {
-			if helpers.ContainsString(
-				helpers.BuildRunningPendingStatus,
-				lagoonBuilds.Items[0].Labels["lagoon.sh/buildStatus"],
-			) {
-				runningBuilds = true
-			}
-		}
-		if !runningBuilds {
+		runningBuildsv1beta1 := lagoonv1beta1.CheckRunningBuilds(ctx, h.ControllerNamespace, opLog, cl, ns)
+		if !runningBuildsv1beta1 {
 			rotated, err := h.RotateRobotCredential(ctx, cl, ns, false)
 			if err != nil {
 				opLog.Error(err, "error")

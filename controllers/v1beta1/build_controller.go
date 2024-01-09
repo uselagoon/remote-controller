@@ -260,7 +260,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	err = helpers.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
+	err = lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -293,7 +293,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 		} else {
 			// get the status from the pod and update the build
 			if lagoonBuildPod.Status.Phase == corev1.PodFailed || lagoonBuildPod.Status.Phase == corev1.PodSucceeded {
-				buildCondition = helpers.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
+				buildCondition = lagoonv1beta1.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
 				opLog.Info(fmt.Sprintf("Setting build %s as %s", runningBuild.ObjectMeta.Name, buildCondition.String()))
 				runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 			} else {

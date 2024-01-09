@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/uselagoon/machinery/api/schema"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -76,7 +77,7 @@ type LagoonTaskSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Key          string                  `json:"key,omitempty"`
-	Task         LagoonTaskInfo          `json:"task,omitempty"`
+	Task         schema.LagoonTaskInfo   `json:"task,omitempty"`
 	Project      LagoonTaskProject       `json:"project,omitempty"`
 	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
 	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`

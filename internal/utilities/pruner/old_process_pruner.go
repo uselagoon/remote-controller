@@ -4,16 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"time"
-	//lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	//"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
 // LagoonOldProcPruner will identify and remove any long running builds or tasks.

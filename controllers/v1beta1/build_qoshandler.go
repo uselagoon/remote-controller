@@ -128,7 +128,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
-						if err := helpers.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
+						if err := lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
 							// only return if there is an error doing this operation
 							// continue on otherwise to allow the queued status updater to run
 							runningProcessQueue = false

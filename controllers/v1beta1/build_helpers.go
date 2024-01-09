@@ -922,7 +922,7 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
-	if helpers.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
+	if lagoonv1beta1.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
 		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)

@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 )
 
@@ -97,10 +98,10 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		get any deployments/statefulsets/daemonsets
 		then delete them
 	*/
-	if del := d.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := lagoonv1beta1.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), d.Client, namespace.ObjectMeta.Name, project, environment); del == false {
 		return fmt.Errorf("error deleting tasks")
 	}
-	if del := d.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := lagoonv1beta1.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), d.Client, namespace.ObjectMeta.Name, project, environment); del == false {
 		return fmt.Errorf("error deleting builds")
 	}
 	if del := d.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), namespace.ObjectMeta.Name, project, environment); del == false {

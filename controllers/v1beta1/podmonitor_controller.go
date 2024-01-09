@@ -125,7 +125,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		} else {
 			if helpers.ContainsString(
-				helpers.BuildRunningPendingStatus,
+				lagoonv1beta1.BuildRunningPendingStatus,
 				lagoonBuild.Labels["lagoon.sh/buildStatus"],
 			) {
 				opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
@@ -162,7 +162,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			// if we have no running builds, then check for any pending builds
 			if len(runningBuilds.Items) == 0 {
-				return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+				return ctrl.Result{}, lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 			}
 		} else {
 			// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op

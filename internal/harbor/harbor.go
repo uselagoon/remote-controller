@@ -35,6 +35,14 @@ type Harbor struct {
 	WebhookEventTypes     []string
 	LagoonTargetName      string
 	Config                *config.Options
+	TagRetention          TagRetention
+}
+
+type TagRetention struct {
+	Enabled              bool   `json:"enabled"`
+	BranchRetention      int    `json:"branchRetention"`
+	PullRequestRetention int    `json:"pullrequestRetention"`
+	Schedule             string `json:"schedule"`
 }
 
 // New create a new harbor connection.

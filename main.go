@@ -175,6 +175,11 @@ func main() {
 	var enablePodProxy bool
 	var podsUseDifferentProxy bool
 
+	// @TODO: policy control in remote-controller disabled for now
+	// var enableHarborRetentionPolicy bool
+	// var harborRetentionBranch, harborRetentionPullrequest int
+	// var harborRetentionSchedule string
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -368,6 +373,15 @@ func main() {
 	flag.IntVar(&pvcRetryAttempts, "delete-pvc-retry-attempts", 30, "How many attempts to check that PVCs have been removed (default 30).")
 	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
 
+	// retention policy configuration
+	// @TODO: policy control in remote-controller disabled for now
+	// flag.BoolVar(&enableHarborRetentionPolicy, "enable-harbor-retention-policy", false,
+	// 	"Flag to have this controller create and manage retention policies.\n The Lagoon API can also configure per project retention policies which will override the controller defined policy.")
+	// flag.IntVar(&harborRetentionBranch, "harbor-retention-branch", 5, "The number of latest pulled image tags for branch environments to retain.")
+	// flag.IntVar(&harborRetentionPullrequest, "harbor-retention-pullrequest", 1, "The number of latest pulled image tags for pullrequest environments to retain.")
+	// flag.StringVar(&harborRetentionSchedule, "harbor-retention-schedule", "M H(22-2) D(5-25) * *",
+	// 	"The schedule to use for harbor tag retentions, the lagoon project name will influence any replacement values that impact the time this could run per harbor project.")
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -458,6 +472,18 @@ func main() {
 			noProxy = helpers.GetEnv("LAGOON_NO_PROXY", noProxy)
 		}
 	}
+
+	// @TODO: policy control in remote-controller disabled for now
+	// enableHarborRetentionPolicy = helpers.GetEnvBool("HARBOR_RETENTION_POLICIES_ENABLED", enableHarborRetentionPolicy)
+	// harborRetentionBranch = helpers.GetEnvInt("HARBOR_RETENTION_POLICY_BRANCH", harborRetentionBranch)
+	// harborRetentionPullrequest = helpers.GetEnvInt("HARBOR_RETENTION_POLICY_PULLREQUEST", harborRetentionPullrequest)
+	// harborRetentionSchedule = helpers.GetEnv("HARBOR_RETENTION_POLICY_SCHEDULE", harborRetentionSchedule)
+	// validate provided retention policy and crash the controller if it is invalid
+	// _, err := helpers.ConvertCrontab("seed-data", harborRetentionSchedule)
+	// if err != nil {
+	// 	setupLog.Error(err, "unable to start manager - harbor retention schedule is formatted incorrectly")
+	// 	os.Exit(1)
+	// }
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -624,6 +650,13 @@ func main() {
 		WebhookURL:            harborLagoonWebhook,
 		LagoonTargetName:      lagoonTargetName,
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
+		// @TODO: policy control in remote-controller disabled for now
+		// TagRetention: harbor.TagRetention{
+		// 	Enabled:              enableHarborRetentionPolicy,
+		// 	BranchRetention:      harborRetentionBranch,
+		// 	PullRequestRetention: harborRetentionPullrequest,
+		// 	Schedule:             harborRetentionSchedule,
+		// },
 	}
 
 	deletion := deletions.New(mgr.GetClient(),

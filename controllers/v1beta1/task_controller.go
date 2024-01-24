@@ -68,6 +68,22 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
+		// with the introduction of v1beta2, this will let any existing tasks continue through
+		// but once the task is done
+		if _, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok {
+			if helpers.ContainsString(
+				lagoonv1beta1.TaskCompletedCancelledFailedStatus,
+				lagoonTask.Labels["lagoon.sh/taskStatus"],
+			) {
+				opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1alpha1 is deprecated in favor of v1beta1",
+					lagoonTask.ObjectMeta.Name,
+					req.NamespacedName.Namespace,
+				))
+				if err := r.Delete(ctx, &lagoonTask); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
 		// check if the task that has been recieved is a standard or advanced task
 		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagoonv1beta1.TaskStatusPending.String() &&
 			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagoonv1beta1.TaskTypeStandard.String() {

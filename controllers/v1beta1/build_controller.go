@@ -135,6 +135,24 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				}
 			}
 		}
+
+		// with the introduction of v1beta2, this will let any existing pending/qeued/running builds continue through
+		// but once the build is completed or failed and has processed anything else it needs to do, it should delete the resource
+		if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if helpers.ContainsString(
+				lagoonv1beta1.BuildCompletedCancelledFailedStatus,
+				lagoonBuild.Labels["lagoon.sh/buildStatus"],
+			) {
+				opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1beta1 is deprecated in favor of v1beta2",
+					lagoonBuild.ObjectMeta.Name,
+					req.NamespacedName.Namespace,
+				))
+				if err := r.Delete(ctx, &lagoonBuild); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
+
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			// if we do have a `lagoon.sh/buildStatus` set as running, then process it

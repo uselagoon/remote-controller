@@ -140,6 +140,12 @@ type Project struct {
 	EnvironmentIdling     *int            `json:"environmentIdling,omitempty"`
 	ProjectIdling         *int            `json:"projectIdling,omitempty"`
 	StorageCalculator     *int            `json:"storageCalculator,omitempty"`
+	Organization          *Organization   `json:"organization,omitempty"`
+}
+
+type Organization struct {
+	ID   *uint  `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // Variables contains the project and environment variables from lagoon.

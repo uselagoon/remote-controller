@@ -323,6 +323,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, la
 		map[string]string{
 			"lagoon.sh/buildStatus": lagooncrd.BuildStatusPending.String(),
 			"lagoon.sh/controller":  r.ControllerNamespace,
+			"crd.lagoon.sh/version": crdVersion,
 		},
 	)
 	err := r.Get(ctx, types.NamespacedName{

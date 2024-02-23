@@ -75,12 +75,34 @@ func (b TaskType) String() string {
 type LagoonTaskSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Key          string                  `json:"key,omitempty"`
-	Task         LagoonTaskInfo          `json:"task,omitempty"`
-	Project      LagoonTaskProject       `json:"project,omitempty"`
-	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
-	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`
-	AdvancedTask *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
+	Key           string                  `json:"key,omitempty"`
+	Task          LagoonTaskInfo          `json:"task,omitempty"`
+	Project       LagoonTaskProject       `json:"project,omitempty"`
+	Environment   LagoonTaskEnvironment   `json:"environment,omitempty"`
+	Misc          *LagoonMiscInfo         `json:"misc,omitempty"`
+	AdvancedTask  *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
+	LagoonService LagoonServiceInfo       `json:"lagoonService,omitempty"`
+	Idling        LagoonIdling            `json:"lagoonIdling,omitempty"`
+}
+
+// TaskType const for the status type
+type ServiceState string
+
+// These are valid conditions of a job.
+const (
+	StateStop    ServiceState = "stop"
+	StateStart   ServiceState = "start"
+	StateRestart ServiceState = "restart"
+)
+
+type LagoonServiceInfo struct {
+	Name  string       `json:"name,omitempty"`
+	State ServiceState `json:"state,omitempty"`
+}
+
+type LagoonIdling struct {
+	Idle       bool `json:"idle,omitempty"`
+	ForceScale bool `json:"forceScale,omitempty"`
 }
 
 // LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.

@@ -45,6 +45,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/remote-controller/controllers/namespace"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/controllers/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
@@ -858,6 +859,18 @@ func main() {
 		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
+		os.Exit(1)
+	}
+	// start the namespace reconciler
+	if err = (&namespace.NamespaceReconciler{
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("namespace").WithName("Namespace"),
+		Scheme:           mgr.GetScheme(),
+		EnableMQ:         enableMQ,
+		Messaging:        messaging,
+		LagoonTargetName: lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)
 	}
 

@@ -296,21 +296,31 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 		})
 		depList := &appsv1.DeploymentList{}
 		serviceNames := []string{}
+		services := []lagoonv1beta1.LagoonService{}
 		if err := r.List(context.TODO(), depList, listOption); err == nil {
-			// generate the list of services to add to the environment
+			// generate the list of services to add or update to the environment
 			for _, deployment := range depList.Items {
-				if _, ok := deployment.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+				var serviceName, serviceType string
+				containers := []lagoonv1beta1.EnvironmentContainer{}
+				if name, ok := deployment.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+					serviceName = name
+					serviceNames = append(serviceNames, serviceName)
 					for _, container := range deployment.Spec.Template.Spec.Containers {
-						serviceNames = append(serviceNames, container.Name)
+						containers = append(containers, lagoonv1beta1.EnvironmentContainer{Name: container.Name})
 					}
 				}
-				if _, ok := deployment.ObjectMeta.Labels["service"]; ok {
-					for _, container := range deployment.Spec.Template.Spec.Containers {
-						serviceNames = append(serviceNames, container.Name)
-					}
+				if sType, ok := deployment.ObjectMeta.Labels["lagoon.sh/service-type"]; ok {
+					serviceType = sType
 				}
+				// probably need to collect dbaas consumers too at some stage
+				services = append(services, lagoonv1beta1.LagoonService{
+					Name:       serviceName,
+					Type:       serviceType,
+					Containers: containers,
+				})
 			}
 			msg.Meta.Services = serviceNames
+			msg.Meta.EnvironmentServices = services
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if lagoonEnv != nil {

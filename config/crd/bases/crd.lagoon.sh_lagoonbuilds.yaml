@@ -237,6 +237,21 @@ spec:
                         type: string
                       environmentId:
                         type: integer
+                      environmentServices:
+                        items:
+                          properties:
+                            created:
+                              type: string
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                            updated:
+                              type: string
+                          type: object
+                        type: array
                       jobName:
                         type: string
                       jobStatus:
@@ -326,6 +341,21 @@ spec:
                         type: string
                       environmentId:
                         type: integer
+                      environmentServices:
+                        items:
+                          properties:
+                            created:
+                              type: string
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                            updated:
+                              type: string
+                          type: object
+                        type: array
                       jobName:
                         type: string
                       jobStatus:
@@ -417,6 +447,21 @@ spec:
                         type: string
                       environmentId:
                         type: integer
+                      environmentServices:
+                        items:
+                          properties:
+                            created:
+                              type: string
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                            updated:
+                              type: string
+                          type: object
+                        type: array
                       jobName:
                         type: string
                       jobStatus:
@@ -510,6 +555,21 @@ spec:
                         type: string
                       environmentId:
                         type: integer
+                      environmentServices:
+                        items:
+                          properties:
+                            created:
+                              type: string
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                            updated:
+                              type: string
+                          type: object
+                        type: array
                       jobName:
                         type: string
                       jobStatus:

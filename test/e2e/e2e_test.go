@@ -441,6 +441,36 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(strings.TrimSpace(string(result))).To(Equal(string(testResult)))
 			}
 
+			By("validating that restore cancellations are working")
+			By("creating a restore cancellation task via rabbitmq")
+			cmd = exec.Command(
+				"curl",
+				"-s",
+				"-u",
+				"guest:guest",
+				"-H",
+				"'Accept: application/json'",
+				"-H",
+				"'Content-Type:application/json'",
+				"-X",
+				"POST",
+				"-d",
+				"@test/e2e/testdata/cancel-restore.json",
+				"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
+			)
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			time.Sleep(10 * time.Second)
+
+			By("validating that the restore is deleted")
+			cmd = exec.Command("kubectl", "get",
+				"restores.k8up.io", "restore-bf072a0-uqxqo4",
+				"-n", "nginx-example-main",
+			)
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).To(HaveOccurred())
+
 			By("validating that the harbor robot credentials get rotated successfully")
 			cmd = exec.Command(utils.Kubectl(), "get",
 				"pods", "-l", "control-plane=controller-manager",

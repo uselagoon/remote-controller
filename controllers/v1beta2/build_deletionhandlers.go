@@ -42,7 +42,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		// only do it if the build status is Pending or Running though
 		err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to update the lagoon with LagoonBuild result"))
+			opLog.Error(err, "Unable to update the lagoon with LagoonBuild result")
 		}
 	} else {
 		opLog.Info(fmt.Sprintf("Found build pod for %s, deleting it", lagoonBuild.ObjectMeta.Name))
@@ -94,7 +94,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	})
 	// list any builds that are running
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list builds in the namespace, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list builds in the namespace, there may be none or something went wrong")
 		// just return nil so the deletion of the resource isn't held up
 		return nil
 	}
@@ -117,7 +117,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 			}),
 		})
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list builds in the namespace, there may be none or something went wrong"))
+			opLog.Error(err, "Unable to list builds in the namespace, there may be none or something went wrong")
 			// just return nil so the deletion of the resource isn't held up
 			return nil
 		}
@@ -144,11 +144,11 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 				},
 			})
 			if err := r.Patch(ctx, pendingBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update pending build to running status"))
+				opLog.Error(err, "Unable to update pending build to running status")
 				return nil
 			}
 		} else {
-			opLog.Info(fmt.Sprintf("No pending builds"))
+			opLog.Info("No pending builds")
 		}
 	}
 	return nil
@@ -177,15 +177,13 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 			),
 		)
 
-		var allContainerLogs []byte
 		// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
 		// so just set the logs to be cancellation message
-		allContainerLogs = []byte(fmt.Sprintf(`
+		allContainerLogs := []byte(`
 ========================================
 Build cancelled
-========================================`))
-		var buildCondition lagooncrd.BuildStatusType
-		buildCondition = lagooncrd.BuildStatusCancelled
+========================================`)
+		buildCondition := lagooncrd.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -195,7 +193,7 @@ Build cancelled
 			},
 		})
 		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to update build status"))
+			opLog.Error(err, "Unable to update build status")
 		}
 		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
 		var lagoonEnv corev1.ConfigMap
@@ -251,7 +249,7 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 			},
 		}
 		// add the actual build log message
-		msg.Message = fmt.Sprintf("%s", logs)
+		msg.Message = string(logs)
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
 			opLog.Error(err, "Unable to encode message as JSON")
@@ -440,7 +438,7 @@ func (r *LagoonBuildReconciler) updateEnvironmentMessage(ctx context.Context,
 		},
 	})
 	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
+		return fmt.Errorf("unable to update status condition: %v", err)
 	}
 	return nil
 }
@@ -462,7 +460,7 @@ func (r *LagoonBuildReconciler) updateBuildStatusMessage(ctx context.Context,
 		},
 	})
 	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
+		return fmt.Errorf("unable to update status condition: %v", err)
 	}
 	return nil
 }
@@ -484,7 +482,7 @@ func (r *LagoonBuildReconciler) removeBuildPendingMessageStatus(ctx context.Cont
 				"statusMessages": nil,
 			})
 			if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				return fmt.Errorf("Unable to update status condition: %v", err)
+				return fmt.Errorf("unable to update status condition: %v", err)
 			}
 		}
 	}
@@ -508,7 +506,7 @@ func (r *LagoonBuildReconciler) updateBuildLogMessage(ctx context.Context,
 		},
 	})
 	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
+		return fmt.Errorf("unable to update status condition: %v", err)
 	}
 	return nil
 }

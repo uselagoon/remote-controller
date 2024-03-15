@@ -84,7 +84,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	if len(pendingBuilds.Items) > 0 {
 		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
@@ -150,7 +150,7 @@ func CheckRunningBuilds(ctx context.Context, cns string, opLog logr.Logger, cl c
 		}),
 	})
 	if err := cl.List(context.Background(), lagoonBuilds, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list Lagoon build pods, there may be none or something went wrong")
 		return false
 	}
 	runningBuilds := false
@@ -223,7 +223,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -241,7 +241,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 			}),
 		})
 		if err := cl.List(ctx, lagoonBuilds, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuild resources, there may be none or something went wrong"))
+			opLog.Error(err, "Unable to list LagoonBuild resources, there may be none or something went wrong")
 			continue
 		}
 		// sort the build pods by creation timestamp
@@ -257,7 +257,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &lagoonBuild); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							opLog.Error(err, "Unable to update status condition")
 							break
 						}
 					}
@@ -265,7 +265,6 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 			}
 		}
 	}
-	return
 }
 
 // BuildPodPruner will prune any build pods that are hanging around.
@@ -279,7 +278,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -298,7 +297,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 			}),
 		})
 		if err := cl.List(ctx, buildPods, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
+			opLog.Error(err, "Unable to list Lagoon build pods, there may be none or something went wrong")
 			return
 		}
 		// sort the build pods by creation timestamp
@@ -312,7 +311,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &pod); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							opLog.Error(err, "Unable to update status condition")
 							break
 						}
 					}
@@ -320,10 +319,9 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 			}
 		}
 	}
-	return
 }
 
-func updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec LagoonTaskSpec, lagoonBuild *LagoonBuild) ([]byte, error) {
+func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *LagoonBuild) ([]byte, error) {
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
@@ -373,7 +371,7 @@ func updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec LagoonTaskSp
 	}
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to encode message as JSON: %v", err)
+		return nil, fmt.Errorf("unable to encode message as JSON: %v", err)
 	}
 	return msgBytes, nil
 }
@@ -404,7 +402,7 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 			))
 			// if there is no pod or build, update the build in Lagoon to cancelled, assume completely cancelled with no other information
 			// and then send the response back to lagoon to say it was cancelled.
-			b, err := updateLagoonBuild(opLog, namespace, *jobSpec, nil)
+			b, err := updateLagoonBuild(namespace, *jobSpec, nil)
 			return false, b, err
 		}
 		// as there is no build pod, but there is a lagoon build resource
@@ -427,7 +425,7 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 			return false, nil, err
 		}
 		// and then send the response back to lagoon to say it was cancelled.
-		b, err := updateLagoonBuild(opLog, namespace, *jobSpec, &lagoonBuild)
+		b, err := updateLagoonBuild(namespace, *jobSpec, &lagoonBuild)
 		return true, b, err
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"

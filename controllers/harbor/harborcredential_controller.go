@@ -43,7 +43,7 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		opLog.Info(fmt.Sprintf("Rotating harbor credentials for namespace %s", harborSecret.ObjectMeta.Namespace))
 		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
 		var ns corev1.Namespace
 		if err := r.Get(ctx, types.NamespacedName{Name: harborSecret.ObjectMeta.Namespace}, &ns); err != nil {
@@ -52,7 +52,7 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, ns, true)
 		if err != nil {
 			// @TODO: resource unknown
-			return ctrl.Result{}, fmt.Errorf("Error was: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error was: %v", err)
 		}
 		if rotated {
 			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))
@@ -65,7 +65,7 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			},
 		})
 		if err := r.Patch(ctx, &harborSecret, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			return ctrl.Result{}, fmt.Errorf("There was an error patching the harbor secret. Error was: %v", err)
+			return ctrl.Result{}, fmt.Errorf("there was an error patching the harbor secret. Error was: %v", err)
 		}
 	}
 

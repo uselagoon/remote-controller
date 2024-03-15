@@ -33,11 +33,11 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta2
 	asPayload := &ActiveStandbyPayload{}
 	asPayloadDecoded, err := base64.StdEncoding.DecodeString(jobSpec.AdvancedTask.JSONPayload)
 	if err != nil {
-		return fmt.Errorf("Unable to base64 decode payload: %v", err)
+		return fmt.Errorf("unable to base64 decode payload: %v", err)
 	}
 	err = json.Unmarshal([]byte(asPayloadDecoded), asPayload)
 	if err != nil {
-		return fmt.Errorf("Unable to unmarshal json payload: %v", err)
+		return fmt.Errorf("unable to unmarshal json payload: %v", err)
 	}
 	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
 		"lagoon.sh/activeStandby":                     "true",

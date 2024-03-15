@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -79,14 +80,14 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 								oldBuildStep = value
 							}
 							if newBuildStep != oldBuildStep {
-								buildStatus.With(prometheus.Labels{
+								metrics.BuildStatus.With(prometheus.Labels{
 									"build_namespace": e.ObjectOld.GetNamespace(),
 									"build_name":      e.ObjectOld.GetName(),
 									"build_step":      newBuildStep,
 								}).Set(1)
 							}
 							time.AfterFunc(31*time.Second, func() {
-								buildStatus.Delete(prometheus.Labels{
+								metrics.BuildStatus.Delete(prometheus.Labels{
 									"build_namespace": e.ObjectOld.GetNamespace(),
 									"build_name":      e.ObjectOld.GetName(),
 									"build_step":      oldBuildStep,

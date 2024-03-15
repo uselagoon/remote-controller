@@ -26,8 +26,11 @@ func (p *Pruner) NamespacePruner() {
 	nsList := &corev1.NamespaceList{}
 
 	markedForDeletionRequirement, err := labels.NewRequirement(ExpirationLabel, selection.Exists, []string{})
+	if err != nil {
+		opLog.Info(fmt.Sprintf("bad requirement: %v", err))
+		return
+	}
 	markedForDeletionPausedRequirement, err := labels.NewRequirement(ExpirationPausedLabel, selection.DoesNotExist, []string{})
-
 	if err != nil {
 		opLog.Info(fmt.Sprintf("bad requirement: %v", err))
 		return
@@ -38,7 +41,10 @@ func (p *Pruner) NamespacePruner() {
 	}
 
 	err = p.Client.List(ctx, nsList, &migrationCompleteSecretOptionSearch)
-
+	if err != nil {
+		opLog.Info(fmt.Sprintf("bad requirement: %v", err))
+		return
+	}
 	for _, x := range nsList.Items {
 		ns := &corev1.Namespace{}
 		//client

@@ -51,32 +51,28 @@ func RemoveString(slice []string, s string) (result []string) {
 
 // IntPtr .
 func IntPtr(i int) *int {
-	var iPtr *int
-	iPtr = new(int)
+	iPtr := new(int)
 	*iPtr = i
 	return iPtr
 }
 
 // Int32Ptr .
 func Int32Ptr(i int32) *int32 {
-	var iPtr *int32
-	iPtr = new(int32)
+	iPtr := new(int32)
 	*iPtr = i
 	return iPtr
 }
 
 // Int64Ptr .
 func Int64Ptr(i int64) *int64 {
-	var iPtr *int64
-	iPtr = new(int64)
+	iPtr := new(int64)
 	*iPtr = i
 	return iPtr
 }
 
 // UintPtr .
 func UintPtr(i uint) *uint {
-	var iPtr *uint
-	iPtr = new(uint)
+	iPtr := new(uint)
 	*iPtr = i
 	return iPtr
 }
@@ -210,7 +206,7 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 	)
 	// If there is a namespaceprefix defined, and random prefix is disabled
 	// then add the prefix to the namespace
-	if prefix != "" && randomPrefix == false {
+	if prefix != "" && !randomPrefix {
 		ns = fmt.Sprintf("%s-%s", prefix, ns)
 	}
 	// If the randomprefix is enabled, then add a prefix based on the hash of the controller namespace

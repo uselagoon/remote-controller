@@ -52,7 +52,7 @@ func (r *LagoonBuildReconciler) getOrCreateServiceAccount(ctx context.Context, s
 	}, serviceAccount)
 	if err != nil {
 		if err := r.Create(ctx, serviceAccount); err != nil {
-			return fmt.Errorf("There was an error creating the lagoon-deployer servicea account. Error was: %v", err)
+			return fmt.Errorf("there was an error creating the lagoon-deployer servicea account. Error was: %v", err)
 		}
 	}
 	return nil
@@ -82,7 +82,7 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 	}, saRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, saRoleBinding); err != nil {
-			return fmt.Errorf("There was an error creating the lagoon-deployer-admin role binding. Error was: %v", err)
+			return fmt.Errorf("there was an error creating the lagoon-deployer-admin role binding. Error was: %v", err)
 		}
 	}
 	return nil
@@ -149,7 +149,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 		if helpers.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("There was an error getting the namespace. Error was: %v", err)
+			return fmt.Errorf("there was an error getting the namespace. Error was: %v", err)
 		}
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
@@ -178,7 +178,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	// if kubernetes, just create it if it doesn't exist
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
 		if err := r.Create(ctx, namespace); err != nil {
-			return fmt.Errorf("There was an error creating the namespace. Error was: %v", err)
+			return fmt.Errorf("there was an error creating the namespace. Error was: %v", err)
 		}
 	}
 
@@ -191,10 +191,10 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		},
 	})
 	if err := r.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("There was an error patching the namespace. Error was: %v", err)
+		return fmt.Errorf("there was an error patching the namespace. Error was: %v", err)
 	}
 	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		return fmt.Errorf("There was an error getting the namespace. Error was: %v", err)
+		return fmt.Errorf("there was an error getting the namespace. Error was: %v", err)
 	}
 
 	// if local/regional harbor is enabled
@@ -202,18 +202,18 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		// create the harbor client
 		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
-			return fmt.Errorf("Error creating harbor client, check your harbor configuration. Error was: %v", err)
+			return fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
 		// create the project in harbor
 		robotCreds := &helpers.RegistryCredentials{}
 		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
 		if err != nil {
-			return fmt.Errorf("Error getting harbor version, check your harbor configuration. Error was: %v", err)
+			return fmt.Errorf("error getting harbor version, check your harbor configuration. Error was: %v", err)
 		}
 		if lagoonHarbor.UseV2Functions(curVer) {
 			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
-				return fmt.Errorf("Error creating harbor project: %v", err)
+				return fmt.Errorf("error creating harbor project: %v", err)
 			}
 			// create or refresh the robot credentials
 			robotCreds, err = lagoonHarbor.CreateOrRefreshRobotV2(ctx,
@@ -224,12 +224,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				lagoonHarbor.RobotAccountExpiry,
 				false)
 			if err != nil {
-				return fmt.Errorf("Error creating harbor robot account: %v", err)
+				return fmt.Errorf("error creating harbor robot account: %v", err)
 			}
 		} else {
 			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
 			if err != nil {
-				return fmt.Errorf("Error creating harbor project: %v", err)
+				return fmt.Errorf("error creating harbor project: %v", err)
 			}
 			// create or refresh the robot credentials
 			robotCreds, err = lagoonHarbor.CreateOrRefreshRobot(ctx,
@@ -240,7 +240,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix(),
 				false)
 			if err != nil {
-				return fmt.Errorf("Error creating harbor robot account: %v", err)
+				return fmt.Errorf("error creating harbor robot account: %v", err)
 			}
 		}
 		// if we have robotcredentials to create, do that here
@@ -250,7 +250,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			"lagoon-internal-registry-secret",
 			robotCreds)
 		if err != nil {
-			return fmt.Errorf("Error upserting harbor robot account secret: %v", err)
+			return fmt.Errorf("error upserting harbor robot account secret: %v", err)
 		}
 	}
 	return nil
@@ -275,16 +275,16 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	}, sshKey)
 	if err != nil {
 		if err := r.Create(ctx, sshKey); err != nil {
-			return fmt.Errorf("There was an error creating the lagoon-sshkey. Error was: %v", err)
+			return fmt.Errorf("there was an error creating the lagoon-sshkey. Error was: %v", err)
 		}
 	}
 	// if the keys are different, then load in the new key from the spec
-	if bytes.Compare(sshKey.Data["ssh-privatekey"], spec.Project.Key) != 0 {
+	if !bytes.Equal(sshKey.Data["ssh-privatekey"], spec.Project.Key) {
 		sshKey.Data = map[string][]byte{
 			"ssh-privatekey": spec.Project.Key,
 		}
 		if err := r.Update(ctx, sshKey); err != nil {
-			return fmt.Errorf("There was an error updating the lagoon-sshkey. Error was: %v", err)
+			return fmt.Errorf("there was an error updating the lagoon-sshkey. Error was: %v", err)
 		}
 	}
 	return nil
@@ -300,7 +300,7 @@ func (r *LagoonBuildReconciler) getOrCreateConfigMap(ctx context.Context, cmName
 		configMap.SetName(cmName)
 		//we create it
 		if err = r.Create(ctx, configMap); err != nil {
-			return fmt.Errorf("There was an error creating the configmap '%v'. Error was: %v", cmName, err)
+			return fmt.Errorf("there was an error creating the configmap '%v'. Error was: %v", cmName, err)
 		}
 	}
 	return nil
@@ -605,12 +605,12 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				Namespace: lagoonBuild.ObjectMeta.Namespace,
 				Name:      "lagoon-internal-registry-secret",
 			}, robotCredential); err != nil {
-				return fmt.Errorf("Could not find Harbor RobotAccount credential")
+				return fmt.Errorf("could not find Harbor RobotAccount credential")
 			}
 			auths := helpers.Auths{}
 			if secretData, ok := robotCredential.Data[".dockerconfigjson"]; ok {
 				if err := json.Unmarshal(secretData, &auths); err != nil {
-					return fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
+					return fmt.Errorf("could not unmarshal Harbor RobotAccount credential")
 				}
 				// if the defined regional harbor key exists using the hostname
 				if creds, ok := auths.Registries[r.Harbor.URL]; ok {
@@ -865,7 +865,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// if it doesn't exist, then create the build pod
 		opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 		if err := r.Create(ctx, newPod); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to create build pod"))
+			opLog.Error(err, "Unable to create build pod")
 			// log the error and just exit, don't continue to try and do anything
 			// @TODO: should update the build to failed
 			return nil
@@ -886,10 +886,9 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	if r.EnableDebug {
 		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.ObjectMeta.Name, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
 	}
-	var allContainerLogs []byte
 	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
 	// so just set the logs to be cancellation message
-	allContainerLogs = []byte(fmt.Sprintf(`
+	allContainerLogs := []byte(fmt.Sprintf(`
 ========================================
 %s
 ========================================
@@ -941,8 +940,7 @@ func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
 Build cancelled
 ========================================
 %s`, message))
-		var buildCondition lagoonv1beta1.BuildStatusType
-		buildCondition = lagoonv1beta1.BuildStatusCancelled
+		buildCondition := lagoonv1beta1.BuildStatusCancelled
 		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -952,7 +950,7 @@ Build cancelled
 			},
 		})
 		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to update build status"))
+			opLog.Error(err, "Unable to update build status")
 		}
 	}
 	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
@@ -980,50 +978,7 @@ Build cancelled
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
 	if err != nil {
-		return fmt.Errorf("There was an error deleting the lagoon build. Error was: %v", err)
-	}
-	return nil
-}
-
-func (r *LagoonBuildReconciler) cancelExtraBuilds(ctx context.Context, opLog logr.Logger, pendingBuilds *lagoonv1beta1.LagoonBuildList, ns string, status string) error {
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
-	})
-	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-	}
-	if len(pendingBuilds.Items) > 0 {
-		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
-		}
-		// if we have any pending builds, then grab the latest one and make it running
-		// if there are any other pending builds, cancel them so only the latest one runs
-		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
-		})
-		for idx, pBuild := range pendingBuilds.Items {
-			pendingBuild := pBuild.DeepCopy()
-			if idx == 0 {
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
-			} else {
-				// cancel any other pending builds
-				opLog.Info(fmt.Sprintf("Attempting to cancel build %s", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
-			}
-			if err := r.Update(ctx, pendingBuild); err != nil {
-				return fmt.Errorf("There was an error updating the pending build. Error was: %v", err)
-			}
-			var lagoonBuild lagoonv1beta1.LagoonBuild
-			if err := r.Get(ctx, types.NamespacedName{
-				Namespace: pendingBuild.ObjectMeta.Namespace,
-				Name:      pendingBuild.ObjectMeta.Name,
-			}, &lagoonBuild); err != nil {
-				return helpers.IgnoreNotFound(err)
-			}
-			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled extra build", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
-		}
+		return fmt.Errorf("there was an error deleting the lagoon build. Error was: %v", err)
 	}
 	return nil
 }

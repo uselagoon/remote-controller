@@ -34,6 +34,7 @@ import (
 
 	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 )
 
 // LagoonTaskReconciler reconciles a LagoonTask object
@@ -128,7 +129,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"Unable to get deployments for project %s, environment %s: %v",
+			"unable to get deployments for project %s, environment %s: %v",
 			lagoonTask.Spec.Project.Name,
 			lagoonTask.Spec.Environment.Name,
 			err,
@@ -282,7 +283,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 		}
 		if !hasService {
 			return nil, fmt.Errorf(
-				"No matching service %s for project %s, environment %s: %v",
+				"no matching service %s for project %s, environment %s: %v",
 				lagoonTask.Spec.Task.Service,
 				lagoonTask.Spec.Project.Name,
 				lagoonTask.Spec.Environment.Name,
@@ -292,7 +293,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	}
 	// no deployments found return error
 	return nil, fmt.Errorf(
-		"No deployments %s for project %s, environment %s: %v",
+		"no deployments %s for project %s, environment %s: %v",
 		lagoonTask.ObjectMeta.Namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
@@ -332,11 +333,11 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 			//@TODO: send msg back and update task to failed?
 			return nil
 		}
-		taskRunningStatus.With(prometheus.Labels{
+		metrics.TaskRunningStatus.With(prometheus.Labels{
 			"task_namespace": lagoonTask.ObjectMeta.Namespace,
 			"task_name":      lagoonTask.ObjectMeta.Name,
 		}).Set(1)
-		tasksStartedCounter.Inc()
+		metrics.TasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}
@@ -623,11 +624,11 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			)
 			return err
 		}
-		taskRunningStatus.With(prometheus.Labels{
+		metrics.TaskRunningStatus.With(prometheus.Labels{
 			"task_namespace": lagoonTask.ObjectMeta.Namespace,
 			"task_name":      lagoonTask.ObjectMeta.Name,
 		}).Set(1)
-		tasksStartedCounter.Inc()
+		metrics.TasksStartedCounter.Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.ObjectMeta.Name))
 	}

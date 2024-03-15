@@ -15,6 +15,7 @@ import (
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -158,7 +159,7 @@ Logs on pod %s, assigned to cluster %s
 
 // updateLagoonTask sends the status of the task and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog logr.Logger,
+func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagooncrd.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
@@ -166,7 +167,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog lo
 	if r.EnableMQ && lagoonTask != nil {
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
-				taskRunningStatus.Delete(prometheus.Labels{
+				metrics.TaskRunningStatus.Delete(prometheus.Labels{
 					"task_namespace": lagoonTask.ObjectMeta.Namespace,
 					"task_name":      lagoonTask.ObjectMeta.Name,
 				})
@@ -352,7 +353,7 @@ Task %s
 		// send any messages to lagoon message queues
 		// update the deployment with the status
 		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
-		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(ctx, opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
+		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
 		var pendingTaskLog bool
 		var pendingTaskLogMessage schema.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke
@@ -382,7 +383,7 @@ Task %s
 		if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err == nil {
 			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+				opLog.Error(err, "Unable to update resource")
 			}
 		}
 		// just delete the pod

@@ -32,7 +32,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	// go over every namespace that has a lagoon.sh label

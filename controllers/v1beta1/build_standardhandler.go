@@ -36,7 +36,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	})
 	// list any builds that are running
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	for _, runningBuild := range runningBuilds.Items {
 		// if the running build is the one from this request then process it

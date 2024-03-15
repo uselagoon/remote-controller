@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,8 +22,7 @@ type BuildQoS struct {
 
 func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	opLog logr.Logger,
-	lagoonBuild lagooncrd.LagoonBuild,
-	req ctrl.Request) (ctrl.Result, error) {
+	lagoonBuild lagooncrd.LagoonBuild) (ctrl.Result, error) {
 	// check if we get a lagoonbuild that hasn't got any buildstatus
 	// this means it was created by the message queue handler
 	// so we should do the steps required for a lagoon build and then copy the build
@@ -34,7 +34,7 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 		return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
 	}
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking which build next"))
+		opLog.Info("Checking which build next")
 	}
 	// handle the QoS build process here
 	return ctrl.Result{}, r.whichBuildNext(ctx, opLog)
@@ -49,7 +49,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 	})
 	runningBuilds := &lagooncrd.LagoonBuildList{}
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 	}
 	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
 	if len(runningBuilds.Items) >= r.BuildQoS.MaxBuilds {
@@ -86,7 +86,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 	if !runningProcessQueue {
 		runningProcessQueue = true
 		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("Processing queue"))
+			opLog.Info("Processing queue")
 		}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 			client.MatchingLabels(map[string]string{
@@ -97,8 +97,9 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 		pendingBuilds := &lagooncrd.LagoonBuildList{}
 		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
 			runningProcessQueue = false
-			return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
+			return fmt.Errorf("unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 		}
+		metrics.BuildsPendingGauge.Set(float64(len(pendingBuilds.Items)))
 		if len(pendingBuilds.Items) > 0 {
 			if r.EnableDebug {
 				opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
@@ -124,7 +125,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					// list any builds that are running
 					if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
 						runningProcessQueue = false
-						return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+						return fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {

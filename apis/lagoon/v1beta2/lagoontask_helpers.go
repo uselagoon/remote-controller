@@ -52,7 +52,7 @@ func DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, cl client.Client,
 	if err := cl.List(ctx, lagoonTasks, listOption); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to list lagoon task in namespace %s for project %s, environment %s",
+				"unable to list lagoon task in namespace %s for project %s, environment %s",
 				ns,
 				project,
 				environment,
@@ -64,7 +64,7 @@ func DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, cl client.Client,
 		if err := cl.Delete(ctx, &lagoonTask); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
-					"Unable to delete lagoon task %s in %s for project %s, environment %s",
+					"unable to delete lagoon task %s in %s for project %s, environment %s",
 					lagoonTask.ObjectMeta.Name,
 					ns,
 					project,
@@ -97,7 +97,7 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -115,7 +115,7 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 			}),
 		})
 		if err := cl.List(ctx, lagoonTasks, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list LagoonTask resources, there may be none or something went wrong"))
+			opLog.Error(err, "unable to list LagoonTask resources, there may be none or something went wrong")
 			continue
 		}
 		// sort the build pods by creation timestamp
@@ -131,7 +131,7 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &lagoonTask); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							opLog.Error(err, "unable to update status condition")
 							break
 						}
 					}
@@ -139,7 +139,6 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 			}
 		}
 	}
-	return
 }
 
 // TaskPodPruner will prune any task pods that are hanging around.
@@ -153,7 +152,7 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -172,7 +171,7 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 			}),
 		})
 		if err := cl.List(ctx, taskPods, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon task pods, there may be none or something went wrong"))
+			opLog.Error(err, "unable to list Lagoon task pods, there may be none or something went wrong")
 			return
 		}
 		// sort the build pods by creation timestamp
@@ -186,7 +185,7 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &pod); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to delete pod"))
+							opLog.Error(err, "unable to delete pod")
 							break
 						}
 					}
@@ -194,10 +193,9 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 			}
 		}
 	}
-	return
 }
 
-func updateLagoonTask(opLog logr.Logger, namespace string, taskSpec LagoonTaskSpec) ([]byte, error) {
+func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error) {
 	//@TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", taskSpec.Task.ID, helpers.HashString(taskSpec.Task.ID)[0:6])
 	if taskSpec.Task.TaskName != "" {
@@ -228,7 +226,7 @@ func updateLagoonTask(opLog logr.Logger, namespace string, taskSpec LagoonTaskSp
 	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to encode message as JSON: %v", err)
+		return nil, fmt.Errorf("unable to encode message as JSON: %v", err)
 	}
 	return msgBytes, nil
 }
@@ -255,11 +253,11 @@ func CancelTask(ctx context.Context, cl client.Client, namespace string, body []
 			Namespace: namespace,
 		}, &lagoonTask); err != nil {
 			opLog.Info(fmt.Sprintf(
-				"Unable to find task %s to cancel it. Sending response to Lagoon to update the task to cancelled.",
+				"unable to find task %s to cancel it. Sending response to Lagoon to update the task to cancelled.",
 				taskName,
 			))
 			// if there is no pod or task, update the task in Lagoon to cancelled
-			b, err := updateLagoonTask(opLog, namespace, *jobSpec)
+			b, err := updateLagoonTask(namespace, *jobSpec)
 			return false, b, err
 		}
 		// as there is no task pod, but there is a lagoon task resource
@@ -268,21 +266,21 @@ func CancelTask(ctx context.Context, cl client.Client, namespace string, body []
 		if err := cl.Update(ctx, &lagoonTask); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
-					"Unable to update task %s to cancel it.",
+					"unable to update task %s to cancel it.",
 					taskName,
 				),
 			)
 			return false, nil, err
 		}
 		// and then send the response back to lagoon to say it was cancelled.
-		b, err := updateLagoonTask(opLog, namespace, *jobSpec)
+		b, err := updateLagoonTask(namespace, *jobSpec)
 		return true, b, err
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
 	if err := cl.Update(ctx, &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to update task %s to cancel it.",
+				"unable to update task %s to cancel it.",
 				jobSpec.Misc.Name,
 			),
 		)

@@ -136,7 +136,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 
 // buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
@@ -227,7 +227,7 @@ Logs on pod %s, assigned to cluster %s
 
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
@@ -357,7 +357,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(ctx context
 }
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	jobPod *corev1.Pod,
@@ -568,14 +568,14 @@ Build %s
 		}
 
 		// do any message publishing here, and update any pending messages if needed
-		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
-		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
+		pendingStatus, pendingStatusMessage := r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
+		pendingEnvironment, pendingEnvironmentMessage := r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower())
 		var pendingBuildLog bool
 		var pendingBuildLogMessage schema.LagoonLog
 		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs)
+			pendingBuildLog, pendingBuildLogMessage = r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs)
 		}
 		if pendingStatus || pendingEnvironment || pendingBuildLog {
 			mergeMap["metadata"].(map[string]interface{})["labels"].(map[string]interface{})["lagoon.sh/pendingMessages"] = "true"
@@ -599,7 +599,7 @@ Build %s
 		if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err == nil {
 			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+				opLog.Error(err, "Unable to update resource")
 			}
 		}
 		// just delete the pod

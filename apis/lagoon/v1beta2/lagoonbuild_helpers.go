@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -84,8 +85,9 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": BuildStatusPending.String()}),
 	})
 	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
+	metrics.BuildsPendingGauge.Set(float64(len(pendingBuilds.Items)))
 	if len(pendingBuilds.Items) > 0 {
 		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
 		// if we have any pending builds, then grab the latest one and make it running
@@ -150,7 +152,7 @@ func CheckRunningBuilds(ctx context.Context, cns string, opLog logr.Logger, cl c
 		}),
 	})
 	if err := cl.List(ctx, lagoonBuilds, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
+		opLog.Error(err, "unable to list Lagoon build pods, there may be none or something went wrong")
 		return false
 	}
 	runningBuilds := false
@@ -179,7 +181,7 @@ func DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, cl client.Client
 	if err := cl.List(ctx, lagoonBuilds, listOption); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to list lagoon build in namespace %s for project %s, environment %s",
+				"unable to list lagoon build in namespace %s for project %s, environment %s",
 				ns,
 				project,
 				environment,
@@ -191,7 +193,7 @@ func DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, cl client.Client
 		if err := cl.Delete(ctx, &lagoonBuild); helpers.IgnoreNotFound(err) != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
-					"Unable to delete lagoon build %s in %s for project %s, environment %s",
+					"unable to delete lagoon build %s in %s for project %s, environment %s",
 					lagoonBuild.ObjectMeta.Name,
 					ns,
 					project,
@@ -223,7 +225,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -241,7 +243,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 			}),
 		})
 		if err := cl.List(ctx, lagoonBuilds, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list LagoonBuild resources, there may be none or something went wrong"))
+			opLog.Error(err, "unable to list LagoonBuild resources, there may be none or something went wrong")
 			continue
 		}
 		// sort the build pods by creation timestamp
@@ -257,7 +259,7 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 					) {
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &lagoonBuild); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							opLog.Error(err, "unable to update status condition")
 							break
 						}
 					}
@@ -265,7 +267,6 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 			}
 		}
 	}
-	return
 }
 
 // BuildPodPruner will prune any build pods that are hanging around.
@@ -279,7 +280,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 		},
 	})
 	if err := cl.List(ctx, namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 	for _, ns := range namespaces.Items {
@@ -298,7 +299,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 			}),
 		})
 		if err := cl.List(ctx, buildPods, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list Lagoon build pods, there may be none or something went wrong"))
+			opLog.Error(err, "unable to list Lagoon build pods, there may be none or something went wrong")
 			return
 		}
 		// sort the build pods by creation timestamp
@@ -312,7 +313,7 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 						pod.Status.Phase == corev1.PodSucceeded {
 						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
 						if err := cl.Delete(ctx, &pod); err != nil {
-							opLog.Error(err, fmt.Sprintf("Unable to update status condition"))
+							opLog.Error(err, "unable to update status condition")
 							break
 						}
 					}
@@ -320,10 +321,9 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 			}
 		}
 	}
-	return
 }
 
-func updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec LagoonTaskSpec, lagoonBuild *LagoonBuild) ([]byte, error) {
+func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *LagoonBuild) ([]byte, error) {
 	// if the build isn't found by the controller
 	// then publish a response back to controllerhandler to tell it to update the build to cancelled
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
@@ -373,7 +373,7 @@ func updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec LagoonTaskSp
 	}
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to encode message as JSON: %v", err)
+		return nil, fmt.Errorf("unable to encode message as JSON: %v", err)
 	}
 	return msgBytes, nil
 }
@@ -389,7 +389,7 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 		Namespace: namespace,
 	}, &jobPod); err != nil {
 		opLog.Info(fmt.Sprintf(
-			"Unable to find build pod %s to cancel it. Checking to see if LagoonBuild exists.",
+			"unable to find build pod %s to cancel it. Checking to see if LagoonBuild exists.",
 			jobSpec.Misc.Name,
 		))
 		// since there was no build pod, check for the lagoon build resource
@@ -399,12 +399,12 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 			Namespace: namespace,
 		}, &lagoonBuild); err != nil {
 			opLog.Info(fmt.Sprintf(
-				"Unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
+				"unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
 				jobSpec.Misc.Name,
 			))
 			// if there is no pod or build, update the build in Lagoon to cancelled, assume completely cancelled with no other information
 			// and then send the response back to lagoon to say it was cancelled.
-			b, err := updateLagoonBuild(opLog, namespace, *jobSpec, nil)
+			b, err := updateLagoonBuild(namespace, *jobSpec, nil)
 			return false, b, err
 		}
 		// as there is no build pod, but there is a lagoon build resource
@@ -420,21 +420,21 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 		if err := cl.Update(ctx, &lagoonBuild); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
-					"Unable to update build %s to cancel it.",
+					"unable to update build %s to cancel it.",
 					jobSpec.Misc.Name,
 				),
 			)
 			return false, nil, err
 		}
 		// and then send the response back to lagoon to say it was cancelled.
-		b, err := updateLagoonBuild(opLog, namespace, *jobSpec, &lagoonBuild)
+		b, err := updateLagoonBuild(namespace, *jobSpec, &lagoonBuild)
 		return true, b, err
 	}
 	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
 	if err := cl.Update(ctx, &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(
-				"Unable to update build %s to cancel it.",
+				"unable to update build %s to cancel it.",
 				jobSpec.Misc.Name,
 			),
 		)

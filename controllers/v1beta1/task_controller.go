@@ -143,7 +143,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"Unable to get deployments for project %s, environment %s: %v",
+			"unable to get deployments for project %s, environment %s: %v",
 			lagoonTask.Spec.Project.Name,
 			lagoonTask.Spec.Environment.Name,
 			err,
@@ -297,7 +297,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 		}
 		if !hasService {
 			return nil, fmt.Errorf(
-				"No matching service %s for project %s, environment %s: %v",
+				"no matching service %s for project %s, environment %s: %v",
 				lagoonTask.Spec.Task.Service,
 				lagoonTask.Spec.Project.Name,
 				lagoonTask.Spec.Environment.Name,
@@ -307,7 +307,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 	}
 	// no deployments found return error
 	return nil, fmt.Errorf(
-		"No deployments %s for project %s, environment %s: %v",
+		"no deployments %s for project %s, environment %s: %v",
 		lagoonTask.ObjectMeta.Namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,

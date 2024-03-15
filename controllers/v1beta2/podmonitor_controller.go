@@ -77,7 +77,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
 		err := r.calculateTaskMetrics(ctx)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+			opLog.Error(err, "Unable to generate metrics.")
 		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
@@ -102,7 +102,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
 		err := r.calculateBuildMetrics(ctx)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
+			opLog.Error(err, "Unable to generate metrics.")
 		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
@@ -118,22 +118,22 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 		}, &lagoonBuild)
 		if err != nil {
-			opLog.Info(fmt.Sprintf("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required."))
+			opLog.Info("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required.")
 			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+				opLog.Error(err, "Unable to update the LagoonBuild.")
 			}
 		} else {
 			if helpers.ContainsString(
 				lagooncrd.BuildRunningPendingStatus,
 				lagoonBuild.Labels["lagoon.sh/buildStatus"],
 			) {
-				opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
+				opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
 				// this will update the deployment back to lagoon if it can do so
 				// and should only update if the LagoonBuild is Pending or Running
 				err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 				if err != nil {
-					opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+					opLog.Error(err, "Unable to update the LagoonBuild.")
 				}
 			}
 		}
@@ -150,7 +150,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// sorted by their creation timestamp and set the first to running
 		if !r.LFFQoSEnabled {
 			// if qos is not enabled, then handle the check for pending builds here
-			opLog.Info(fmt.Sprintf("Checking for any pending builds."))
+			opLog.Info("Checking for any pending builds.")
 			runningBuilds := &lagooncrd.LagoonBuildList{}
 			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 				client.InNamespace(req.Namespace),
@@ -158,7 +158,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			})
 			// list all builds in the namespace that have the running buildstatus
 			if err := r.List(ctx, runningBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+				return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 			}
 			// if we have no running builds, then check for any pending builds
 			if len(runningBuilds.Items) == 0 {
@@ -167,7 +167,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op
 			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("No pending build check in namespaces when QoS is enabled"))
+				opLog.Info("No pending build check in namespaces when QoS is enabled")
 			}
 		}
 	}
@@ -217,7 +217,7 @@ func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile
 	for _, container := range jobPod.Spec.Containers {
 		cLogs, err := getContainerLogs(ctx, container.Name, req)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to retrieve logs from pod: %v", err)
+			return nil, fmt.Errorf("unable to retrieve logs from pod: %v", err)
 		}
 		allContainerLogs = append(allContainerLogs, cLogs...)
 	}

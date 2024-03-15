@@ -166,7 +166,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			})
 			// list any builds that are running
 			if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+				return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 			}
 			for _, runningBuild := range runningNSBuilds.Items {
 				// if the running build is the one from this request then process it
@@ -180,7 +180,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				} // end check if running build is current LagoonBuild
 			} // end loop for running builds
 			// once running builds are processed, run the qos handler
-			return r.qosBuildProcessor(ctx, opLog, lagoonBuild, req)
+			return r.qosBuildProcessor(ctx, opLog, lagoonBuild)
 		}
 		// if qos is not enabled, just process it as a standard build
 		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
@@ -197,7 +197,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
-			opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
+			opLog.Error(err, "Unable to delete external resources")
 			return ctrl.Result{}, err
 		}
 		// remove our finalizer from the list and update it.
@@ -292,7 +292,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	})
 	// list all builds in the namespace that have the running buildstatus
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	// if there are running builds still, check if the pod exists or if the pod is complete/failed and attempt to get the status
 	for _, rBuild := range runningBuilds.Items {

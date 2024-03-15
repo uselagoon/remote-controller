@@ -208,7 +208,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						ns,
 						project,
 						branch,
-						fmt.Errorf("The controller label value %s does not match %s for this namespace", value, m.ControllerNamespace),
+						fmt.Errorf("the controller label value %s does not match %s for this namespace", value, m.ControllerNamespace),
 					),
 				)
 				message.Ack(false) // ack to remove from queue
@@ -221,7 +221,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					ns,
 					project,
 					branch,
-					fmt.Errorf("The controller ownership label does not exist on this namespace, nothing will be done for this removal request"),
+					fmt.Errorf("the controller ownership label does not exist on this namespace, nothing will be done for this removal request"),
 				),
 			)
 		}

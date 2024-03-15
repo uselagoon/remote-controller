@@ -26,7 +26,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 		},
 	})
 	if err := p.Client.List(context.Background(), namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+		opLog.Error(err, "Unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 
@@ -61,7 +61,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			},
 		})
 		if err := p.Client.List(context.Background(), &podList, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list pod resources, there may be none or something went wrong"))
+			opLog.Error(err, "Unable to list pod resources, there may be none or something went wrong")
 			continue
 		}
 
@@ -75,13 +75,13 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 						if pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore) && pruneTasks {
 							updatePod = true
 							pod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
-							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled task due to timeout")
+							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = "Cancelled task due to timeout"
 						}
 					case "build":
 						if pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore) && pruneBuilds {
 							updatePod = true
 							pod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
-							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled build due to timeout")
+							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = "Cancelled build due to timeout"
 						}
 					default:
 						return

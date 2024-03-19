@@ -158,9 +158,8 @@ type LagoonTask struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
-	Status         LagoonTaskStatus      `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+	Spec   LagoonTaskSpec   `json:"spec,omitempty"`
+	Status LagoonTaskStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

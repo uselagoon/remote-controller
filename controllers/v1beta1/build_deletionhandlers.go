@@ -260,15 +260,9 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 		// bother to patch the resource??
 		// leave it for now cause the resource will just be deleted anyway
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
-			// if we can't publish the message, set it as a pending message
-			// overwrite whatever is there as these are just current state messages so it doesn't
-			// really matter if we don't smootly transition in what we send back to lagoon
-			r.updateBuildLogMessage(ctx, lagoonBuild, msg)
+			// if we can't publish the message, just return
 			return
 		}
-		// if we are able to publish the message, then we need to remove any pending messages from the resource
-		// and make sure we don't try and publish again
-		r.removeBuildPendingMessageStatus(ctx, lagoonBuild)
 	}
 }
 
@@ -351,15 +345,9 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 		// bother to patch the resource??
 		// leave it for now cause the resource will just be deleted anyway
 		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
-			// if we can't publish the message, set it as a pending message
-			// overwrite whatever is there as these are just current state messages so it doesn't
-			// really matter if we don't smootly transition in what we send back to lagoon
-			r.updateEnvironmentMessage(ctx, lagoonBuild, msg)
+			// if we can't publish the message, just return
 			return
 		}
-		// if we are able to publish the message, then we need to remove any pending messages from the resource
-		// and make sure we don't try and publish again
-		r.removeBuildPendingMessageStatus(ctx, lagoonBuild)
 	}
 }
 
@@ -411,104 +399,8 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
 		// bother to patch the resource??
 		// leave it for now cause the resource will just be deleted anyway
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
-			// if we can't publish the message, set it as a pending message
-			// overwrite whatever is there as these are just current state messages so it doesn't
-			// really matter if we don't smootly transition in what we send back to lagoon
-			r.updateBuildStatusMessage(ctx, lagoonBuild, msg)
+			// if we can't publish the message, just return
 			return
 		}
-		// if we are able to publish the message, then we need to remove any pending messages from the resource
-		// and make sure we don't try and publish again
-		r.removeBuildPendingMessageStatus(ctx, lagoonBuild)
 	}
-}
-
-// updateEnvironmentMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonBuildReconciler) updateEnvironmentMessage(ctx context.Context,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	envMessage lagoonv1beta1.LagoonMessage,
-) error {
-	// set the transition time
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"lagoon.sh/pendingMessages": "true",
-			},
-		},
-		"statusMessages": map[string]interface{}{
-			"environmentMessage": envMessage,
-		},
-	})
-	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
-	}
-	return nil
-}
-
-// updateBuildStatusMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonBuildReconciler) updateBuildStatusMessage(ctx context.Context,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	statusMessage lagoonv1beta1.LagoonLog,
-) error {
-	// set the transition time
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"lagoon.sh/pendingMessages": "true",
-			},
-		},
-		"statusMessages": map[string]interface{}{
-			"statusMessage": statusMessage,
-		},
-	})
-	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
-	}
-	return nil
-}
-
-// removeBuildPendingMessageStatus purges the status messages from the resource once they are successfully re-sent
-func (r *LagoonBuildReconciler) removeBuildPendingMessageStatus(ctx context.Context,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
-) error {
-	// if we have the pending messages label as true, then we want to remove this label and any pending statusmessages
-	// so we can avoid double handling, or an old pending message from being sent after a new pending message
-	if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/pendingMessages"]; !ok {
-		if val == "true" {
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"labels": map[string]interface{}{
-						"lagoon.sh/pendingMessages": "false",
-					},
-				},
-				"statusMessages": nil,
-			})
-			if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				return fmt.Errorf("Unable to update status condition: %v", err)
-			}
-		}
-	}
-	return nil
-}
-
-// updateBuildLogMessage this is called if the message queue is unavailable, it stores the message that would be sent in the lagoon build
-func (r *LagoonBuildReconciler) updateBuildLogMessage(ctx context.Context,
-	lagoonBuild *lagoonv1beta1.LagoonBuild,
-	buildMessage lagoonv1beta1.LagoonLog,
-) error {
-	// set the transition time
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"lagoon.sh/pendingMessages": "true",
-			},
-		},
-		"statusMessages": map[string]interface{}{
-			"buildLogMessage": buildMessage,
-		},
-	})
-	if err := r.Patch(ctx, lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("Unable to update status condition: %v", err)
-	}
-	return nil
 }

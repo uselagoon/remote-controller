@@ -923,6 +923,7 @@ func main() {
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,
 		},
+		UnauthenticatedRegistry: unauthenticatedRegistry,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

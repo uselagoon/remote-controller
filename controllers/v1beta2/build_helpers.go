@@ -508,7 +508,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	})
 	podEnvs = append(podEnvs, corev1.EnvVar{
 		Name:  "REGISTRY",
-		Value: lagoonBuild.Spec.Project.Registry,
+		Value: r.UnauthenticatedRegistry,
 	})
 	// this is enabled by default for now
 	// eventually will be disabled by default because support for the generation/modification of this will

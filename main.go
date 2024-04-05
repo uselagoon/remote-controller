@@ -178,6 +178,8 @@ func main() {
 	var enablePodProxy bool
 	var podsUseDifferentProxy bool
 
+	var unauthenticatedRegistry string
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
@@ -337,6 +339,9 @@ func main() {
 	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
 		"The event types to use for the Lagoon webhook")
 
+	// this is for legacy reasons, and backwards compatability support due to removal of https://github.com/uselagoon/lagoon/pull/3659
+	flag.StringVar(&unauthenticatedRegistry, "unauthenticated-registry", "registry.lagoon.svc:5000", "An unauthenticated registry URL that could be used for local testing without a harbor")
+
 	// NS cleanup configuration
 	flag.BoolVar(&cleanNamespacesEnabled, "enable-namespace-cleanup", false,
 		"Tells the controller to remove namespaces marked for deletion with labels (lagoon.sh/expiration=<unixtimestamp>).")
@@ -408,6 +413,8 @@ func main() {
 	lagoonTokenPort = helpers.GetEnv("TASK_SSH_PORT", lagoonTokenPort)
 
 	nativeCronPodMinFrequency = helpers.GetEnvInt("NATIVE_CRON_POD_MINIMUM_FREQUENCY", nativeCronPodMinFrequency)
+
+	unauthenticatedRegistry = helpers.GetEnv("UNAUTHENTICATED_REGISTRY", unauthenticatedRegistry)
 
 	// harbor envvars
 	harborURL = helpers.GetEnv("HARBOR_URL", harborURL)
@@ -810,6 +817,7 @@ func main() {
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,
 		},
+		UnauthenticatedRegistry: unauthenticatedRegistry,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

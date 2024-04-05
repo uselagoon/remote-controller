@@ -75,6 +75,7 @@ type LagoonBuildReconciler struct {
 	LagoonFeatureFlags               map[string]string
 	LagoonAPIConfiguration           helpers.LagoonAPIConfiguration
 	ProxyConfig                      ProxyConfig
+	UnauthenticatedRegistry          string
 }
 
 // BackupConfig holds all the backup configuration settings

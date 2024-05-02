@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/uselagoon/machinery/api/schema"
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -112,13 +112,13 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 	jobPod *corev1.Pod,
 	condition string,
 	logs []byte,
-) (bool, lagoonv1beta1.LagoonLog) {
+) error {
 	if r.EnableMQ && lagoonTask != nil {
-		msg := lagoonv1beta1.LagoonLog{
+		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
 			Event:    "task-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
-			Meta: &lagoonv1beta1.LagoonLogMeta{
+			Meta: &schema.LagoonLogMeta{
 				Task:        &lagoonTask.Spec.Task,
 				Environment: lagoonTask.Spec.Environment.Name,
 				JobName:     lagoonTask.ObjectMeta.Name,
@@ -141,41 +141,35 @@ Logs on pod %s, assigned to cluster %s
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
-			return true, msg
+			return err
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
-	return false, lagoonv1beta1.LagoonLog{}
+	return nil
 }
 
 // updateLagoonTask sends the status of the task and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog logr.Logger,
+func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
-) (bool, lagoonv1beta1.LagoonMessage) {
+) error {
 	if r.EnableMQ && lagoonTask != nil {
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
-			time.AfterFunc(31*time.Second, func() {
-				taskRunningStatus.Delete(prometheus.Labels{
-					"task_namespace": lagoonTask.ObjectMeta.Namespace,
-					"task_name":      lagoonTask.ObjectMeta.Name,
-				})
-			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
-		msg := lagoonv1beta1.LagoonMessage{
+		msg := schema.LagoonMessage{
 			Type:      "task",
 			Namespace: lagoonTask.ObjectMeta.Namespace,
-			Meta: &lagoonv1beta1.LagoonLogMeta{
+			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				Project:       lagoonTask.Spec.Project.Name,
@@ -206,18 +200,18 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(ctx context.Context, opLog lo
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
-			return true, msg
+			return err
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
-	return false, lagoonv1beta1.LagoonMessage{}
+	return nil
 }
 
 // taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
@@ -225,13 +219,13 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagoonv1beta1.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
-) (bool, lagoonv1beta1.LagoonLog) {
+) error {
 	if r.EnableMQ && lagoonTask != nil {
-		msg := lagoonv1beta1.LagoonLog{
+		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
 			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
-			Meta: &lagoonv1beta1.LagoonLogMeta{
+			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,
 				Environment:   lagoonTask.Spec.Environment.Name,
@@ -252,18 +246,18 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
-			return true, msg
+			return err
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
-	return false, lagoonv1beta1.LagoonLog{}
+	return nil
 }
 
 // updateTaskWithLogs collects logs from the task containers and ships or stores them
@@ -276,7 +270,7 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 	cancel bool,
 ) error {
 	opLog := r.Log.WithValues("lagoonmonitor", req.NamespacedName)
-	taskCondition := helpers.GetTaskConditionFromPod(jobPod.Status.Phase)
+	taskCondition := lagoonv1beta1.GetTaskConditionFromPod(jobPod.Status.Phase)
 	collectLogs := true
 	if cancel {
 		taskCondition = lagoonv1beta1.TaskStatusCancelled
@@ -286,7 +280,7 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 	// then update the task to reflect the current pod status
 	// we do this so we don't update the status of the task again
 	if helpers.ContainsString(
-		helpers.TaskRunningPendingStatus,
+		lagoonv1beta1.TaskRunningPendingStatus,
 		lagoonTask.Labels["lagoon.sh/taskStatus"],
 	) || cancel {
 		opLog.Info(
@@ -332,7 +326,6 @@ Task %s
 					"lagoon.sh/taskStatus": taskCondition.String(),
 				},
 			},
-			"statusMessages": map[string]interface{}{},
 		}
 
 		condition := lagoonv1beta1.LagoonTaskConditions{
@@ -340,7 +333,7 @@ Task %s
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: time.Now().UTC().Format(time.RFC3339),
 		}
-		if !helpers.TaskContainsStatus(lagoonTask.Status.Conditions, condition) {
+		if !lagoonv1beta1.TaskContainsStatus(lagoonTask.Status.Conditions, condition) {
 			lagoonTask.Status.Conditions = append(lagoonTask.Status.Conditions, condition)
 			mergeMap["status"] = map[string]interface{}{
 				"conditions": lagoonTask.Status.Conditions,
@@ -350,38 +343,25 @@ Task %s
 
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		pendingStatus, pendingStatusMessage := r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
-		pendingEnvironment, pendingEnvironmentMessage := r.updateLagoonTask(ctx, opLog, &lagoonTask, &jobPod, taskCondition.ToLower())
-		var pendingTaskLog bool
-		var pendingTaskLogMessage lagoonv1beta1.LagoonLog
+		if err = r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {
+			opLog.Error(err, "unable to publish task status logs")
+		}
+		if err = r.updateLagoonTask(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {
+			opLog.Error(err, "unable to publish task update")
+		}
 		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			pendingTaskLog, pendingTaskLogMessage = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower(), allContainerLogs)
-		}
-
-		if pendingStatus || pendingEnvironment || pendingTaskLog {
-			mergeMap["metadata"].(map[string]interface{})["labels"].(map[string]interface{})["lagoon.sh/pendingMessages"] = "true"
-			if pendingStatus {
-				mergeMap["statusMessages"].(map[string]interface{})["statusMessage"] = pendingStatusMessage
+			if err = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower(), allContainerLogs); err != nil {
+				opLog.Error(err, "unable to publish task logs")
 			}
-			if pendingEnvironment {
-				mergeMap["statusMessages"].(map[string]interface{})["environmentMessage"] = pendingEnvironmentMessage
-			}
-			if pendingTaskLog {
-				mergeMap["statusMessages"].(map[string]interface{})["taskLogMessage"] = pendingTaskLogMessage
-			}
-		}
-		if !pendingStatus && !pendingEnvironment && !pendingTaskLog {
-			mergeMap["metadata"].(map[string]interface{})["labels"].(map[string]interface{})["lagoon.sh/pendingMessages"] = nil
-			mergeMap["statusMessages"] = nil
 		}
 		mergePatch, _ := json.Marshal(mergeMap)
 		// check if the task exists
 		if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err == nil {
 			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update resource"))
+				opLog.Error(err, "unable to update resource")
 			}
 		}
 		// just delete the pod

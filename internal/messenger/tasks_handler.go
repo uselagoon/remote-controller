@@ -5,13 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,223 +23,40 @@ type ActiveStandbyPayload struct {
 	DestinationNamespace string `json:"destinationNamespace"`
 }
 
-// CancelBuild handles cancelling builds or handling if a build no longer exists.
-func (m *Messenger) CancelBuild(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	var jobPod corev1.Pod
-	if err := m.Client.Get(context.Background(), types.NamespacedName{
-		Name:      jobSpec.Misc.Name,
-		Namespace: namespace,
-	}, &jobPod); err != nil {
-		opLog.Info(fmt.Sprintf(
-			"Unable to find build pod %s to cancel it. Checking to see if LagoonBuild exists.",
-			jobSpec.Misc.Name,
-		))
-		// since there was no build pod, check for the lagoon build resource
-		var lagoonBuild lagoonv1beta1.LagoonBuild
-		if err := m.Client.Get(context.Background(), types.NamespacedName{
-			Name:      jobSpec.Misc.Name,
-			Namespace: namespace,
-		}, &lagoonBuild); err != nil {
-			opLog.Info(fmt.Sprintf(
-				"Unable to find build %s to cancel it. Sending response to Lagoon to update the build to cancelled.",
-				jobSpec.Misc.Name,
-			))
-			// if there is no pod or build, update the build in Lagoon to cancelled, assume completely cancelled with no other information
-			m.updateLagoonBuild(opLog, namespace, *jobSpec, nil)
-			return nil
-		}
-		// as there is no build pod, but there is a lagoon build resource
-		// update it to cancelled so that the controller doesn't try to run it
-		// check if the build has existing status or not though to consume it
-		if helpers.ContainsString(
-			helpers.BuildRunningPendingStatus,
-			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
-		) {
-			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
-		}
-		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
-		if err := m.Client.Update(context.Background(), &lagoonBuild); err != nil {
-			opLog.Error(err,
-				fmt.Sprintf(
-					"Unable to update build %s to cancel it.",
-					jobSpec.Misc.Name,
-				),
-			)
-			return err
-		}
-		// and then send the response back to lagoon to say it was cancelled.
-		m.updateLagoonBuild(opLog, namespace, *jobSpec, &lagoonBuild)
-		return nil
-	}
-	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
-	if err := m.Client.Update(context.Background(), &jobPod); err != nil {
-		opLog.Error(err,
-			fmt.Sprintf(
-				"Unable to update build %s to cancel it.",
-				jobSpec.Misc.Name,
-			),
-		)
-		return err
-	}
-	return nil
+// TaskType const for the status type
+type ServiceState string
+
+// These are valid states for a service.
+const (
+	StateStop    ServiceState = "stop"
+	StateStart   ServiceState = "start"
+	StateRestart ServiceState = "restart"
+)
+
+type LagoonServiceInfo struct {
+	ServiceName  string       `json:"name,omitempty"`
+	ServiceState ServiceState `json:"state,omitempty"`
 }
 
-// CancelTask handles cancelling tasks or handling if a tasks no longer exists.
-func (m *Messenger) CancelTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
-	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	var jobPod corev1.Pod
-	//@TODO: use `taskName` in the future only
-	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
-	if jobSpec.Task.TaskName != "" {
-		taskName = jobSpec.Task.TaskName
-	}
-	if err := m.Client.Get(context.Background(), types.NamespacedName{
-		Name:      taskName,
-		Namespace: namespace,
-	}, &jobPod); err != nil {
-		// since there was no task pod, check for the lagoon task resource
-		var lagoonTask lagoonv1beta1.LagoonTask
-		if err := m.Client.Get(context.Background(), types.NamespacedName{
-			Name:      taskName,
-			Namespace: namespace,
-		}, &lagoonTask); err != nil {
-			opLog.Info(fmt.Sprintf(
-				"Unable to find task %s to cancel it. Sending response to Lagoon to update the task to cancelled.",
-				taskName,
-			))
-			// if there is no pod or task, update the task in Lagoon to cancelled
-			m.updateLagoonTask(opLog, namespace, *jobSpec)
-			return nil
-		}
-		// as there is no task pod, but there is a lagoon task resource
-		// update it to cancelled so that the controller doesn't try to run it
-		lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] = lagoonv1beta1.TaskStatusCancelled.String()
-		if err := m.Client.Update(context.Background(), &lagoonTask); err != nil {
-			opLog.Error(err,
-				fmt.Sprintf(
-					"Unable to update task %s to cancel it.",
-					taskName,
-				),
-			)
-			return err
-		}
-		// and then send the response back to lagoon to say it was cancelled.
-		m.updateLagoonTask(opLog, namespace, *jobSpec)
-		return nil
-	}
-	jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
-	if err := m.Client.Update(context.Background(), &jobPod); err != nil {
-		opLog.Error(err,
-			fmt.Sprintf(
-				"Unable to update task %s to cancel it.",
-				jobSpec.Misc.Name,
-			),
-		)
-		return err
-	}
-	return nil
+type LagoonIdling struct {
+	ForceIdle  bool `json:"foreIdle,omitempty"`
+	ForceScale bool `json:"forceScale,omitempty"`
 }
 
-func (m *Messenger) updateLagoonBuild(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec, lagoonBuild *lagoonv1beta1.LagoonBuild) {
-	// if the build isn't found by the controller
-	// then publish a response back to controllerhandler to tell it to update the build to cancelled
-	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
-	buildCondition := "cancelled"
-	if lagoonBuild != nil {
-		if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
-			// if the build isnt running,pending,queued, then set the buildcondition to the value failed/complete/cancelled
-			if !helpers.ContainsString(helpers.BuildRunningPendingStatus, val) {
-				buildCondition = strings.ToLower(val)
-			}
-		}
-	}
-	msg := lagoonv1beta1.LagoonMessage{
-		Type:      "build",
-		Namespace: namespace,
-		Meta: &lagoonv1beta1.LagoonLogMeta{
-			Environment: jobSpec.Environment.Name,
-			Project:     jobSpec.Project.Name,
-			BuildPhase:  buildCondition,
-			BuildName:   jobSpec.Misc.Name,
-		},
-	}
-	// set the start/end time to be now as the default
-	// to stop the duration counter in the ui
-	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-
-	// if possible, get the start and end times from the build resource, these will be sent back to lagoon to update the api
-	if lagoonBuild != nil && lagoonBuild.Status.Conditions != nil {
-		conditions := lagoonBuild.Status.Conditions
-		// sort the build conditions by time so the first and last can be extracted
-		sort.Slice(conditions, func(i, j int) bool {
-			iTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[i].LastTransitionTime)
-			jTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[j].LastTransitionTime)
-			return iTime.Before(jTime)
-		})
-		// get the starting time, or fallback to default
-		sTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[0].LastTransitionTime)
-		if err == nil {
-			msg.Meta.StartTime = sTime.Format("2006-01-02 15:04:05")
-		}
-		// get the ending time, or fallback to default
-		eTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[len(conditions)-1].LastTransitionTime)
-		if err == nil {
-			msg.Meta.EndTime = eTime.Format("2006-01-02 15:04:05")
-		}
-	}
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		opLog.Error(err, "Unable to encode message as JSON")
-	}
-	// publish the cancellation result back to lagoon
-	if err := m.Publish("lagoon-tasks:controller", msgBytes); err != nil {
-		opLog.Error(err, "Unable to publish message.")
-	}
+type ServiceStateEvent struct {
+	Type      string            `json:"type"`      // defines the action type
+	EventType string            `json:"eventType"` // defines the eventtype field in the event notification
+	Data      LagoonServiceInfo `json:"data"`      // contains the payload for the action, this could be any json so using a map
 }
 
-func (m *Messenger) updateLagoonTask(opLog logr.Logger, namespace string, jobSpec lagoonv1beta1.LagoonTaskSpec) {
-	//@TODO: use `taskName` in the future only
-	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
-	if jobSpec.Task.TaskName != "" {
-		taskName = jobSpec.Task.TaskName
-	}
-	// if the task isn't found by the controller
-	// then publish a response back to controllerhandler to tell it to update the task to cancelled
-	// this allows us to update tasks in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
-	msg := lagoonv1beta1.LagoonMessage{
-		Type:      "task",
-		Namespace: namespace,
-		Meta: &lagoonv1beta1.LagoonLogMeta{
-			Environment: jobSpec.Environment.Name,
-			Project:     jobSpec.Project.Name,
-			JobName:     taskName,
-			JobStatus:   "cancelled",
-			Task: &lagoonv1beta1.LagoonTaskInfo{
-				TaskName: jobSpec.Task.TaskName,
-				ID:       jobSpec.Task.ID,
-				Name:     jobSpec.Task.Name,
-				Service:  jobSpec.Task.Service,
-			},
-		},
-	}
-	// if the task isn't found at all, then set the start/end time to be now
-	// to stop the duration counter in the ui
-	msg.Meta.StartTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-	msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		opLog.Error(err, "Unable to encode message as JSON")
-	}
-	// publish the cancellation result back to lagoon
-	if err := m.Publish("lagoon-tasks:controller", msgBytes); err != nil {
-		opLog.Error(err, "Unable to publish message.")
-	}
+type IdlingEvent struct {
+	Type      string       `json:"type"`      // defines the action type
+	EventType string       `json:"eventType"` // defines the eventtype field in the event notification
+	Data      LagoonIdling `json:"data"`      // contains the payload for the action, this could be any json so using a map
 }
 
 // IngressRouteMigration handles running the ingress migrations.
-func (m *Messenger) IngressRouteMigration(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) IngressRouteMigration(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	// always set these to true for ingress migration tasks
 	jobSpec.AdvancedTask.DeployerToken = true
 	jobSpec.AdvancedTask.SSHKey = true
@@ -249,18 +64,18 @@ func (m *Messenger) IngressRouteMigration(namespace string, jobSpec *lagoonv1bet
 }
 
 // ActiveStandbySwitch handles running the active standby switch setup advanced task.
-func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	// always set these to true for ingress migration tasks
 	jobSpec.AdvancedTask.DeployerToken = true
 	jobSpec.AdvancedTask.SSHKey = true
 	asPayload := &ActiveStandbyPayload{}
 	asPayloadDecoded, err := base64.StdEncoding.DecodeString(jobSpec.AdvancedTask.JSONPayload)
 	if err != nil {
-		return fmt.Errorf("Unable to base64 decode payload: %v", err)
+		return fmt.Errorf("unable to base64 decode payload: %v", err)
 	}
 	err = json.Unmarshal([]byte(asPayloadDecoded), asPayload)
 	if err != nil {
-		return fmt.Errorf("Unable to unmarshal json payload: %v", err)
+		return fmt.Errorf("unable to unmarshal json payload: %v", err)
 	}
 	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
 		"lagoon.sh/activeStandby":                     "true",
@@ -270,30 +85,30 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta1
 }
 
 // AdvancedTask handles running the ingress migrations.
-func (m *Messenger) AdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) AdvancedTask(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	return m.createAdvancedTask(namespace, jobSpec, nil)
 }
 
 // CreateAdvancedTask takes care of creating actual advanced tasks
-func (m *Messenger) createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, additionalLabels map[string]string) error {
+func (m *Messenger) createAdvancedTask(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec, additionalLabels map[string]string) error {
 	return createAdvancedTask(namespace, jobSpec, m, additionalLabels)
 }
 
 // CreateAdvancedTask takes care of creating actual advanced tasks
-func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec, m *Messenger, additionalLabels map[string]string) error {
+func createAdvancedTask(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec, m *Messenger, additionalLabels map[string]string) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	// create the advanced task
 	taskName := fmt.Sprintf("lagoon-advanced-task-%s", helpers.RandString(6))
 	if jobSpec.Task.TaskName != "" {
 		taskName = jobSpec.Task.TaskName
 	}
-	task := lagoonv1beta1.LagoonTask{
+	task := lagoonv1beta2.LagoonTask{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      taskName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				"lagoon.sh/taskType":   lagoonv1beta1.TaskTypeAdvanced.String(),
-				"lagoon.sh/taskStatus": lagoonv1beta1.TaskStatusPending.String(),
+				"lagoon.sh/taskType":   lagoonv1beta2.TaskTypeAdvanced.String(),
+				"lagoon.sh/taskStatus": lagoonv1beta2.TaskStatusPending.String(),
 				"lagoon.sh/controller": m.ControllerNamespace,
 			},
 		},
@@ -315,7 +130,15 @@ func createAdvancedTask(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec,
 	return nil
 }
 
-func (m *Messenger) ScaleOrIdleEnvironment(ctx context.Context, opLog logr.Logger, ns string, idle, forceScale bool) error {
+func (m *Messenger) ScaleOrIdleEnvironment(ctx context.Context, opLog logr.Logger, ns string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
+	opLog.Info(
+		fmt.Sprintf(
+			"Received environment idling request for project %s, environment %s - %s",
+			jobSpec.Project.Name,
+			jobSpec.Environment.Name,
+			ns,
+		),
+	)
 	namespace := &corev1.Namespace{}
 	err := m.Client.Get(ctx, types.NamespacedName{
 		Name: ns,
@@ -323,8 +146,12 @@ func (m *Messenger) ScaleOrIdleEnvironment(ctx context.Context, opLog logr.Logge
 	if err != nil {
 		return err
 	}
-	if idle {
-		if forceScale {
+	retPol := &IdlingEvent{}
+	if err := json.Unmarshal(jobSpec.Misc.MiscResource, retPol); err != nil {
+		return err
+	}
+	if retPol.Data.ForceIdle {
+		if retPol.Data.ForceScale {
 			// this would be nice to be a lagoon label :)
 			namespace.ObjectMeta.Labels["idling.amazee.io/force-scaled"] = "true"
 		} else {
@@ -347,21 +174,34 @@ func (m *Messenger) ScaleOrIdleEnvironment(ctx context.Context, opLog logr.Logge
 	return nil
 }
 
-func (m *Messenger) EnvironmentServiceState(ctx context.Context, opLog logr.Logger, ns, service string, state lagoonv1beta1.ServiceState) error {
+func (m *Messenger) EnvironmentServiceState(ctx context.Context, opLog logr.Logger, ns string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
+	retPol := &ServiceStateEvent{}
+	if err := json.Unmarshal(jobSpec.Misc.MiscResource, retPol); err != nil {
+		return err
+	}
+	opLog.Info(
+		fmt.Sprintf(
+			"Received environment service request for project %s, environment %s service %s - %s",
+			jobSpec.Project.Name,
+			jobSpec.Environment.Name,
+			retPol.Data.ServiceName,
+			ns,
+		),
+	)
 	deployment := &appsv1.Deployment{}
 	err := m.Client.Get(ctx, types.NamespacedName{
-		Name:      service,
+		Name:      retPol.Data.ServiceName,
 		Namespace: ns,
 	}, deployment)
 	if err != nil {
 		return err
 	}
 	update := false
-	switch state {
-	case lagoonv1beta1.StateRestart:
+	switch retPol.Data.ServiceState {
+	case StateRestart:
 		deployment.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 		update = true
-	case lagoonv1beta1.StateStop:
+	case StateStop:
 		if *deployment.Spec.Replicas > 0 {
 			// if the service has replicas, then save the replica count and scale it to 0
 			deployment.ObjectMeta.Annotations["service.lagoon.sh/replicas"] = strconv.FormatInt(int64(*deployment.Spec.Replicas), 10)
@@ -369,7 +209,7 @@ func (m *Messenger) EnvironmentServiceState(ctx context.Context, opLog logr.Logg
 			deployment.Spec.Replicas = &replicas
 			update = true
 		}
-	case lagoonv1beta1.StateStart:
+	case StateStart:
 		if *deployment.Spec.Replicas == 0 {
 			// if the service has no replicas, set it back to what the previous replica value was
 			prevReplicas, err := strconv.Atoi(deployment.ObjectMeta.Annotations["service.lagoon.sh/replicas"])

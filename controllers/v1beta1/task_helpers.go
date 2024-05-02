@@ -35,7 +35,7 @@ func (r *LagoonTaskReconciler) createActiveStandbyRole(ctx context.Context, sour
 	}, activeStandbyRoleBinding)
 	if err != nil {
 		if err := r.Create(ctx, activeStandbyRoleBinding); err != nil {
-			return fmt.Errorf("There was an error creating the lagoon-deployer-activestandby role binding. Error was: %v", err)
+			return fmt.Errorf("there was an error creating the lagoon-deployer-activestandby role binding. Error was: %v", err)
 		}
 	}
 	return nil
@@ -53,7 +53,7 @@ func (r *LagoonMonitorReconciler) deleteActiveStandbyRole(ctx context.Context, d
 	}
 	err = r.Delete(ctx, activeStandbyRoleBinding)
 	if err != nil {
-		return fmt.Errorf("Unable to delete lagoon-deployer-activestandby role binding")
+		return fmt.Errorf("unable to delete lagoon-deployer-activestandby role binding")
 	}
 	return nil
 }

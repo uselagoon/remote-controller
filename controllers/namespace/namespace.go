@@ -17,12 +17,13 @@ package namespace
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/go-logr/logr"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,6 +41,10 @@ type NamespaceReconciler struct {
 	EnableMQ         bool
 	Messaging        *messenger.Messenger
 	LagoonTargetName string
+}
+
+type IdlingState struct {
+	Idled bool `json:"idled"`
 }
 
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -62,15 +67,17 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if e, ok := namespace.ObjectMeta.Labels["lagoon.sh/environment"]; ok {
 				environmentName = e
 			}
-			msg := lagoonv1beta1.LagoonMessage{
-				Type:      "idling",
+			// create the message payload
+			idleMsgBytes, _ := json.Marshal(&IdlingState{Idled: idled})
+			msg := schema.LagoonMessage{
+				Type:      "environmentIdling",
 				Namespace: namespace.Name,
-				Meta: &lagoonv1beta1.LagoonLogMeta{
-					Environment: environmentName,
-					Project:     projectName,
-					Cluster:     r.LagoonTargetName,
+				Meta: &schema.LagoonLogMeta{
+					Environment:  environmentName,
+					Project:      projectName,
+					Cluster:      r.LagoonTargetName,
+					AdvancedData: base64.StdEncoding.EncodeToString(idleMsgBytes),
 				},
-				Idled: idled,
 			}
 			msgBytes, err := json.Marshal(msg)
 			if err != nil {

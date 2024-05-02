@@ -22,12 +22,35 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/uselagoon/machinery/api/schema"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="use lagoontasks.crd.lagoon.sh/v1beta2"
+
+// LagoonTask is the Schema for the lagoontasks API
+type LagoonTask struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
+	Status         LagoonTaskStatus      `json:"status,omitempty"`
+	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// LagoonTaskList contains a list of LagoonTask
+type LagoonTaskList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []LagoonTask `json:"items"`
+}
 
 // TaskStatusType const for the status type
 type TaskStatusType string
@@ -75,34 +98,12 @@ func (b TaskType) String() string {
 type LagoonTaskSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Key           string                  `json:"key,omitempty"`
-	Task          LagoonTaskInfo          `json:"task,omitempty"`
-	Project       LagoonTaskProject       `json:"project,omitempty"`
-	Environment   LagoonTaskEnvironment   `json:"environment,omitempty"`
-	Misc          *LagoonMiscInfo         `json:"misc,omitempty"`
-	AdvancedTask  *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
-	LagoonService LagoonServiceInfo       `json:"lagoonService,omitempty"`
-	Idling        LagoonIdling            `json:"lagoonIdling,omitempty"`
-}
-
-// TaskType const for the status type
-type ServiceState string
-
-// These are valid conditions of a job.
-const (
-	StateStop    ServiceState = "stop"
-	StateStart   ServiceState = "start"
-	StateRestart ServiceState = "restart"
-)
-
-type LagoonServiceInfo struct {
-	Name  string       `json:"name,omitempty"`
-	State ServiceState `json:"state,omitempty"`
-}
-
-type LagoonIdling struct {
-	Idle       bool `json:"idle,omitempty"`
-	ForceScale bool `json:"forceScale,omitempty"`
+	Key          string                  `json:"key,omitempty"`
+	Task         schema.LagoonTaskInfo   `json:"task,omitempty"`
+	Project      LagoonTaskProject       `json:"project,omitempty"`
+	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
+	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`
+	AdvancedTask *LagoonAdvancedTaskInfo `json:"advancedTask,omitempty"`
 }
 
 // LagoonTaskInfo defines what a task can use to communicate with Lagoon via SSH/API.
@@ -171,27 +172,6 @@ type LagoonTaskConditions struct {
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               TaskStatusType         `json:"type"`
 	// Condition          string                 `json:"condition"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonTask is the Schema for the lagoontasks API
-type LagoonTask struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
-	Status         LagoonTaskStatus      `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonTaskList contains a list of LagoonTask
-type LagoonTaskList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []LagoonTask `json:"items"`
 }
 
 func init() {

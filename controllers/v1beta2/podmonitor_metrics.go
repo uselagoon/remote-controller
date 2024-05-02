@@ -1,9 +1,10 @@
-package v1beta1
+package v1beta2
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -17,7 +18,7 @@ func (r *LagoonMonitorReconciler) calculateBuildMetrics(ctx context.Context) err
 	})
 	buildPods := &corev1.PodList{}
 	if err := r.List(ctx, buildPods, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the cluster, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list builds in the cluster, there may be none or something went wrong: %v", err)
 	}
 	runningBuilds := float64(0)
 	for _, buildPod := range buildPods.Items {
@@ -25,7 +26,7 @@ func (r *LagoonMonitorReconciler) calculateBuildMetrics(ctx context.Context) err
 			runningBuilds = runningBuilds + 1
 		}
 	}
-	buildsRunningGauge.Set(runningBuilds)
+	metrics.BuildsRunningGauge.Set(runningBuilds)
 	return nil
 }
 
@@ -38,7 +39,7 @@ func (r *LagoonMonitorReconciler) calculateTaskMetrics(ctx context.Context) erro
 	})
 	taskPods := &corev1.PodList{}
 	if err := r.List(ctx, taskPods, listOption); err != nil {
-		return fmt.Errorf("Unable to list tasks in the cluster, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list tasks in the cluster, there may be none or something went wrong: %v", err)
 	}
 	runningTasks := float64(0)
 	for _, taskPod := range taskPods.Items {
@@ -46,6 +47,6 @@ func (r *LagoonMonitorReconciler) calculateTaskMetrics(ctx context.Context) erro
 			runningTasks = runningTasks + 1
 		}
 	}
-	tasksRunningGauge.Set(runningTasks)
+	metrics.TasksRunningGauge.Set(runningTasks)
 	return nil
 }

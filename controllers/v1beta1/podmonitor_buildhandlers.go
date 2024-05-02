@@ -290,24 +290,24 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		})
 		depList := &appsv1.DeploymentList{}
 		serviceNames := []string{}
-		services := []lagoonv1beta1.LagoonService{}
+		services := []schema.EnvironmentService{}
 		if err := r.List(context.TODO(), depList, listOption); err == nil {
 			// generate the list of services to add or update to the environment
 			for _, deployment := range depList.Items {
 				var serviceName, serviceType string
-				containers := []lagoonv1beta1.EnvironmentContainer{}
+				containers := []schema.ServiceContainer{}
 				if name, ok := deployment.ObjectMeta.Labels["lagoon.sh/service"]; ok {
 					serviceName = name
 					serviceNames = append(serviceNames, serviceName)
 					for _, container := range deployment.Spec.Template.Spec.Containers {
-						containers = append(containers, lagoonv1beta1.EnvironmentContainer{Name: container.Name})
+						containers = append(containers, schema.ServiceContainer{Name: container.Name})
 					}
 				}
 				if sType, ok := deployment.ObjectMeta.Labels["lagoon.sh/service-type"]; ok {
 					serviceType = sType
 				}
 				// probably need to collect dbaas consumers too at some stage
-				services = append(services, lagoonv1beta1.LagoonService{
+				services = append(services, schema.EnvironmentService{
 					Name:       serviceName,
 					Type:       serviceType,
 					Containers: containers,

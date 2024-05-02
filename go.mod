@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.29.0
 	github.com/prometheus/client_golang v1.16.0
-	github.com/uselagoon/machinery v0.0.17-0.20240109062854-3b567fb41003
+	github.com/uselagoon/machinery v0.0.20
 	github.com/vshn/k8up v1.99.99
 	github.com/xhit/go-str2duration/v2 v2.1.0
 	gopkg.in/matryer/try.v1 v1.0.0-20150601225556-312d2599e12e
@@ -84,10 +84,10 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/net v0.19.0 // indirect
-	golang.org/x/oauth2 v0.10.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/oauth2 v0.17.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/term v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect

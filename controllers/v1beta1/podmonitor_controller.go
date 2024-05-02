@@ -75,10 +75,6 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// if this is a lagoon task, then run the handle task monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "task" {
-		err := r.calculateTaskMetrics(ctx)
-		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
-		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
@@ -100,10 +96,6 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	// if this is a lagoon build, then run the handle build monitoring process
 	if jobPod.ObjectMeta.Labels["lagoon.sh/jobType"] == "build" {
-		err := r.calculateBuildMetrics(ctx)
-		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to generate metrics."))
-		}
 		if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
 			// pod is not being deleted
 			return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
@@ -113,27 +105,27 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// first try and clean up the pod and capture the logs and update
 		// the lagoonbuild that owns it with the status
 		var lagoonBuild lagoonv1beta1.LagoonBuild
-		err = r.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Namespace: jobPod.ObjectMeta.Namespace,
 			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
 		}, &lagoonBuild)
 		if err != nil {
-			opLog.Info(fmt.Sprintf("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required."))
+			opLog.Info("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required.")
 			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 			if err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+				opLog.Error(err, "Unable to update the LagoonBuild.")
 			}
 		} else {
 			if helpers.ContainsString(
-				helpers.BuildRunningPendingStatus,
+				lagoonv1beta1.BuildRunningPendingStatus,
 				lagoonBuild.Labels["lagoon.sh/buildStatus"],
 			) {
-				opLog.Info(fmt.Sprintf("Attempting to update the LagoonBuild with cancellation if required."))
+				opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
 				// this will update the deployment back to lagoon if it can do so
 				// and should only update if the LagoonBuild is Pending or Running
 				err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
 				if err != nil {
-					opLog.Error(err, fmt.Sprintf("Unable to update the LagoonBuild."))
+					opLog.Error(err, "Unable to update the LagoonBuild.")
 				}
 			}
 		}
@@ -150,7 +142,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// sorted by their creation timestamp and set the first to running
 		if !r.LFFQoSEnabled {
 			// if qos is not enabled, then handle the check for pending builds here
-			opLog.Info(fmt.Sprintf("Checking for any pending builds."))
+			opLog.Info("Checking for any pending builds.")
 			runningBuilds := &lagoonv1beta1.LagoonBuildList{}
 			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 				client.InNamespace(req.Namespace),
@@ -158,16 +150,16 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			})
 			// list all builds in the namespace that have the running buildstatus
 			if err := r.List(ctx, runningBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+				return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 			}
 			// if we have no running builds, then check for any pending builds
 			if len(runningBuilds.Items) == 0 {
-				return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+				return ctrl.Result{}, lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 			}
 		} else {
 			// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op
 			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("No pending build check in namespaces when QoS is enabled"))
+				opLog.Info("No pending build check in namespaces when QoS is enabled")
 			}
 		}
 	}
@@ -217,7 +209,7 @@ func (r *LagoonMonitorReconciler) collectLogs(ctx context.Context, req reconcile
 	for _, container := range jobPod.Spec.Containers {
 		cLogs, err := getContainerLogs(ctx, container.Name, req)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to retrieve logs from pod: %v", err)
+			return nil, fmt.Errorf("unable to retrieve logs from pod: %v", err)
 		}
 		allContainerLogs = append(allContainerLogs, cLogs...)
 	}

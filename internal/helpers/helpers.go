@@ -1,53 +1,18 @@
 package helpers
 
 import (
-	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
-	"github.com/hashicorp/go-version"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-var (
-	// BuildRunningPendingStatus .
-	BuildRunningPendingStatus = []string{
-		lagoonv1beta1.BuildStatusPending.String(),
-		lagoonv1beta1.BuildStatusQueued.String(),
-		lagoonv1beta1.BuildStatusRunning.String(),
-	}
-	// BuildCompletedCancelledFailedStatus .
-	BuildCompletedCancelledFailedStatus = []string{
-		lagoonv1beta1.BuildStatusFailed.String(),
-		lagoonv1beta1.BuildStatusComplete.String(),
-		lagoonv1beta1.BuildStatusCancelled.String(),
-	}
-	// TaskRunningPendingStatus .
-	TaskRunningPendingStatus = []string{
-		lagoonv1beta1.TaskStatusPending.String(),
-		lagoonv1beta1.TaskStatusQueued.String(),
-		lagoonv1beta1.TaskStatusRunning.String(),
-	}
-	// TaskCompletedCancelledFailedStatus .
-	TaskCompletedCancelledFailedStatus = []string{
-		lagoonv1beta1.TaskStatusFailed.String(),
-		lagoonv1beta1.TaskStatusComplete.String(),
-		lagoonv1beta1.TaskStatusCancelled.String(),
-	}
 )
 
 const (
@@ -84,54 +49,30 @@ func RemoveString(slice []string, s string) (result []string) {
 	return
 }
 
-// BuildContainsStatus .
-func BuildContainsStatus(slice []lagoonv1beta1.LagoonBuildConditions, s lagoonv1beta1.LagoonBuildConditions) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-// TaskContainsStatus .
-func TaskContainsStatus(slice []lagoonv1beta1.LagoonTaskConditions, s lagoonv1beta1.LagoonTaskConditions) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 // IntPtr .
 func IntPtr(i int) *int {
-	var iPtr *int
-	iPtr = new(int)
+	iPtr := new(int)
 	*iPtr = i
 	return iPtr
 }
 
 // Int32Ptr .
 func Int32Ptr(i int32) *int32 {
-	var iPtr *int32
-	iPtr = new(int32)
+	iPtr := new(int32)
 	*iPtr = i
 	return iPtr
 }
 
 // Int64Ptr .
 func Int64Ptr(i int64) *int64 {
-	var iPtr *int64
-	iPtr = new(int64)
+	iPtr := new(int64)
 	*iPtr = i
 	return iPtr
 }
 
 // UintPtr .
 func UintPtr(i uint) *uint {
-	var iPtr *uint
-	iPtr = new(uint)
+	iPtr := new(uint)
 	*iPtr = i
 	return iPtr
 }
@@ -164,18 +105,6 @@ func HashString(s string) string {
 	h.Write([]byte(s))
 	bs := h.Sum(nil)
 	return fmt.Sprintf("%x", bs)
-}
-
-// RemoveBuild remove a LagoonBuild from a slice of LagoonBuilds
-func RemoveBuild(slice []lagoonv1beta1.LagoonBuild, s lagoonv1beta1.LagoonBuild) []lagoonv1beta1.LagoonBuild {
-	result := []lagoonv1beta1.LagoonBuild{}
-	for _, item := range slice {
-		if item.ObjectMeta.Name == s.ObjectMeta.Name {
-			continue
-		}
-		result = append(result, item)
-	}
-	return result
 }
 
 var lowerAlNum = regexp.MustCompile("[^a-z0-9]+")
@@ -254,90 +183,6 @@ func containsStr(s []string, str string) bool {
 	return false
 }
 
-// Check if the version of lagoon provided in the internal_system scope variable is greater than or equal to the checked version
-func CheckLagoonVersion(build *lagoonv1beta1.LagoonBuild, checkVersion string) bool {
-	lagoonProjectVariables := &[]LagoonEnvironmentVariable{}
-	json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
-	lagoonVersion, err := GetLagoonVariable("LAGOON_SYSTEM_CORE_VERSION", []string{"internal_system"}, *lagoonProjectVariables)
-	if err != nil {
-		return false
-	}
-	aVer, err := version.NewSemver(lagoonVersion.Value)
-	if err != nil {
-		return false
-	}
-	bVer, err := version.NewSemver(checkVersion)
-	if err != nil {
-		return false
-	}
-	return aVer.GreaterThanOrEqual(bVer)
-}
-
-// CancelExtraBuilds cancels extra builds.
-func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, ns string, status string) error {
-	pendingBuilds := &lagoonv1beta1.LagoonBuildList{}
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagoonv1beta1.BuildStatusPending.String()}),
-	})
-	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-		return fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-	}
-	if len(pendingBuilds.Items) > 0 {
-		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
-		// if we have any pending builds, then grab the latest one and make it running
-		// if there are any other pending builds, cancel them so only the latest one runs
-		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
-		})
-		for idx, pBuild := range pendingBuilds.Items {
-			pendingBuild := pBuild.DeepCopy()
-			if idx == 0 {
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
-			} else {
-				// cancel any other pending builds
-				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.ObjectMeta.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = lagoonv1beta1.BuildStatusCancelled.String()
-				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
-			}
-			if err := r.Update(ctx, pendingBuild); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func GetBuildConditionFromPod(phase corev1.PodPhase) lagoonv1beta1.BuildStatusType {
-	var buildCondition lagoonv1beta1.BuildStatusType
-	switch phase {
-	case corev1.PodFailed:
-		buildCondition = lagoonv1beta1.BuildStatusFailed
-	case corev1.PodSucceeded:
-		buildCondition = lagoonv1beta1.BuildStatusComplete
-	case corev1.PodPending:
-		buildCondition = lagoonv1beta1.BuildStatusPending
-	case corev1.PodRunning:
-		buildCondition = lagoonv1beta1.BuildStatusRunning
-	}
-	return buildCondition
-}
-
-func GetTaskConditionFromPod(phase corev1.PodPhase) lagoonv1beta1.TaskStatusType {
-	var taskCondition lagoonv1beta1.TaskStatusType
-	switch phase {
-	case corev1.PodFailed:
-		taskCondition = lagoonv1beta1.TaskStatusFailed
-	case corev1.PodSucceeded:
-		taskCondition = lagoonv1beta1.TaskStatusComplete
-	case corev1.PodPending:
-		taskCondition = lagoonv1beta1.TaskStatusPending
-	case corev1.PodRunning:
-		taskCondition = lagoonv1beta1.TaskStatusRunning
-	}
-	return taskCondition
-}
-
 // GenerateNamespaceName handles the generation of the namespace name from environment and project name with prefixes and patterns
 func GenerateNamespaceName(pattern, environmentName, projectname, prefix, controllerNamespace string, randomPrefix bool) string {
 	nsPattern := pattern
@@ -361,7 +206,7 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 	)
 	// If there is a namespaceprefix defined, and random prefix is disabled
 	// then add the prefix to the namespace
-	if prefix != "" && randomPrefix == false {
+	if prefix != "" && !randomPrefix {
 		ns = fmt.Sprintf("%s-%s", prefix, ns)
 	}
 	// If the randomprefix is enabled, then add a prefix based on the hash of the controller namespace

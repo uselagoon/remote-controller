@@ -4,6 +4,12 @@ repo: github.com/uselagoon/remote-controller
 resources:
 - group: crd
   kind: LagoonBuild
+  version: v1beta2
+- group: crd
+  kind: LagoonTask
+  version: v1beta2
+- group: crd
+  kind: LagoonBuild
   version: v1beta1
 - group: crd
   kind: LagoonTask

@@ -22,6 +22,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta2"
+
+// LagoonBuild is the Schema for the lagoonbuilds API
+type LagoonBuild struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
+	Status         LagoonBuildStatus     `json:"status,omitempty"`
+	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// LagoonBuildList contains a list of LagoonBuild
+type LagoonBuildList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []LagoonBuild `json:"items"`
+}
+
 // BuildStatusType const for the status type
 type BuildStatusType string
 
@@ -81,27 +103,6 @@ type LagoonBuildConditions struct {
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               BuildStatusType        `json:"type"`
 	// Condition          string                 `json:"condition"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonBuild is the Schema for the lagoonbuilds API
-type LagoonBuild struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
-	Status         LagoonBuildStatus     `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonBuildList contains a list of LagoonBuild
-type LagoonBuildList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []LagoonBuild `json:"items"`
 }
 
 func init() {

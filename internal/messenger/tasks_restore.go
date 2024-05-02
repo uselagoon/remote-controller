@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -17,7 +17,7 @@ import (
 )
 
 // ResticRestore handles creating the restic restore jobs.
-func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	vers, err := checkRestoreVersionFromCore(jobSpec.Misc.MiscResource)
 	if err != nil {
@@ -97,7 +97,7 @@ func checkRestoreVersionFromCore(resource []byte) (string, error) {
 }
 
 // createv1alpha1Restore will create a restore task using the restores.backup.appuio.ch v1alpha1 api (k8up v1)
-func (m *Messenger) createv1alpha1Restore(opLog logr.Logger, namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) createv1alpha1Restore(opLog logr.Logger, namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	restorev1alpha1 := &k8upv1alpha1.Restore{}
 	if err := json.Unmarshal(jobSpec.Misc.MiscResource, restorev1alpha1); err != nil {
 		opLog.Error(err,
@@ -122,7 +122,7 @@ func (m *Messenger) createv1alpha1Restore(opLog logr.Logger, namespace string, j
 }
 
 // createv1Restore will create a restore task using the restores.k8up.io v1 api (k8up v2)
-func (m *Messenger) createv1Restore(opLog logr.Logger, namespace string, jobSpec *lagoonv1beta1.LagoonTaskSpec) error {
+func (m *Messenger) createv1Restore(opLog logr.Logger, namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	restorev1 := &k8upv1.Restore{}
 	if err := json.Unmarshal(jobSpec.Misc.MiscResource, restorev1); err != nil {
 		opLog.Error(err,

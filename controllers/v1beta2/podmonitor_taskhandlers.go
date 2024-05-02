@@ -143,7 +143,7 @@ Logs on pod %s, assigned to cluster %s
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
@@ -208,7 +208,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
@@ -254,7 +254,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
-			opLog.Error(err, "Unable to encode message as JSON")
+			opLog.Error(err, "unable to encode message as JSON")
 		}
 		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
 			// if we can't publish the message, set it as a pending message
@@ -353,16 +353,16 @@ Task %s
 		// send any messages to lagoon message queues
 		// update the deployment with the status
 		if err = r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to publish task status logs"))
+			opLog.Error(err, "unable to publish task status logs")
 		}
 		if err = r.updateLagoonTask(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to publish task update"))
+			opLog.Error(err, "unable to publish task update")
 		}
 		// if the container logs can't be retrieved, we don't want to send any task logs back, as this will nuke
 		// any previously received logs
 		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
 			if err = r.taskLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower(), allContainerLogs); err != nil {
-				opLog.Error(err, fmt.Sprintf("Unable to publish task logs"))
+				opLog.Error(err, "unable to publish task logs")
 			}
 		}
 		mergePatch, _ := json.Marshal(mergeMap)
@@ -370,7 +370,7 @@ Task %s
 		if err := r.Get(ctx, req.NamespacedName, &lagoonTask); err == nil {
 			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, "Unable to update resource")
+				opLog.Error(err, "unable to update resource")
 			}
 		}
 		// just delete the pod

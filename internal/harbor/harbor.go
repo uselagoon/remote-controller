@@ -1,6 +1,8 @@
 package harbor
 
 import (
+	"crypto/tls"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,11 +37,15 @@ type Harbor struct {
 	WebhookEventTypes     []string
 	LagoonTargetName      string
 	Config                *config.Options
+	TLSSkipVerify         bool
 }
 
 // New create a new harbor connection.
 func New(harbor Harbor) (*Harbor, error) {
 	harbor.Log = ctrl.Log.WithName("controllers").WithName("HarborIntegration")
+	if harbor.TLSSkipVerify {
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 	c, err := harborclientv3.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password)
 	if err != nil {
 		return nil, err

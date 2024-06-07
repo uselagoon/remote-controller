@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	harborclientv3 "github.com/mittwald/goharbor-client/v3/apiv2"
 
 	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
 	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
@@ -22,7 +21,6 @@ type Harbor struct {
 	Username              string
 	Password              string
 	Log                   logr.Logger
-	ClientV3              *harborclientv3.RESTClient
 	ClientV5              *harborclientv5.RESTClient
 	DeleteDisabled        bool
 	WebhookAddition       bool
@@ -46,11 +44,6 @@ func New(harbor Harbor) (*Harbor, error) {
 	if harbor.TLSSkipVerify {
 		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
-	c, err := harborclientv3.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password)
-	if err != nil {
-		return nil, err
-	}
-	harbor.ClientV3 = c
 	harbor.Config = &config.Options{
 		Page:     1,
 		PageSize: 100,

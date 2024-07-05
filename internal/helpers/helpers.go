@@ -36,6 +36,13 @@ var (
 		lagoonv1beta1.BuildStatusComplete.String(),
 		lagoonv1beta1.BuildStatusCancelled.String(),
 	}
+	// BuildRunningPendingStatus .
+	BuildRunningPendingFailedStatus = []string{
+		lagoonv1beta1.BuildStatusPending.String(),
+		lagoonv1beta1.BuildStatusQueued.String(),
+		lagoonv1beta1.BuildStatusRunning.String(),
+		lagoonv1beta1.BuildStatusFailed.String(),
+	}
 	// TaskRunningPendingStatus .
 	TaskRunningPendingStatus = []string{
 		lagoonv1beta1.TaskStatusPending.String(),
@@ -47,6 +54,13 @@ var (
 		lagoonv1beta1.TaskStatusFailed.String(),
 		lagoonv1beta1.TaskStatusComplete.String(),
 		lagoonv1beta1.TaskStatusCancelled.String(),
+	}
+	// TaskRunningPendingStatus .
+	TaskRunningPendingFailedStatus = []string{
+		lagoonv1beta1.TaskStatusPending.String(),
+		lagoonv1beta1.TaskStatusQueued.String(),
+		lagoonv1beta1.TaskStatusRunning.String(),
+		lagoonv1beta1.TaskStatusFailed.String(),
 	}
 )
 

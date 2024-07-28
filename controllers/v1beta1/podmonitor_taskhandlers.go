@@ -280,7 +280,7 @@ func (r *LagoonMonitorReconciler) updateTaskWithLogs(
 	// then update the task to reflect the current pod status
 	// we do this so we don't update the status of the task again
 	if helpers.ContainsString(
-		lagoonv1beta1.TaskRunningPendingStatus,
+		lagoonv1beta1.TaskRunningPendingFailedStatus,
 		lagoonTask.Labels["lagoon.sh/taskStatus"],
 	) || cancel {
 		opLog.Info(

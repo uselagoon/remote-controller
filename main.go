@@ -17,10 +17,8 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -632,6 +630,7 @@ func main() {
 		WebhookURL:            harborLagoonWebhook,
 		LagoonTargetName:      lagoonTargetName,
 		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
+		TLSSkipVerify:         tlsSkipVerify,
 	}
 
 	deletion := deletions.New(mgr.GetClient(),
@@ -996,11 +995,5 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
-	}
-}
-
-func init() {
-	if tlsSkipVerify {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 }

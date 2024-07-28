@@ -33,6 +33,13 @@ var (
 		BuildStatusComplete.String(),
 		BuildStatusCancelled.String(),
 	}
+	// BuildRunningPendingStatus .
+	BuildRunningPendingFailedStatus = []string{
+		BuildStatusPending.String(),
+		BuildStatusQueued.String(),
+		BuildStatusRunning.String(),
+		BuildStatusFailed.String(),
+	}
 )
 
 // BuildContainsStatus .

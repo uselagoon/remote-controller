@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/cheshir/go-mq/v2 v2.0.1
 	github.com/coreos/go-semver v0.3.1
+	github.com/cxmcc/unixsums v0.0.0-20131125091133-89564297d82f
 	github.com/go-logr/logr v1.2.4
 	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/go-version v1.6.0

@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -227,21 +226,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 				return fmt.Errorf("error creating harbor robot account: %v", err)
 			}
 		} else {
-			hProject, err := lagoonHarbor.CreateProject(ctx, lagoonBuild.Spec.Project.Name)
-			if err != nil {
-				return fmt.Errorf("error creating harbor project: %v", err)
-			}
-			// create or refresh the robot credentials
-			robotCreds, err = lagoonHarbor.CreateOrRefreshRobot(ctx,
-				r.Client,
-				hProject,
-				lagoonBuild.Spec.Project.Environment,
-				ns,
-				time.Now().Add(lagoonHarbor.RobotAccountExpiry).Unix(),
-				false)
-			if err != nil {
-				return fmt.Errorf("error creating harbor robot account: %v", err)
-			}
+			return fmt.Errorf("harbor versions below v2.2.0 are not supported: %v", err)
 		}
 		// if we have robotcredentials to create, do that here
 		_, err = lagoonHarbor.UpsertHarborSecret(ctx,

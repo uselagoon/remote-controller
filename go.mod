@@ -10,7 +10,6 @@ require (
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/k8up-io/k8up/v2 v2.7.1
-	github.com/mittwald/goharbor-client/v3 v3.3.0
 	github.com/mittwald/goharbor-client/v5 v5.3.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.29.0

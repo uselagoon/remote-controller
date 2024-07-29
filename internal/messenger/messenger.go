@@ -17,12 +17,6 @@ type removeTask struct {
 	NamespacePattern                 string `json:"namespacePattern,omitempty"`
 }
 
-type messenger interface {
-	Consumer(string)
-	Publish(string, []byte)
-	GetPendingMessages()
-}
-
 // Messaging is used for the config and client information for the messaging queue.
 type Messenger struct {
 	Config                           mq.Config

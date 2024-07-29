@@ -18,6 +18,9 @@ NS=nginx-example-main
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
 LBUILD3=9m5zypx
+LBUILD4=1m5zypx
+
+LATEST_CRD_VERSION=v1beta2
 
 HARBOR_VERSION=${HARBOR_VERSION:-1.6.4}
 
@@ -233,6 +236,15 @@ else
     echo "===> label exists"
 fi
 
+echo "==> deprecated v1beta1 api: Trigger a lagoon build using kubectl apply"
+kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project3.yaml
+# patch the resource with the controller namespace
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.crd.lagoon.sh lagoon-build-${LBUILD4} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+# patch the resource with a random label to bump the controller event filter
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.crd.lagoon.sh lagoon-build-${LBUILD4} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+sleep 10
+check_lagoon_build lagoon-build-${LBUILD4}
+
 echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
 
 kubectl -n $NS apply -f test-resources/dynamic-secret-in-task-project1-secret.yaml
@@ -344,7 +356,9 @@ else
 fi
 done
 echo "==> Pod cleanup output (should only be 1 lagoon-build pod)"
-POD_CLEANUP_OUTPUT=$(kubectl -n nginx-example-main get pods | grep "lagoon-build")
+
+# only check
+POD_CLEANUP_OUTPUT=$(kubectl -n nginx-example-main get pods -l crd.lagoon.sh/version=${LATEST_CRD_VERSION} | grep "lagoon-build")
 echo "${POD_CLEANUP_OUTPUT}"
 POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")
 if [ $POD_CLEANUP_COUNT -gt 1 ]; then
@@ -444,7 +458,7 @@ echo '
 {"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
     "payload":"{
         \"misc\":{
-            \"miscResource\":\"eyJtZXRhZGF0YSI6eyJuYW1lIjoicmVzdG9yZS1iZjA3MmEwLXVxeHFvNCJ9LCJzcGVjIjp7InNuYXBzaG90IjoiYmYwNzJhMDllMTc3MjZkYTU0YWRjNzk5MzZlYzg3NDU1MjE5OTM1OTlkNDEyMTFkZmM5NDY2ZGZkNWJjMzJhNSIsInJlc3RvcmVNZXRob2QiOnsiczMiOnt9fSwiYmFja2VuZCI6eyJzMyI6eyJidWNrZXQiOiJiYWFzLW5naW54LWV4YW1wbGUifSwicmVwb1Bhc3N3b3JkU2VjcmV0UmVmIjp7ImtleSI6InJlcG8tcHciLCJuYW1lIjoiYmFhcy1yZXBvLXB3In19fX0=\"
+            \"miscResource\":\"eyJtZXRhZGF0YSI6eyJuYW1lIjoicmVzdG9yZS1iZjA3MmEwOWUxNzcyNmRhNTRhZGM3OTkzNmVjODc0NTUyMTk5MzU5OWQ0MTIxMWRmYzk0NjZkZmQ1YmMzMmE1In0sInNwZWMiOnsic25hcHNob3QiOiJiZjA3MmEwOWUxNzcyNmRhNTRhZGM3OTkzNmVjODc0NTUyMTk5MzU5OWQ0MTIxMWRmYzk0NjZkZmQ1YmMzMmE1IiwicmVzdG9yZU1ldGhvZCI6eyJzMyI6e319LCJiYWNrZW5kIjp7InMzIjp7ImJ1Y2tldCI6ImJhYXMtbmdpbngtZXhhbXBsZSJ9LCJyZXBvUGFzc3dvcmRTZWNyZXRSZWYiOnsia2V5IjoicmVwby1wdyIsIm5hbWUiOiJiYWFzLXJlcG8tcHcifX19fQ==\"
         },
         \"key\":\"deploytarget:restic:backup:restore\",
         \"environment\":{
@@ -463,7 +477,7 @@ echo ""
 sleep 10
 CHECK_COUNTER=1
 kubectl -n nginx-example-main get restores.k8up.io
-until $(kubectl -n nginx-example-main get restores.k8up.io restore-bf072a0-uqxqo4 &> /dev/null)
+until $(kubectl -n nginx-example-main get restores.k8up.io restore-bf072a09e17726da54adc79936ec8745521993599d41211dfc9466dfd5bc32a5 &> /dev/null)
 do
 if [ $CHECK_COUNTER -lt 14 ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -478,7 +492,7 @@ else
     exit 1
 fi
 done
-kubectl -n nginx-example-main get restores.k8up.io restore-bf072a0-uqxqo4 -o yaml | kubectl-neat > test-resources/results/k8upv1-cluster.yaml
+kubectl -n nginx-example-main get restores.k8up.io restore-bf072a09e17726da54adc79936ec8745521993599d41211dfc9466dfd5bc32a5 -o yaml | kubectl-neat > test-resources/results/k8upv1-cluster.yaml
 if cmp --silent -- "test-resources/results/k8upv1.yaml" "test-resources/results/k8upv1-cluster.yaml"; then
     echo "Resulting restores match"
 else
@@ -494,6 +508,46 @@ else
     echo "============== FAILED ==============="
     exit 1
 fi
+
+# test that a cancellation works when a cancellation message is received from rabbitmq, and that the restore resource is deleted from the namespace
+echo "==> Trigger a lagoon restore cancellation using rabbitmq"
+echo '
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJyZXN0b3JlTmFtZSI6InJlc3RvcmUtYmYwNzJhMDllMTc3MjZkYTU0YWRjNzk5MzZlYzg3NDU1MjE5OTM1OTlkNDEyMTFkZmM5NDY2ZGZkNWJjMzJhNSIsImJhY2t1cElkIjoiYmYwNzJhMDllMTc3MjZkYTU0YWRjNzk5MzZlYzg3NDU1MjE5OTM1OTlkNDEyMTFkZmM5NDY2ZGZkNWJjMzJhNSJ9\"
+        },
+        \"key\":\"deploytarget:restic:cancel:restore\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}' >payload.json
+curl -s -u guest:guest -H "Accept: application/json" -H "Content-Type:application/json" -X POST -d @payload.json http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish
+echo ""
+sleep 10
+# check that the restore resource gets removed
+until ! $(kubectl -n nginx-example-main get restores.k8up.io restore-bf072a09e17726da54adc79936ec8745521993599d41211dfc9466dfd5bc32a5 &> /dev/null)
+do
+if [ $CHECK_COUNTER -lt 14 ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Restore not deleted yet"
+    sleep 5
+else
+    echo "Timeout of 70seconds for restore to be deleted"
+    check_controller_log
+    tear_down
+    echo "================ END ================"
+    echo "============== FAILED ==============="
+    exit 1
+fi
+done
 
 echo "==> Delete the environment"
 echo '

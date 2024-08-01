@@ -2,22 +2,26 @@ package pruner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"time"
 	//lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
 	//"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
 // LagoonOldProcPruner will identify and remove any long running builds or tasks.
 func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
+	ctx := context.Background()
 	opLog := ctrl.Log.WithName("utilities").WithName("LagoonOldProcPruner")
 	namespaces := &corev1.NamespaceList{}
 	labelRequirements, _ := labels.NewRequirement("lagoon.sh/environmentType", selection.Exists, nil)
@@ -26,8 +30,8 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			Selector: labels.NewSelector().Add(*labelRequirements),
 		},
 	})
-	if err := p.Client.List(context.Background(), namespaces, listOption); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to list namespaces created by Lagoon, there may be none or something went wrong"))
+	if err := p.Client.List(ctx, namespaces, listOption); err != nil {
+		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
 
@@ -61,45 +65,47 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 				Selector: labels.NewSelector().Add(*jobTypeLabelRequirements),
 			},
 		})
-		if err := p.Client.List(context.Background(), &podList, listOption); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to list pod resources, there may be none or something went wrong"))
+		if err := p.Client.List(ctx, &podList, listOption); err != nil {
+			opLog.Error(err, "unable to list pod resources, there may be none or something went wrong")
 			continue
 		}
 
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodRunning {
 				if podType, ok := pod.GetLabels()["lagoon.sh/jobType"]; ok {
-
-					updatePod := false
-					switch podType {
-					case "task":
-						if pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore) && pruneTasks {
-							updatePod = true
-							pod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
-							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled task due to timeout")
+					var mergeLabels map[string]string
+					switch {
+					case podType == "task" && pruneTasks && pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore):
+						mergeLabels = map[string]string{
+							"lagoon.sh/cancelTask": "true",
 						}
-					case "build":
-						if pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore) && pruneBuilds {
-							updatePod = true
-							pod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
-							pod.ObjectMeta.Annotations["lagoon.sh/cancelReason"] = fmt.Sprintf("Cancelled build due to timeout")
+					case podType == "build" && pruneBuilds && pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore):
+						mergeLabels = map[string]string{
+							"lagoon.sh/cancelBuild": "true",
 						}
 					default:
 						return
 					}
-					if !updatePod {
-						return
-					}
 
-					if err := p.Client.Update(context.Background(), &pod); err != nil {
+					mergeMap := map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": mergeLabels,
+							"annotations": map[string]string{
+								"lagoon.sh/cancelReason": "Cancelled due to timeout",
+							},
+						},
+					}
+					mergePatch, _ := json.Marshal(mergeMap)
+					cPod := pod.DeepCopy()
+					if err := p.Client.Patch(ctx, cPod, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 						opLog.Error(err,
 							fmt.Sprintf(
-								"Unable to update %s to cancel it.",
-								pod.Name,
+								"Unable to patch %s to cancel it.",
+								cPod.Name,
 							),
 						)
 					}
-					opLog.Info(fmt.Sprintf("Cancelled pod %v - timeout", pod.Name))
+					opLog.Info(fmt.Sprintf("Cancelled pod %v - timeout", cPod.Name))
 				} else {
 					continue
 				}
@@ -146,7 +152,7 @@ func calculateRemoveBeforeTimes(p *Pruner, ns corev1.Namespace, startTime time.T
 	if err != nil {
 		errorText := fmt.Sprintf(
 			"Unable to parse TimeoutForTaskPods '%v' - cannot run long running task removal process.",
-			p.TimeoutForBuildPods,
+			p.TimeoutForTaskPods,
 		)
 		return time.Time{}, time.Time{}, errors.New(errorText)
 	}

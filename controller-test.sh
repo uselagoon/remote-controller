@@ -48,18 +48,18 @@ tear_down () {
     echo "==> Remove cluster"
     kind delete cluster --name ${KIND_NAME}
     echo "==> Remove services"
-    docker-compose down
+    docker compose down
 }
 
 start_docker_compose_services () {
     echo "================ BEGIN ================"
     echo "==> Bring up local provider"
-    docker-compose up -d
+    docker compose up -d
     CHECK_COUNTER=1
 }
 
 mariadb_start_check () {
-    until $(docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
+    until $(docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
     do
     if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
         let CHECK_COUNTER=CHECK_COUNTER+1

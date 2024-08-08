@@ -114,7 +114,7 @@ controller-test:
 	./controller-test.sh
 
 clean:
-	docker-compose down
+	docker compose down
 	kind delete cluster --name ${KIND_NAME}
 
 local-circle:

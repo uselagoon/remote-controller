@@ -16,7 +16,8 @@ import (
 )
 
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
-func (h *Harbor) CreateProjectV2(ctx context.Context, projectName string) (*harborclientv5model.Project, error) {
+func (h *Harbor) CreateProjectV2(ctx context.Context, namespace corev1.Namespace) (*harborclientv5model.Project, error) {
+	projectName := namespace.Labels["lagoon.sh/project"]
 	exists, err := h.ClientV5.ProjectExists(ctx, projectName)
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error checking project %s exists, err: %v", projectName, err))
@@ -278,6 +279,14 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 			if err != nil {
 				h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
 			}
+			h.Log.Info(
+				fmt.Sprintf(
+					"Deleted harbor repository %s in  project %s, environment %s",
+					repo.Name,
+					projectName,
+					environmentName,
+				),
+			)
 		}
 	}
 	if len(listRepositories) > 100 {
@@ -293,6 +302,14 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 					if err != nil {
 						h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
 					}
+					h.Log.Info(
+						fmt.Sprintf(
+							"Deleted harbor repository %s in  project %s, environment %s",
+							repo.Name,
+							projectName,
+							environmentName,
+						),
+					)
 				}
 			}
 		}
@@ -321,6 +338,14 @@ func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectName, branch str
 				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", projectName, robot.Name))
 				return
 			}
+			h.Log.Info(
+				fmt.Sprintf(
+					"Deleted harbor robot account %s in  project %s, environment %s",
+					robot.Name,
+					projectName,
+					environmentName,
+				),
+			)
 		}
 	}
 }

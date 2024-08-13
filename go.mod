@@ -1,6 +1,6 @@
 module github.com/uselagoon/remote-controller
 
-go 1.20
+go 1.21
 
 require (
 	github.com/cheshir/go-mq/v2 v2.0.1

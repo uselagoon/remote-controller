@@ -703,14 +703,13 @@ spec:
                   environmentType:
                     type: string
                   id:
-                    type: string
+                    type: integer
                   name:
                     type: string
                   project:
                     type: string
                 required:
                 - environmentType
-                - id
                 - name
                 - project
                 type: object
@@ -751,7 +750,7 @@ spec:
                 description: LagoonTaskProject defines the lagoon project information.
                 properties:
                   id:
-                    type: string
+                    type: integer
                   name:
                     type: string
                   namespacePattern:
@@ -775,7 +774,6 @@ spec:
                         type: string
                     type: object
                 required:
-                - id
                 - name
                 type: object
               task:

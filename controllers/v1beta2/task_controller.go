@@ -182,6 +182,18 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						Name:  "TASK_DATA_ID",
 						Value: lagoonTask.Spec.Task.ID,
 					})
+					if lagoonTask.Spec.Project.ID != nil {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "LAGOON_PROJECT_ID",
+							Value: strconv.Itoa(int(*lagoonTask.Spec.Project.ID)),
+						})
+					}
+					if lagoonTask.Spec.Environment.ID != nil {
+						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+							Name:  "LAGOON_ENVIRONMENT_ID",
+							Value: strconv.Itoa(int(*lagoonTask.Spec.Environment.ID)),
+						})
+					}
 					// add proxy variables to builds if they are defined
 					if r.ProxyConfig.HTTPProxy != "" {
 						dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{

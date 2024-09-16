@@ -463,6 +463,18 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Value: helpers.GetAPIValues(r.LagoonAPIConfiguration, "LAGOON_CONFIG_SSH_PORT"),
 		},
 	}
+	if lagoonBuild.Spec.Project.EnvironmentID != nil {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "ENVIRONMENT_ID",
+			Value: strconv.Itoa(int(*lagoonBuild.Spec.Project.EnvironmentID)),
+		})
+	}
+	if lagoonBuild.Spec.Project.ID != nil {
+		podEnvs = append(podEnvs, corev1.EnvVar{
+			Name:  "PROJECT_ID",
+			Value: strconv.Itoa(int(*lagoonBuild.Spec.Project.ID)),
+		})
+	}
 	// add proxy variables to builds if they are defined
 	if r.ProxyConfig.HTTPProxy != "" {
 		podEnvs = append(podEnvs, corev1.EnvVar{

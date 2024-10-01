@@ -87,21 +87,7 @@ func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns
 			return false, fmt.Errorf("error getting or creating robot account: %v", err)
 		}
 	} else {
-		hProject, err := h.CreateProject(ctx, ns.Labels["lagoon.sh/project"])
-		if err != nil {
-			return false, fmt.Errorf("error getting or creating project: %v", err)
-		}
-		time.Sleep(1 * time.Second) // wait 1 seconds
-		robotCreds, err = h.CreateOrRefreshRobot(ctx,
-			cl,
-			hProject,
-			ns.Labels["lagoon.sh/environment"],
-			ns.ObjectMeta.Name,
-			time.Now().Add(h.RobotAccountExpiry).Unix(),
-			force)
-		if err != nil {
-			return false, fmt.Errorf("error getting or creating robot account: %v", err)
-		}
+		return false, fmt.Errorf("harbor versions below v2.2.0 are not supported: %v", err)
 	}
 	time.Sleep(1 * time.Second) // wait 1 seconds
 

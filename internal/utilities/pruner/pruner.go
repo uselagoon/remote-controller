@@ -5,12 +5,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type pruner interface {
-	LagoonBuildCleanup()
-	BuildPodCleanup()
-	TaskPodCleanup()
-}
-
 // Pruner is used for cleaning up old pods or resources.
 type Pruner struct {
 	Client                client.Client

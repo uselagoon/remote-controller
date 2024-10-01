@@ -15,8 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	//lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	//"github.com/uselagoon/remote-controller/internal/helpers"
 )
 
 // LagoonOldProcPruner will identify and remove any long running builds or tasks.

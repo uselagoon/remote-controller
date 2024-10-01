@@ -53,14 +53,10 @@ func (h *Harbor) generateRobotWithPrefix(str string) string {
 
 // matchRobotAccount will check if the robotaccount exists or not
 func (h *Harbor) matchRobotAccount(robotName string,
-	projectName string,
 	environmentName string,
 ) bool {
 	// pre global-robot-accounts (2.2.0+)
-	if robotName == h.generateRobotWithPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8])) {
-		return true
-	}
-	return false
+	return robotName == h.generateRobotWithPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8]))
 }
 
 // https://github.com/goharbor/harbor/pull/13685
@@ -90,10 +86,7 @@ func (h *Harbor) matchRobotAccountV2(robotName string,
 	projectName string,
 	environmentName string,
 ) bool {
-	if robotName == h.generateRobotWithPrefixV2(projectName, environmentName) {
-		return true
-	}
-	return false
+	return robotName == h.generateRobotWithPrefixV2(projectName, environmentName)
 }
 
 // already expired?

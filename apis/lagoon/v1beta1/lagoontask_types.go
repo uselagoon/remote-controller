@@ -171,11 +171,32 @@ type LagoonTaskConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               TaskStatusType         `json:"type"`
-	// Condition          string                 `json:"condition"`
+	Reason             string                 `json:"reason"`
+	Message            string                 `json:"message"`
 }
 
 func init() {
 	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
+}
+
+// convert to string as required for environment ID for backwards compatability
+func (a *LagoonTaskEnvironment) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		a.ID = fmt.Sprintf("%v", value)
+	}
+	return nil
+}
+
+// convert to string as required for project ID for backwards compatability
+func (a *LagoonTaskProject) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		a.ID = fmt.Sprintf("%v", value)
+	}
+	return nil
 }
 
 // this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript

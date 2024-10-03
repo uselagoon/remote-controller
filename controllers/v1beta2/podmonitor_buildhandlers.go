@@ -16,8 +16,11 @@ import (
 	lagooncrd "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -147,7 +150,7 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(
 	logs []byte,
 ) error {
 	if r.EnableMQ {
-		buildStep := "running"
+		buildStep := "pending"
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			// set build step to anything other than running if the condition isn't running
 			buildStep = condition
@@ -237,7 +240,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 	condition string,
 ) error {
 	if r.EnableMQ {
-		buildStep := "running"
+		buildStep := "pending"
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			// set build step to anything other than running if the condition isn't running
 			buildStep = condition
@@ -382,7 +385,7 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
 	condition string,
 ) error {
 	if r.EnableMQ {
-		buildStep := "running"
+		buildStep := "pending"
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			// set build step to anything other than running if the condition isn't running
 			buildStep = condition
@@ -492,7 +495,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
 			collectLogs = false
 		}
 	}
-	buildStep := "running"
+	buildStep := "pending"
 	if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 		buildStep = value
 	}
@@ -551,20 +554,19 @@ Build %s
 					"lagoon.sh/buildStarted": "true",
 				},
 			},
-			"statusMessages": map[string]interface{}{},
 		}
-
-		condition := lagooncrd.LagoonBuildConditions{
-			Type:               buildCondition,
-			Status:             corev1.ConditionTrue,
-			LastTransitionTime: time.Now().UTC().Format(time.RFC3339),
+		condition := metav1.Condition{
+			Type: "BuildStep",
+			// Reason needs to be CamelCase not camelCase. Would need to update the `build-deploy-tool` to use CamelCase
+			// to eventually remove the need for `cases`
+			Reason:             cases.Title(language.English, cases.NoLower).String(buildStep),
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
 		}
-		if !lagooncrd.BuildContainsStatus(lagoonBuild.Status.Conditions, condition) {
-			lagoonBuild.Status.Conditions = append(lagoonBuild.Status.Conditions, condition)
-			mergeMap["status"] = map[string]interface{}{
-				"conditions": lagoonBuild.Status.Conditions,
-				// don't save build logs in resource anymore
-			}
+		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+		mergeMap["status"] = map[string]interface{}{
+			"conditions": lagoonBuild.Status.Conditions,
+			"phase":      buildCondition.String(),
 		}
 
 		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon

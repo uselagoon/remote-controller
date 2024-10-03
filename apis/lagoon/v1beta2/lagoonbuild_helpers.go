@@ -14,6 +14,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,7 +45,7 @@ var (
 )
 
 // BuildContainsStatus .
-func BuildContainsStatus(slice []LagoonBuildConditions, s LagoonBuildConditions) bool {
+func BuildContainsStatus(slice []metav1.Condition, s metav1.Condition) bool {
 	for _, item := range slice {
 		if item == s {
 			return true
@@ -363,20 +364,16 @@ func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *La
 		conditions := lagoonBuild.Status.Conditions
 		// sort the build conditions by time so the first and last can be extracted
 		sort.Slice(conditions, func(i, j int) bool {
-			iTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[i].LastTransitionTime)
-			jTime, _ := time.Parse("2006-01-02T15:04:05Z", conditions[j].LastTransitionTime)
-			return iTime.Before(jTime)
+			iTime := conditions[i].LastTransitionTime
+			jTime := conditions[j].LastTransitionTime
+			return iTime.Before(&jTime)
 		})
 		// get the starting time, or fallback to default
-		sTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[0].LastTransitionTime)
-		if err == nil {
-			msg.Meta.StartTime = sTime.Format("2006-01-02 15:04:05")
-		}
+		sTime := conditions[0].LastTransitionTime
+		msg.Meta.StartTime = sTime.Format("2006-01-02 15:04:05")
 		// get the ending time, or fallback to default
-		eTime, err := time.Parse("2006-01-02T15:04:05Z", conditions[len(conditions)-1].LastTransitionTime)
-		if err == nil {
-			msg.Meta.EndTime = eTime.Format("2006-01-02 15:04:05")
-		}
+		eTime := conditions[len(conditions)-1].LastTransitionTime
+		msg.Meta.EndTime = eTime.Format("2006-01-02 15:04:05")
 	}
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {

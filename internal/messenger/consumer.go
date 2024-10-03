@@ -260,9 +260,10 @@ func (m *Messenger) Consumer(targetName string) { //error {
 			job.ObjectMeta.Namespace = namespace
 			job.SetLabels(
 				map[string]string{
-					"lagoon.sh/taskType":   lagoonv1beta2.TaskTypeStandard.String(),
-					"lagoon.sh/taskStatus": lagoonv1beta2.TaskStatusPending.String(),
-					"lagoon.sh/controller": m.ControllerNamespace,
+					"lagoon.sh/taskType":    lagoonv1beta2.TaskTypeStandard.String(),
+					"lagoon.sh/taskStatus":  lagoonv1beta2.TaskStatusPending.String(),
+					"lagoon.sh/controller":  m.ControllerNamespace,
+					"crd.lagoon.sh/version": "v1beta2",
 				},
 			)
 			job.ObjectMeta.Name = fmt.Sprintf("lagoon-task-%s-%s", job.Spec.Task.ID, helpers.HashString(job.Spec.Task.ID)[0:6])

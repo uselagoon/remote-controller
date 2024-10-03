@@ -17,6 +17,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -334,20 +335,18 @@ Task %s
 					"lagoon.sh/taskStatus": taskCondition.String(),
 				},
 			},
-			"statusMessages": map[string]interface{}{},
 		}
 
-		condition := lagooncrd.LagoonTaskConditions{
-			Type:               taskCondition,
-			Status:             corev1.ConditionTrue,
-			LastTransitionTime: time.Now().UTC().Format(time.RFC3339),
+		condition := metav1.Condition{
+			Reason:             taskCondition.String(),
+			Type:               "TaskCondition",
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
 		}
-		if !lagooncrd.TaskContainsStatus(lagoonTask.Status.Conditions, condition) {
-			lagoonTask.Status.Conditions = append(lagoonTask.Status.Conditions, condition)
-			mergeMap["status"] = map[string]interface{}{
-				"conditions": lagoonTask.Status.Conditions,
-				// don't save build logs in resource anymore
-			}
+		_ = meta.SetStatusCondition(&lagoonTask.Status.Conditions, condition)
+		mergeMap["status"] = map[string]interface{}{
+			"conditions": lagoonTask.Status.Conditions,
+			"phase":      taskCondition.String(),
 		}
 
 		// send any messages to lagoon message queues

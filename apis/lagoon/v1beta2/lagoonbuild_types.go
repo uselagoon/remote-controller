@@ -18,12 +18,14 @@ package v1beta2
 import (
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // +kubebuilder:object:root=true
-//+kubebuilder:storageversion
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.phase`,description="Status of the LagoonBuild"
+// +kubebuilder:printcolumn:name="BuildStep",type="string",JSONPath=`.status.conditions[?(@.type == "BuildStep")].reason`,description="The build step of the LagoonBuild"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // LagoonBuild is the Schema for the lagoonbuilds API
 type LagoonBuild struct {
@@ -88,18 +90,11 @@ type LagoonBuildSpec struct {
 
 // LagoonBuildStatus defines the observed state of LagoonBuild
 type LagoonBuildStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
-	Log        []byte                  `json:"log,omitempty"`
-}
-
-// LagoonBuildConditions defines the observed conditions of build pods.
-type LagoonBuildConditions struct {
-	LastTransitionTime string                 `json:"lastTransitionTime"`
-	Status             corev1.ConditionStatus `json:"status"`
-	Type               BuildStatusType        `json:"type"`
-	// Condition          string                 `json:"condition"`
+	// Conditions provide a standard mechanism for higher-level status reporting from a controller.
+	// They are an extension mechanism which allows tools and other controllers to collect summary information about
+	// resources without needing to understand resource-specific status details.
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Phase      string             `json:"phase,omitempty"`
 }
 
 func init() {

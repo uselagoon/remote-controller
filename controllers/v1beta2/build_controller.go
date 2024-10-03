@@ -327,6 +327,9 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, la
 			"crd.lagoon.sh/version": crdVersion,
 		},
 	)
+	// all new builds start as "queued" but will transition to pending or running fairly quickly
+	// unless they are actually queued :D
+	newBuild.Status.Phase = "Queued"
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: ns,
 		Name:      newBuild.ObjectMeta.Name,

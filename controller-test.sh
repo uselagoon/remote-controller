@@ -26,6 +26,7 @@ HARBOR_VERSION=${HARBOR_VERSION:-1.6.4}
 
 check_controller_log () {
     echo "=========== CONTROLLER LOG ============"
+    kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} --previous=true
     kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
     if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Build ${1} Failed")
     then
@@ -179,7 +180,7 @@ check_lagoon_build () {
     fi
     done
     echo "==> Build running"
-    kubectl -n ${NS} logs ${1} -f
+    # kubectl -n ${NS} logs ${1} -f
 }
 
 start_docker_compose_services

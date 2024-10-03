@@ -11,6 +11,7 @@ import (
 	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,7 +42,7 @@ var (
 )
 
 // TaskContainsStatus .
-func TaskContainsStatus(slice []LagoonTaskConditions, s LagoonTaskConditions) bool {
+func TaskContainsStatus(slice []metav1.Condition, s metav1.Condition) bool {
 	for _, item := range slice {
 		if item == s {
 			return true

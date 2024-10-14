@@ -78,9 +78,6 @@ func (b BuildStatusType) ToLower() string {
 
 // LagoonBuildSpec defines the desired state of LagoonBuild
 type LagoonBuildSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	Build        Build       `json:"build"`
 	Project      Project     `json:"project"`
 	Branch       Branch      `json:"branch,omitempty"`
@@ -91,8 +88,6 @@ type LagoonBuildSpec struct {
 
 // LagoonBuildStatus defines the observed state of LagoonBuild
 type LagoonBuildStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
 	Log        []byte                  `json:"log,omitempty"`
 }

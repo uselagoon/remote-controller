@@ -220,6 +220,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // and we set it to watch LagoonBuilds
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("lagoonbuildv1beta1").
 		For(&lagoonv1beta1.LagoonBuild{}).
 		WithEventFilter(BuildPredicates{
 			ControllerNamespace: r.ControllerNamespace,

@@ -122,6 +122,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // SetupWithManager sets up the controller with the given manager
 func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("lagoontaskv1beta1").
 		For(&lagoonv1beta1.LagoonTask{}).
 		WithEventFilter(TaskPredicates{
 			ControllerNamespace: r.ControllerNamespace,

@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/uselagoon/machinery/api/schema"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,7 +30,9 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // +kubebuilder:object:root=true
-//+kubebuilder:storageversion
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.phase`,description="Status of the LagoonTask"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // LagoonTask is the Schema for the lagoontasks API
 type LagoonTask struct {
@@ -147,18 +148,11 @@ type LagoonTaskEnvironment struct {
 
 // LagoonTaskStatus defines the observed state of LagoonTask
 type LagoonTaskStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Conditions []LagoonTaskConditions `json:"conditions,omitempty"`
-	Log        []byte                 `json:"log,omitempty"`
-}
-
-// LagoonTaskConditions defines the observed conditions of task pods.
-type LagoonTaskConditions struct {
-	LastTransitionTime string                 `json:"lastTransitionTime"`
-	Status             corev1.ConditionStatus `json:"status"`
-	Type               TaskStatusType         `json:"type"`
-	// Condition          string                 `json:"condition"`
+	// Conditions provide a standard mechanism for higher-level status reporting from a controller.
+	// They are an extension mechanism which allows tools and other controllers to collect summary information about
+	// resources without needing to understand resource-specific status details.
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Phase      string             `json:"phase,omitempty"`
 }
 
 func init() {

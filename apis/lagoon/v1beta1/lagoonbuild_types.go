@@ -102,7 +102,8 @@ type LagoonBuildConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               BuildStatusType        `json:"type"`
-	// Condition          string                 `json:"condition"`
+	Reason             string                 `json:"reason"`
+	Message            string                 `json:"message"`
 }
 
 func init() {

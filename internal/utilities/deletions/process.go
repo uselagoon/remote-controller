@@ -9,6 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 )
 
@@ -23,7 +25,7 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		environment = val
 	}
 	if project == "" && environment == "" {
-		return fmt.Errorf("Namespace %s is not a lagoon environment", namespace.Name)
+		return fmt.Errorf("namespace %s is not a lagoon environment", namespace.Name)
 	}
 
 	/*
@@ -97,37 +99,43 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		get any deployments/statefulsets/daemonsets
 		then delete them
 	*/
-	if del := d.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := lagoonv1beta1.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), d.Client, namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting tasks")
 	}
-	if del := d.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := lagoonv1beta2.DeleteLagoonTasks(ctx, opLog.WithName("DeleteLagoonTasks"), d.Client, namespace.ObjectMeta.Name, project, environment); !del {
+		return fmt.Errorf("error deleting tasks")
+	}
+	if del := lagoonv1beta1.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), d.Client, namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting builds")
 	}
-	if del := d.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := lagoonv1beta2.DeleteLagoonBuilds(ctx, opLog.WithName("DeleteLagoonBuilds"), d.Client, namespace.ObjectMeta.Name, project, environment); !del {
+		return fmt.Errorf("error deleting builds")
+	}
+	if del := d.DeleteDeployments(ctx, opLog.WithName("DeleteDeployments"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting deployments")
 	}
-	if del := d.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeleteStatefulSets(ctx, opLog.WithName("DeleteStatefulSets"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting statefulsets")
 	}
-	if del := d.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeleteDaemonSets(ctx, opLog.WithName("DeleteDaemonSets"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting daemonsets")
 	}
-	if del := d.DeleteIngress(ctx, opLog.WithName("DeleteIngress"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeleteIngress(ctx, opLog.WithName("DeleteIngress"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting ingress")
 	}
-	if del := d.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeleteJobs(ctx, opLog.WithName("DeleteJobs"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting jobs")
 	}
-	if del := d.DeletePods(ctx, opLog.WithName("DeletePods"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeletePods(ctx, opLog.WithName("DeletePods"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting pods")
 	}
-	if del := d.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), namespace.ObjectMeta.Name, project, environment); del == false {
+	if del := d.DeletePVCs(ctx, opLog.WithName("DeletePVCs"), namespace.ObjectMeta.Name, project, environment); !del {
 		return fmt.Errorf("error deleting pvcs")
 	}
 	/*
 		then delete the namespace
 	*/
-	if del := d.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, environment); del == false {
+	if del := d.DeleteNamespace(ctx, opLog.WithName("DeleteNamespace"), namespace, project, environment); !del {
 		return fmt.Errorf("error deleting namespace")
 	}
 	opLog.WithName("DeleteNamespace").Info(

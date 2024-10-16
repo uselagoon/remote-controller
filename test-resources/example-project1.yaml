@@ -1,7 +1,9 @@
 kind: LagoonBuild
-apiVersion: crd.lagoon.sh/v1beta1
+apiVersion: crd.lagoon.sh/v1beta2
 metadata:
     name: lagoon-build-7m5zypx
+    labels:
+        crd.lagoon.sh/version: v1beta2
 spec:
     build:
         ci: 'true' #to make sure that readwritemany is changed to readwriteonce

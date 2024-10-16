@@ -22,6 +22,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="use lagoonbuilds.crd.lagoon.sh/v1beta2"
+
+// LagoonBuild is the Schema for the lagoonbuilds API
+type LagoonBuild struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
+	Status         LagoonBuildStatus     `json:"status,omitempty"`
+	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// LagoonBuildList contains a list of LagoonBuild
+type LagoonBuildList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []LagoonBuild `json:"items"`
+}
+
 // BuildStatusType const for the status type
 type BuildStatusType string
 
@@ -56,9 +78,6 @@ func (b BuildStatusType) ToLower() string {
 
 // LagoonBuildSpec defines the desired state of LagoonBuild
 type LagoonBuildSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	Build        Build       `json:"build"`
 	Project      Project     `json:"project"`
 	Branch       Branch      `json:"branch,omitempty"`
@@ -69,8 +88,6 @@ type LagoonBuildSpec struct {
 
 // LagoonBuildStatus defines the observed state of LagoonBuild
 type LagoonBuildStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Conditions []LagoonBuildConditions `json:"conditions,omitempty"`
 	Log        []byte                  `json:"log,omitempty"`
 }
@@ -80,28 +97,8 @@ type LagoonBuildConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               BuildStatusType        `json:"type"`
-	// Condition          string                 `json:"condition"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonBuild is the Schema for the lagoonbuilds API
-type LagoonBuild struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec           LagoonBuildSpec       `json:"spec,omitempty"`
-	Status         LagoonBuildStatus     `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonBuildList contains a list of LagoonBuild
-type LagoonBuildList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []LagoonBuild `json:"items"`
+	Reason             string                 `json:"reason"`
+	Message            string                 `json:"message"`
 }
 
 func init() {

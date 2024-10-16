@@ -33,7 +33,7 @@ func TestHarbor_matchRobotAccount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &tt.args.harbor
-			if got := h.matchRobotAccount(tt.args.robotName, tt.args.projectName, tt.args.environmentName); got != tt.want {
+			if got := h.matchRobotAccount(tt.args.robotName, tt.args.environmentName); got != tt.want {
 				t.Errorf("Harbor.matchRobotAccount() = %v, want %v", got, tt.want)
 			}
 		})

@@ -22,12 +22,35 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/uselagoon/machinery/api/schema"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="use lagoontasks.crd.lagoon.sh/v1beta2"
+
+// LagoonTask is the Schema for the lagoontasks API
+type LagoonTask struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
+	Status         LagoonTaskStatus      `json:"status,omitempty"`
+	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// LagoonTaskList contains a list of LagoonTask
+type LagoonTaskList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []LagoonTask `json:"items"`
+}
 
 // TaskStatusType const for the status type
 type TaskStatusType string
@@ -73,10 +96,8 @@ func (b TaskType) String() string {
 
 // LagoonTaskSpec defines the desired state of LagoonTask
 type LagoonTaskSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Key          string                  `json:"key,omitempty"`
-	Task         LagoonTaskInfo          `json:"task,omitempty"`
+	Task         schema.LagoonTaskInfo   `json:"task,omitempty"`
 	Project      LagoonTaskProject       `json:"project,omitempty"`
 	Environment  LagoonTaskEnvironment   `json:"environment,omitempty"`
 	Misc         *LagoonMiscInfo         `json:"misc,omitempty"`
@@ -148,32 +169,32 @@ type LagoonTaskConditions struct {
 	LastTransitionTime string                 `json:"lastTransitionTime"`
 	Status             corev1.ConditionStatus `json:"status"`
 	Type               TaskStatusType         `json:"type"`
-	// Condition          string                 `json:"condition"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonTask is the Schema for the lagoontasks API
-type LagoonTask struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec           LagoonTaskSpec        `json:"spec,omitempty"`
-	Status         LagoonTaskStatus      `json:"status,omitempty"`
-	StatusMessages *LagoonStatusMessages `json:"statusMessages,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-
-// LagoonTaskList contains a list of LagoonTask
-type LagoonTaskList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []LagoonTask `json:"items"`
+	Reason             string                 `json:"reason"`
+	Message            string                 `json:"message"`
 }
 
 func init() {
 	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
+}
+
+// convert to string as required for environment ID for backwards compatability
+func (a *LagoonTaskEnvironment) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		a.ID = fmt.Sprintf("%v", value)
+	}
+	return nil
+}
+
+// convert to string as required for project ID for backwards compatability
+func (a *LagoonTaskProject) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		a.ID = fmt.Sprintf("%v", value)
+	}
+	return nil
 }
 
 // this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript

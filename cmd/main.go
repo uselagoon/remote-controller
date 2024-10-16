@@ -748,6 +748,7 @@ func main() {
 		enableDebug,
 		lffSupportK8UPv2,
 		cache,
+		harborConfig,
 	)
 
 	reuseCache, _ := lru.New[string, string](1000)

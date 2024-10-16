@@ -114,7 +114,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// The object is being deleted
 		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
+			if err := r.deleteExternalResources(ctx, &lagoonTask, ""); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err

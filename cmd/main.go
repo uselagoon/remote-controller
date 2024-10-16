@@ -736,6 +736,7 @@ func main() {
 		enableDebug,
 		lffSupportK8UPv2,
 		cache,
+		harborConfig,
 	)
 
 	c := cron.New()

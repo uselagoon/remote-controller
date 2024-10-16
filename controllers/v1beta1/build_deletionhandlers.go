@@ -212,16 +212,16 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status of cancelled in lagoon
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	return nil
 }
 
 // buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	logs []byte,
@@ -267,7 +267,7 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(ctx context.Context,
 
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.Context,
+func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,
@@ -361,7 +361,7 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(ctx context.C
 }
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(ctx context.Context,
+func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 	opLog logr.Logger,
 	lagoonBuild *lagoonv1beta1.LagoonBuild,
 	lagoonEnv *corev1.ConfigMap,

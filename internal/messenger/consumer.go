@@ -103,7 +103,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err)
 	}
 
 	// Handle any tasks that go to the `remove` queue
@@ -227,7 +227,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "remove-queue", err)
 	}
 
 	// Handle any tasks that go to the `jobs` queue
@@ -285,7 +285,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err)
 	}
 
 	// Handle any tasks that go to the `misc` queue
@@ -297,14 +297,6 @@ func (m *Messenger) Consumer(targetName string) { //error {
 			jobSpec := &lagoonv1beta2.LagoonTaskSpec{}
 			json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
-			namespace := helpers.GenerateNamespaceName(
-				jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-				jobSpec.Environment.Name,
-				jobSpec.Project.Name,
-				m.NamespacePrefix,
-				m.ControllerNamespace,
-				m.RandomNamespacePrefix,
-			)
 			switch jobSpec.Key {
 			case "deploytarget:build:cancel", "kubernetes:build:cancel":
 				opLog.Info(
@@ -312,12 +304,12 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						"Received build cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						namespace,
+						m.genNamespace(jobSpec),
 					),
 				)
 				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -336,12 +328,12 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						"Received task cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						namespace,
+						m.genNamespace(jobSpec),
 					),
 				)
 				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
@@ -362,7 +354,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						jobSpec.Environment.Name,
 					),
 				)
-				err := m.ResticRestore(namespace, jobSpec)
+				err := m.ResticRestore(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -382,7 +374,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.IngressRouteMigration(namespace, jobSpec)
+				err := m.IngressRouteMigration(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -402,7 +394,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.AdvancedTask(namespace, jobSpec)
+				err := m.AdvancedTask(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -422,7 +414,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.ActiveStandbySwitch(namespace, jobSpec)
+				err := m.ActiveStandbySwitch(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -432,6 +424,18 @@ func (m *Messenger) Consumer(targetName string) { //error {
 						),
 					)
 					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "deploytarget:harborpolicy:update":
+				err := m.HarborPolicy(ctx, jobSpec)
+				if err != nil {
+					opLog.Error(err,
+						fmt.Sprintf(
+							"Harbor policy update for project %s failed",
+							jobSpec.Project.Name,
+						),
+					)
 					message.Ack(false) // ack to remove from queue
 					return
 				}
@@ -448,7 +452,18 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "misc-queue", err)
 	}
 	<-forever
+}
+
+func (m *Messenger) genNamespace(jobSpec *lagoonv1beta2.LagoonTaskSpec) string {
+	return helpers.GenerateNamespaceName(
+		jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		jobSpec.Environment.Name,
+		jobSpec.Project.Name,
+		m.NamespacePrefix,
+		m.ControllerNamespace,
+		m.RandomNamespacePrefix,
+	)
 }

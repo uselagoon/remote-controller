@@ -83,7 +83,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// The object is being deleted
 		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
+			if err := r.deleteExternalResources(); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err
@@ -115,7 +115,7 @@ func (r *LagoonTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LagoonTaskReconciler) deleteExternalResources(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, namespace string) error {
+func (r *LagoonTaskReconciler) deleteExternalResources() error {
 	// delete any external resources if required
 	return nil
 }
@@ -262,35 +262,35 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						"-c",
 						lagoonTask.Spec.Task.Command,
 					}
-					dep.Spec.Template.Spec.RestartPolicy = "Never"
-					taskPod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      lagoonTask.ObjectMeta.Name,
-							Namespace: lagoonTask.ObjectMeta.Namespace,
-							Labels: map[string]string{
-								"lagoon.sh/jobType":     "task",
-								"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
-								"crd.lagoon.sh/version": crdVersion,
-								"lagoon.sh/controller":  r.ControllerNamespace,
-							},
-							OwnerReferences: []metav1.OwnerReference{
-								{
-									APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
-									Kind:       "LagoonTask",
-									Name:       lagoonTask.ObjectMeta.Name,
-									UID:        lagoonTask.UID,
-								},
+				}
+				dep.Spec.Template.Spec.RestartPolicy = "Never"
+				taskPod := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      lagoonTask.ObjectMeta.Name,
+						Namespace: lagoonTask.ObjectMeta.Namespace,
+						Labels: map[string]string{
+							"lagoon.sh/jobType":     "task",
+							"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
+							"crd.lagoon.sh/version": crdVersion,
+							"lagoon.sh/controller":  r.ControllerNamespace,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
+								Kind:       "LagoonTask",
+								Name:       lagoonTask.ObjectMeta.Name,
+								UID:        lagoonTask.UID,
 							},
 						},
-						Spec: dep.Spec.Template.Spec,
-					}
-					// set the organization labels on task pods
-					if lagoonTask.Spec.Project.Organization != nil {
-						taskPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
-						taskPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
-					}
-					return taskPod, nil
+					},
+					Spec: dep.Spec.Template.Spec,
 				}
+				// set the organization labels on task pods
+				if lagoonTask.Spec.Project.Organization != nil {
+					taskPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
+					taskPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+				}
+				return taskPod, nil
 			}
 		}
 		if !hasService {
@@ -427,8 +427,9 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			return err
 		}
 		var serviceaccountTokenSecret string
+		reg, _ := regexp.Compile("^lagoon-deployer-token")
 		for _, secret := range serviceAccount.Secrets {
-			match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+			match := reg.MatchString(secret.Name)
 			if match {
 				serviceaccountTokenSecret = secret.Name
 				break

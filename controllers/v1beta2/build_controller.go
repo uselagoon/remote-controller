@@ -307,7 +307,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 			continue
 		}
 		// send the status change to lagoon
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, runningBuild, nil, buildCondition, "cancelled")
+		r.updateDeploymentAndEnvironmentTask(opLog, runningBuild, nil, buildCondition, "cancelled")
 		continue
 	}
 	// handle processing running but no pod/failed pod builds

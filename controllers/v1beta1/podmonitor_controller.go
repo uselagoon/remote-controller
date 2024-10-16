@@ -170,6 +170,7 @@ func (r *LagoonMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // and we set it to watch Pods with an event filter that contains our build label
 func (r *LagoonMonitorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("lagoonmonitorv1beta1").
 		For(&corev1.Pod{}).
 		WithEventFilter(PodPredicates{
 			ControllerNamespace: r.ControllerNamespace,

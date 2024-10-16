@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/url"
@@ -39,6 +40,8 @@ import (
 	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
 	cron "gopkg.in/robfig/cron.v2"
+
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
@@ -87,6 +90,9 @@ func main() {
 	var enableLeaderElection bool
 	var enableMQ bool
 	var leaderElectionID string
+	var secureMetrics bool
+	var enableHTTP2 bool
+
 	var mqWorkers int
 	var rabbitRetryInterval int
 	var startupConnectionAttempts int
@@ -180,6 +186,11 @@ func main() {
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.")
+	flag.BoolVar(&secureMetrics, "metrics-secure", false,
+		"If set the metrics endpoint is served securely")
+	flag.BoolVar(&enableHTTP2, "enable-http2", false,
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+
 	flag.StringVar(&lagoonTargetName, "lagoon-target-name", "ci-local-control-k8s",
 		"The name of the target as it is in lagoon.")
 	flag.StringVar(&mqUser, "rabbitmq-username", "guest",
@@ -468,12 +479,23 @@ func main() {
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
 	}))
+	disableHTTP2 := func(c *tls.Config) {
+		setupLog.Info("disabling http/2")
+		c.NextProtos = []string{"http/1.1"}
+	}
+	tlsOpts := []func(*tls.Config){}
+	if !enableHTTP2 {
+		tlsOpts = append(tlsOpts, disableHTTP2)
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   leaderElectionID,
-		Port:               9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress:   metricsAddr,
+			SecureServing: secureMetrics,
+			TLSOpts:       tlsOpts,
+		},
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: leaderElectionID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

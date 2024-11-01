@@ -36,7 +36,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	})
 	// list any builds that are running
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	for _, runningBuild := range runningBuilds.Items {
 		// if the running build is the one from this request then process it
@@ -52,7 +52,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 
 	// if there are no running builds, check if there are any pending builds that can be started
 	if len(runningBuilds.Items) == 0 {
-		return ctrl.Result{}, helpers.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+		return ctrl.Result{}, lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 	}
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent

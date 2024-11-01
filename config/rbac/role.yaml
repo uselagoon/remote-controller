@@ -1,9 +1,7 @@
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: manager-role
 rules:
 - apiGroups:
@@ -16,25 +14,6 @@ rules:
   - crd.lagoon.sh
   resources:
   - lagoonbuilds
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - crd.lagoon.sh
-  resources:
-  - lagoonbuilds/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - crd.lagoon.sh
-  resources:
   - lagoontasks
   verbs:
   - create
@@ -47,6 +26,7 @@ rules:
 - apiGroups:
   - crd.lagoon.sh
   resources:
+  - lagoonbuilds/status
   - lagoontasks/status
   verbs:
   - get

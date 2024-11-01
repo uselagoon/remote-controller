@@ -18,11 +18,15 @@ NS=nginx-example-main
 LBUILD=7m5zypx
 LBUILD2=8m5zypx
 LBUILD3=9m5zypx
+LBUILD4=1m5zypx
+
+LATEST_CRD_VERSION=v1beta2
 
 HARBOR_VERSION=${HARBOR_VERSION:-1.6.4}
 
 check_controller_log () {
     echo "=========== CONTROLLER LOG ============"
+    kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} --previous=true
     kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE}
     if $(kubectl logs $(kubectl get pods  -n ${CONTROLLER_NAMESPACE} --no-headers | awk '{print $1}') -c manager -n ${CONTROLLER_NAMESPACE} | grep -q "Build ${1} Failed")
     then
@@ -176,7 +180,7 @@ check_lagoon_build () {
     fi
     done
     echo "==> Build running"
-    kubectl -n ${NS} logs ${1} -f
+    # kubectl -n ${NS} logs ${1} -f
 }
 
 start_docker_compose_services
@@ -232,6 +236,15 @@ if ! $(kubectl get namespace -l 'organization.lagoon.sh/id=123' --no-headers 2> 
 else
     echo "===> label exists"
 fi
+
+echo "==> deprecated v1beta1 api: Trigger a lagoon build using kubectl apply"
+kubectl -n $CONTROLLER_NAMESPACE apply -f test-resources/example-project3.yaml
+# patch the resource with the controller namespace
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.crd.lagoon.sh lagoon-build-${LBUILD4} --type=merge --patch '{"metadata":{"labels":{"lagoon.sh/controller":"'$CONTROLLER_NAMESPACE'"}}}'
+# patch the resource with a random label to bump the controller event filter
+kubectl -n $CONTROLLER_NAMESPACE patch lagoonbuilds.v1beta1.crd.lagoon.sh lagoon-build-${LBUILD4} --type=merge --patch '{"metadata":{"labels":{"bump":"bump"}}}'
+sleep 10
+check_lagoon_build lagoon-build-${LBUILD4}
 
 echo "==> Trigger a Task using kubectl apply to test dynamic secret mounting"
 
@@ -344,7 +357,9 @@ else
 fi
 done
 echo "==> Pod cleanup output (should only be 1 lagoon-build pod)"
-POD_CLEANUP_OUTPUT=$(kubectl -n nginx-example-main get pods | grep "lagoon-build")
+
+# only check
+POD_CLEANUP_OUTPUT=$(kubectl -n nginx-example-main get pods -l crd.lagoon.sh/version=${LATEST_CRD_VERSION} | grep "lagoon-build")
 echo "${POD_CLEANUP_OUTPUT}"
 POD_CLEANUP_COUNT=$(echo "${POD_CLEANUP_OUTPUT}" | wc -l |  tr  -d " ")
 if [ $POD_CLEANUP_COUNT -gt 1 ]; then

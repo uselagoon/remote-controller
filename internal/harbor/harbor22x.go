@@ -154,7 +154,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		auths := helpers.Auths{}
 		// unmarshal it
 		if err := json.Unmarshal(secretData, &auths); err != nil {
-			return nil, fmt.Errorf("Could not unmarshal Harbor RobotAccount credential")
+			return nil, fmt.Errorf("could not unmarshal Harbor RobotAccount credential")
 		}
 		// set the force recreate robot account flag here
 		forceRecreate = true
@@ -167,7 +167,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	}
 	tempRobots := robots[:0]
 	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, project.Name, environmentName) && !robot.Editable {
+		if h.matchRobotAccount(robot.Name, environmentName) && !robot.Editable {
 			// this is an old (legacy) robot account, get rid of it
 			// if accounts are disabled, and deletion of disabled accounts is enabled
 			// then this will delete the account to get re-created

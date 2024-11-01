@@ -136,6 +136,24 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				}
 			}
 		}
+
+		// with the introduction of v1beta2, this will let any existing pending/qeued/running builds continue through
+		// but once the build is completed or failed and has processed anything else it needs to do, it should delete the resource
+		if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
+			if helpers.ContainsString(
+				lagoonv1beta1.BuildCompletedCancelledFailedStatus,
+				lagoonBuild.Labels["lagoon.sh/buildStatus"],
+			) {
+				opLog.Info(fmt.Sprintf("%s found in namespace %s is no longer required, removing it. v1beta1 is deprecated in favor of v1beta2",
+					lagoonBuild.ObjectMeta.Name,
+					req.NamespacedName.Namespace,
+				))
+				if err := r.Delete(ctx, &lagoonBuild); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
+
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			// if we do have a `lagoon.sh/buildStatus` set as running, then process it
@@ -149,7 +167,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			})
 			// list any builds that are running
 			if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+				return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 			}
 			for _, runningBuild := range runningNSBuilds.Items {
 				// if the running build is the one from this request then process it
@@ -163,7 +181,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				} // end check if running build is current LagoonBuild
 			} // end loop for running builds
 			// once running builds are processed, run the qos handler
-			return r.qosBuildProcessor(ctx, opLog, lagoonBuild, req)
+			return r.qosBuildProcessor(ctx, opLog, lagoonBuild)
 		}
 		// if qos is not enabled, just process it as a standard build
 		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
@@ -180,7 +198,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
-			opLog.Error(err, fmt.Sprintf("Unable to delete external resources"))
+			opLog.Error(err, "Unable to delete external resources")
 			return ctrl.Result{}, err
 		}
 		// remove our finalizer from the list and update it.
@@ -202,6 +220,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // and we set it to watch LagoonBuilds
 func (r *LagoonBuildReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("lagoonbuildv1beta1").
 		For(&lagoonv1beta1.LagoonBuild{}).
 		WithEventFilter(BuildPredicates{
 			ControllerNamespace: r.ControllerNamespace,
@@ -260,7 +279,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	err = helpers.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
+	err = lagoonv1beta1.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagoonv1beta1.BuildStatusPending.String())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -275,7 +294,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	})
 	// list all builds in the namespace that have the running buildstatus
 	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Unable to list builds in the namespace, there may be none or something went wrong: %v", err)
+		return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
 	}
 	// if there are running builds still, check if the pod exists or if the pod is complete/failed and attempt to get the status
 	for _, rBuild := range runningBuilds.Items {
@@ -293,7 +312,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 		} else {
 			// get the status from the pod and update the build
 			if lagoonBuildPod.Status.Phase == corev1.PodFailed || lagoonBuildPod.Status.Phase == corev1.PodSucceeded {
-				buildCondition = helpers.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
+				buildCondition = lagoonv1beta1.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
 				opLog.Info(fmt.Sprintf("Setting build %s as %s", runningBuild.ObjectMeta.Name, buildCondition.String()))
 				runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 			} else {

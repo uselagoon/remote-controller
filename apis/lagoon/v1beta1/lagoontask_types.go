@@ -187,6 +187,20 @@ func (a *LagoonTaskEnvironment) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// convert to uint as required for environment ID for backwards compatability
+func (a *LagoonTaskEnvironment) MarshalJSON() ([]byte, error) {
+	type LagoonTaskEnvironmentA LagoonTaskEnvironment
+	id, _ := strconv.Atoi(a.ID)
+	idUint := uint(id)
+	return json.Marshal(&struct {
+		ID *uint `json:"id"`
+		*LagoonTaskEnvironmentA
+	}{
+		ID:                     &idUint,
+		LagoonTaskEnvironmentA: (*LagoonTaskEnvironmentA)(a),
+	})
+}
+
 // convert to string as required for project ID for backwards compatability
 func (a *LagoonTaskProject) UnmarshalJSON(data []byte) error {
 	tmpMap := map[string]interface{}{}
@@ -195,6 +209,20 @@ func (a *LagoonTaskProject) UnmarshalJSON(data []byte) error {
 		a.ID = fmt.Sprintf("%v", value)
 	}
 	return nil
+}
+
+// convert to uint as required for environment ID for backwards compatability
+func (a *LagoonTaskProject) MarshalJSON() ([]byte, error) {
+	type LagoonTaskProjectA LagoonTaskProject
+	id, _ := strconv.Atoi(a.ID)
+	idUint := uint(id)
+	return json.Marshal(&struct {
+		ID *uint `json:"id"`
+		*LagoonTaskProjectA
+	}{
+		ID:                 &idUint,
+		LagoonTaskProjectA: (*LagoonTaskProjectA)(a),
+	})
 }
 
 // this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript

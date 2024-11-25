@@ -6,7 +6,6 @@ import (
 	"context"
 	"time"
 
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/api/lagoon/v1beta1"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 
@@ -45,9 +44,8 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		}
 		opLog.Info(fmt.Sprintf("Checking if %s needs robot credentials rotated", ns.ObjectMeta.Name))
 		// check for running builds!
-		runningBuildsv1beta1 := lagoonv1beta1.CheckRunningBuilds(ctx, h.ControllerNamespace, opLog, cl, ns)
 		runningBuildsv1beta2 := lagoonv1beta2.CheckRunningBuilds(ctx, h.ControllerNamespace, opLog, cl, ns)
-		if !runningBuildsv1beta1 && !runningBuildsv1beta2 {
+		if !runningBuildsv1beta2 {
 			rotated, err := h.RotateRobotCredential(ctx, cl, ns, false)
 			if err != nil {
 				opLog.Error(err, "error")

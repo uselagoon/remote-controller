@@ -22,22 +22,4 @@ resources:
   kind: LagoonTask
   path: remote-controller/api/lagoon/v1beta2
   version: v1beta2
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: false
-  domain: lagoon.sh
-  group: crd
-  kind: LagoonBuild
-  path: remote-controller/api/lagoon/v1beta1
-  version: v1beta1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: false
-  domain: lagoon.sh
-  group: crd
-  kind: LagoonTask
-  path: remote-controller/api/lagoon/v1beta1
-  version: v1beta1
 version: "3"

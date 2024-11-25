@@ -10,7 +10,6 @@ import (
 
 	"github.com/cheshir/go-mq/v2"
 	"github.com/uselagoon/machinery/api/schema"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/api/lagoon/v1beta1"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
@@ -318,42 +317,17 @@ func (m *Messenger) Consumer(targetName string) { //error {
 				)
 				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				hasv1beta2Build, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, namespace, message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-				hasv1beta1Build, v1beta1Bytes, err := lagoonv1beta1.CancelBuild(ctx, m.Client, namespace, message.Body())
-				if err != nil {
-					//@TODO: send msg back to lagoon and update build to failed?
-					message.Ack(false) // ack to remove from queue
-					return
-				}
-				if v1beta1Bytes != nil && v1beta2Bytes != nil {
-					// check if either v1beta2 or v1beta1 have a matching build
-					if hasv1beta2Build && !hasv1beta1Build {
-						// if v1beta2 has a build, send its response
-						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
-					} else if !hasv1beta2Build && hasv1beta1Build {
-						// if v1beta1 has a build, send its response
-						if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
-					} else {
-						// if both v1beta2 and v1beta1 say there is no associated build
-						// then respond with the v1beta2 response
-						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
+				if v1beta2Bytes != nil {
+					if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+						opLog.Error(err, "Unable to publish message.")
+						message.Ack(false) // ack to remove from queue
+						return
 					}
 				}
 			case "deploytarget:task:cancel", "kubernetes:task:cancel":
@@ -367,42 +341,17 @@ func (m *Messenger) Consumer(targetName string) { //error {
 				)
 				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				hasv1beta2Task, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, namespace, message.Body())
 				if err != nil {
 					//@TODO: send msg back to lagoon and update task to failed?
 					message.Ack(false) // ack to remove from queue
 					return
 				}
-				hasv1beta1Task, v1beta1Bytes, err := lagoonv1beta1.CancelTask(ctx, m.Client, namespace, message.Body())
-				if err != nil {
-					//@TODO: send msg back to lagoon and update task to failed?
-					message.Ack(false) // ack to remove from queue
-					return
-				}
-				if v1beta1Bytes != nil && v1beta2Bytes != nil {
-					// check if either v1beta2 or v1beta1 have a matching task
-					if hasv1beta2Task && !hasv1beta1Task {
-						// if v1beta2 has a task, send its response
-						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
-					} else if !hasv1beta2Task && hasv1beta1Task {
-						// if v1beta1 has a task, send its response
-						if err := m.Publish("lagoon-tasks:controller", v1beta1Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
-					} else {
-						// if both v1beta2 and v1beta1 say there is no associated task
-						// then respond with the v1beta2 response
-						if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
-							opLog.Error(err, "Unable to publish message.")
-							message.Ack(false) // ack to remove from queue
-							return
-						}
+				if v1beta2Bytes != nil {
+					if err := m.Publish("lagoon-tasks:controller", v1beta2Bytes); err != nil {
+						opLog.Error(err, "Unable to publish message.")
+						message.Ack(false) // ack to remove from queue
+						return
 					}
 				}
 			case "deploytarget:restic:backup:restore", "kubernetes:restic:backup:restore":

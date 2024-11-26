@@ -486,6 +486,38 @@ func (m *Messenger) Consumer(targetName string) { //error {
 					message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "deploytarget:environment:idling":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received environment idling request for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						namespace,
+					),
+				)
+				// idle or unidle an environment, optionally forcible scale it so it can't be unidled by the ingress
+				err := m.ScaleOrIdleEnvironment(ctx, opLog, namespace, jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "deploytarget:environment:service":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received environment service request for project %s, environment %s service - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						namespace,
+					),
+				)
+				// idle an environment, optionally forcible scale it so it can't be unidled by the ingress
+				err := m.EnvironmentServiceState(ctx, opLog, namespace, jobSpec)
+				if err != nil {
+					//@TODO: send msg back to lagoon and update task to failed?
+					message.Ack(false) // ack to remove from queue
+					return
+				}
 			default:
 				// if we get something that we don't know about, spit out the entire message
 				opLog.Info(

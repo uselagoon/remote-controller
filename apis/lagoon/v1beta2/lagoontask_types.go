@@ -159,6 +159,77 @@ func init() {
 	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
 }
 
+// custom unmarshaller only required while v1beta1 exists
+func (a *LagoonTaskEnvironment) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	_ = json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.String {
+			id, _ := strconv.Atoi(value.(string))
+			idUint := uint(id)
+			a.ID = &idUint
+		} else {
+			idUint := uint(value.(float64))
+			a.ID = &idUint
+		}
+	}
+	if value, ok := tmpMap["project"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.Float64 {
+			a.Project = strconv.Itoa(int(value.(float64)))
+		}
+	}
+	if value, ok := tmpMap["name"]; ok {
+		a.Name = value.(string)
+	}
+	if value, ok := tmpMap["environmentType"]; ok {
+		a.EnvironmentType = value.(string)
+	}
+	return nil
+}
+
+// custom unmarshaller only required while v1beta1 exists
+func (a *LagoonTaskProject) UnmarshalJSON(data []byte) error {
+	tmpMap := map[string]interface{}{}
+	_ = json.Unmarshal(data, &tmpMap)
+	if value, ok := tmpMap["id"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.String {
+			id, _ := strconv.Atoi(value.(string))
+			idUint := uint(id)
+			a.ID = &idUint
+		} else {
+			idUint := uint(value.(float64))
+			a.ID = &idUint
+		}
+	}
+	if value, ok := tmpMap["variables"]; ok {
+		b, _ := json.Marshal(value)
+		lv := LagoonVariables{}
+		err := json.Unmarshal(b, &lv)
+		if err != nil {
+			return err
+		}
+		a.Variables = lv
+	}
+	if value, ok := tmpMap["name"]; ok {
+		a.Name = value.(string)
+	}
+	if value, ok := tmpMap["organization"]; ok {
+		if value != nil {
+			b, err := json.Marshal(value)
+			if err != nil {
+				return err
+			}
+			o := &Organization{}
+			err = json.Unmarshal(b, o)
+			if err != nil {
+				return err
+			}
+			a.Organization = o
+		}
+	}
+	return nil
+}
+
 // this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript
 // this converts them from floats to bools
 func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {

@@ -1,4 +1,4 @@
-package v1beta1
+package harbor
 
 // contains all the event watch conditions for secret and ingresses
 

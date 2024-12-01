@@ -40,6 +40,20 @@ var (
 
 	duration = 600 * time.Second
 	interval = 1 * time.Second
+
+	metricLabels = []string{
+		"lagoon_builds_cancelled_total",
+		"lagoon_builds_completed_total",
+		"lagoon_builds_failed_total",
+		"lagoon_builds_pending_current",
+		"lagoon_builds_running_current",
+		"lagoon_builds_started_total",
+		"lagoon_tasks_cancelled_total",
+		"lagoon_tasks_completed_total",
+		"lagoon_tasks_failed_total",
+		"lagoon_tasks_running_current",
+		"lagoon_tasks_started_total",
+	}
 )
 
 func init() {
@@ -55,10 +69,21 @@ var _ = Describe("controller", Ordered, func() {
 		By("creating manager namespace")
 		cmd := exec.Command("kubectl", "create", "ns", namespace)
 		_, _ = utils.Run(cmd)
+
+		// when running a re-test, it is best to make sure the old namespace doesn't exist
+		By("removing existing test resources")
+		// remove the old namespace
+		cmd = exec.Command("kubectl", "delete", "ns", "nginx-example-main")
+		_, _ = utils.Run(cmd)
+		// clean up the k8up crds
+		utils.UninstallK8upCRDs()
 	})
 
 	// comment to prevent cleaning up controller namespace and local services
 	AfterAll(func() {
+		By("stop metrics consumer")
+		utils.StopMetricsConsumer()
+
 		By("removing manager namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", namespace)
 		_, _ = utils.Run(cmd)
@@ -69,6 +94,7 @@ var _ = Describe("controller", Ordered, func() {
 
 	Context("Operator", func() {
 		It("should run successfully", func() {
+			// start tests
 			var controllerPodName string
 			var err error
 
@@ -116,7 +142,6 @@ var _ = Describe("controller", Ordered, func() {
 				controllerPodName = podNames[0]
 				ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
 
-				// Validate pod status
 				cmd = exec.Command("kubectl", "get",
 					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
 					"-n", namespace,
@@ -129,6 +154,11 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+
+			By("start metrics consumer")
+			Expect(utils.StartMetricsConsumer()).To(Succeed())
+
+			time.Sleep(30 * time.Second)
 
 			By("validating that lagoonbuilds are working")
 			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx", "1m5zypx"} {
@@ -298,13 +328,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 			for name, restore := range restores {
 				By(fmt.Sprintf("installing %s crds", name))
-				cmd = exec.Command(
-					"kubectl",
-					"apply",
-					"-f",
-					fmt.Sprintf("test/e2e/testdata/%s-crds.yaml", name),
-				)
-				_, err = utils.Run(cmd)
+				err := utils.InstallK8upCRD(name)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 				time.Sleep(5 * time.Second)
@@ -363,7 +387,6 @@ var _ = Describe("controller", Ordered, func() {
 			controllerPodName = podNames[0]
 			ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
 			verifyRobotCredentialsRotate := func() error {
-				// Validate pod status
 				cmd = exec.Command("kubectl", "logs",
 					controllerPodName, "-c", "manager",
 					"-n", namespace,
@@ -411,9 +434,20 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, verifyNamespaceRemoved, duration, interval).Should(Succeed())
-		})
-		// uncomment to debug ...
-		// time.Sleep(5 * time.Minute)
-	})
 
+			By("validating that unauthenticated metrics requests fail")
+			runCmd := `curl -s -k https://remote-controller-controller-manager-metrics-service.remote-controller-system.svc.cluster.local:8443/metrics | grep -v "#" | grep "lagoon_"`
+			_, err = utils.RunCommonsCommand(namespace, runCmd)
+			ExpectWithOffset(2, err).To(HaveOccurred())
+
+			By("validating that authenticated metrics requests succeed with metrics")
+			runCmd = `curl -s -k -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://remote-controller-controller-manager-metrics-service.remote-controller-system.svc.cluster.local:8443/metrics | grep -v "#" | grep "lagoon_"`
+			output, err := utils.RunCommonsCommand(namespace, runCmd)
+			ExpectWithOffset(2, err).NotTo(HaveOccurred())
+			fmt.Printf("metrics: %s", string(output))
+			err = utils.CheckStringContainsStrings(string(output), metricLabels)
+			ExpectWithOffset(2, err).NotTo(HaveOccurred())
+			// End tests
+		})
+	})
 })

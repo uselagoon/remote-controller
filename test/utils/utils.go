@@ -22,11 +22,16 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	"github.com/onsi/ginkgo/v2"
+)
+
+const (
+	k8upv1alpha1crd = "https://github.com/k8up-io/k8up/releases/download/v1.2.0/k8up-crd.yaml"
+	k8upv1crd       = "https://github.com/k8up-io/k8up/releases/download/k8up-4.8.0/k8up-crd.yaml"
 )
 
 func warnError(err error) {
-	fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	fmt.Fprintf(ginkgo.GinkgoWriter, "warning: %v\n", err)
 }
 
 // StartLocalServices starts local services
@@ -51,18 +56,55 @@ func InstallBulkStorage() error {
 	return err
 }
 
+func StartMetricsConsumer() error {
+	cmd := exec.Command("kubectl", "apply", "-f", "test/e2e/testdata/metrics-consumer.yaml")
+	_, err := Run(cmd)
+	return err
+}
+
+func StopMetricsConsumer() {
+	cmd := exec.Command("kubectl", "delete", "-f", "test/e2e/testdata/metrics-consumer.yaml")
+	if _, err := Run(cmd); err != nil {
+		warnError(err)
+	}
+}
+
+// Installs a CRD file but doesn't cause a failure if it already exists
+func InstallK8upCRD(version string) error {
+	crd := k8upv1alpha1crd
+	if version == "k8up-v1" {
+		crd = k8upv1crd
+	}
+	cmd := exec.Command("kubectl", "create", "-f", crd)
+	_, err := Run(cmd)
+	return err
+}
+
+// Removes a CRD file but doesn't cause a failure if already deleted
+func UninstallK8upCRDs() {
+	cmd := exec.Command("kubectl", "delete", "-f", k8upv1alpha1crd)
+	_, _ = Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "-f", k8upv1crd)
+	_, _ = Run(cmd)
+}
+
+func RunCommonsCommand(ns, runCmd string) ([]byte, error) {
+	cmd := exec.Command("kubectl", "-n", ns, "exec", "metrics-consumer", "--", "sh", "-c", runCmd)
+	return Run(cmd)
+}
+
 // Run executes the provided command within this context
 func Run(cmd *exec.Cmd) ([]byte, error) {
 	dir, _ := GetProjectDir()
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		fmt.Fprintf(ginkgo.GinkgoWriter, "chdir dir: %s\n", err)
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	fmt.Fprintf(ginkgo.GinkgoWriter, "running: %s\n", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("%s failed with error: (%v) %s", command, err, string(output))
@@ -105,4 +147,13 @@ func GetProjectDir() (string, error) {
 	}
 	wd = strings.Replace(wd, "/test/e2e", "", -1)
 	return wd, nil
+}
+
+func CheckStringContainsStrings(str string, strs []string) error {
+	for _, s := range strs {
+		if !strings.Contains(str, s) {
+			return fmt.Errorf("string %s not found in strings", s)
+		}
+	}
+	return nil
 }

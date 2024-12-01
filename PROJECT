@@ -1,17 +1,43 @@
 domain: lagoon.sh
-multigroup: true
+layout:
+- go.kubebuilder.io/v3
+projectName: remote-controller
 repo: github.com/uselagoon/remote-controller
 resources:
-- group: crd
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: lagoon.sh
+  group: crd
   kind: LagoonBuild
+  path: remote-controller/api/lagoon/v1beta2
   version: v1beta2
-- group: crd
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: lagoon.sh
+  group: crd
   kind: LagoonTask
+  path: remote-controller/api/lagoon/v1beta2
   version: v1beta2
-- group: crd
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: false
+  domain: lagoon.sh
+  group: crd
   kind: LagoonBuild
+  path: remote-controller/api/lagoon/v1beta1
   version: v1beta1
-- group: crd
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: false
+  domain: lagoon.sh
+  group: crd
   kind: LagoonTask
+  path: remote-controller/api/lagoon/v1beta1
   version: v1beta1
-version: "2"
+version: "3"

@@ -1,7 +1,7 @@
-apiVersion: backup.appuio.ch/v1alpha1
+apiVersion: k8up.io/v1
 kind: Restore
 metadata:
-  name: restore-bf072a0-uqxqo3
+  name: restore-bf072a0-uqxqo4
   namespace: nginx-example-main
 spec:
   backend:

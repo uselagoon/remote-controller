@@ -1,0 +1,17 @@
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJtZXRhZGF0YSI6eyJuYW1lIjoicmVzdG9yZS1iZjA3MmEwLXVxeHFvNCJ9LCJzcGVjIjp7InNuYXBzaG90IjoiYmYwNzJhMDllMTc3MjZkYTU0YWRjNzk5MzZlYzg3NDU1MjE5OTM1OTlkNDEyMTFkZmM5NDY2ZGZkNWJjMzJhNSIsInJlc3RvcmVNZXRob2QiOnsiczMiOnt9fSwiYmFja2VuZCI6eyJzMyI6eyJidWNrZXQiOiJiYWFzLW5naW54LWV4YW1wbGUifSwicmVwb1Bhc3N3b3JkU2VjcmV0UmVmIjp7ImtleSI6InJlcG8tcHciLCJuYW1lIjoiYmFhcy1yZXBvLXB3In19fX0=\"
+        },
+        \"key\":\"deploytarget:restic:backup:restore\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}

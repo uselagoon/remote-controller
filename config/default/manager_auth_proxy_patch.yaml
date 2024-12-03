@@ -33,3 +33,4 @@ spec:
         - "--qos-max-builds=3"
         - "--enable-deprecated-apis"
         - "--lagoon-feature-flag-support-k8upv2"
+        - "--skip-tls-verify"

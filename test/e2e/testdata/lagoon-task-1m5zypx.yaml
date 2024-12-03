@@ -1,12 +1,14 @@
 apiVersion: crd.lagoon.sh/v1beta2
 kind: LagoonTask
 metadata:
-  name: "lagoon-advanced-task-example-task-project-1"
+  name: lagoon-task-1m5zypx
+  namespace: nginx-example-main
   labels:
     lagoon.sh/controller: lagoon
     lagoon.sh/taskStatus: Pending
     lagoon.sh/taskType: advanced
     crd.lagoon.sh/version: v1beta2
+    lagoon.sh/controller: remote-controller-system
 spec:
   advancedTask:
     JSONPayload: e30=

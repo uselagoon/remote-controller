@@ -18,24 +18,24 @@ jobs:
       fail-fast: false
       matrix:
         kindest_node_version: [v1.25.16, v1.26.15]
-        harbor: ["1.9.0","1.14.0"]
+        harbor: ["1.9.0","1.14.3"]
         lagoon_build_image: ["uselagoon/build-deploy-image:main"]
         experimental: [false]
         include:
           - kindest_node_version: v1.27.13
-            harbor: "1.14.0"
+            harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: false
           - kindest_node_version: v1.28.9
-            harbor: "1.14.0"
+            harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: false
           - kindest_node_version: v1.29.4
-            harbor: "1.14.0"
+            harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
           - kindest_node_version: v1.30.2
-            harbor: "1.14.0"
+            harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
     steps:
@@ -79,6 +79,8 @@ jobs:
         helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
         helm repo add harbor https://helm.goharbor.io
         helm repo add lagoon https://uselagoon.github.io/lagoon-charts/
+        helm repo add metallb https://metallb.github.io/metallb
+        helm repo add jetstack https://charts.jetstack.io
 
     - name: Install gojq
       if: |
@@ -92,23 +94,26 @@ jobs:
         
     - name: Configure node IP in kind-config.yaml
       run: |
-        docker network create kind
-        export KIND_NODE_IP=$(docker run --network kind --rm alpine ip -o addr show eth0 | sed -nE 's/.* ([0-9.]{7,})\/.*/\1/p')
-        envsubst < test-resources/kind-config.yaml.tpl > test-resources/kind-config.yaml
-        cat test-resources/kind-config.yaml
+        docker network create remote-controller
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect remote-controller | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"') 
+        export KIND_NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
+        envsubst < test-resources/test-suite.kind-config.yaml.tpl > test-resources/test-suite.kind-config.yaml
 
     - name: Create kind cluster
-      uses: helm/kind-action@v1.3.0
+      uses: helm/kind-action@v1.10.0
       with:
-        version: v0.14.0
+        version: v0.24.0
+        cluster_name: remote-controller
         node_image: kindest/node:${{ matrix.kindest_node_version }}
-        config: test-resources/kind-config.yaml
+        kubectl_version: v1.30.4
+        config: test-resources/test-suite.kind-config.yaml
   
     - name: Check node IP matches kind configuration
       run: |
-        NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')"
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect remote-controller | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
+        NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
         echo Checking for NODE_IP "$NODE_IP"
-        grep $NODE_IP test-resources/kind-config.yaml
+        grep $NODE_IP test-resources/test-suite.kind-config.yaml
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
@@ -120,17 +125,6 @@ jobs:
         load: true
         tags: uselagoon/remote-controller:test-tag
 
-    - name: Install prerequisites
-      run: make -j8 -O install-lagoon-remote HARBOR_VERSION=${{matrix.harbor}}
-
-    - name: Run Tests
+    - name: Run github/test-e2e
       run: |
-        export PATH=$PATH:/usr/local/kubebuilder/bin
-        export PATH=$PATH:/usr/local/go/bin
-        export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}"
-        export HARBOR_URL="http://harbor.$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080"
-        export HARBOR_API="http://harbor.$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}').nip.io:32080/api"
-        export KIND_NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')"
-        export HARBOR_VERSION=${{matrix.harbor}}
-        # export GO111MODULE=on
-        make controller-test
+        make github/test-e2e HARBOR_VERSION=${{matrix.harbor}} OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}"

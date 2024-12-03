@@ -1,0 +1,17 @@
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJhcGlWZXJzaW9uIjoiYmFja3VwLmFwcHVpby5jaC92MWFscGhhMSIsImtpbmQiOiJSZXN0b3JlIiwibWV0YWRhdGEiOnsibmFtZSI6InJlc3RvcmUtYmYwNzJhMC11cXhxbzMifSwic3BlYyI6eyJzbmFwc2hvdCI6ImJmMDcyYTA5ZTE3NzI2ZGE1NGFkYzc5OTM2ZWM4NzQ1NTIxOTkzNTk5ZDQxMjExZGZjOTQ2NmRmZDViYzMyYTUiLCJyZXN0b3JlTWV0aG9kIjp7InMzIjp7fX0sImJhY2tlbmQiOnsiczMiOnsiYnVja2V0IjoiYmFhcy1uZ2lueC1leGFtcGxlIn0sInJlcG9QYXNzd29yZFNlY3JldFJlZiI6eyJrZXkiOiJyZXBvLXB3IiwibmFtZSI6ImJhYXMtcmVwby1wdyJ9fX19\"
+        },
+        \"key\":\"deploytarget:restic:backup:restore\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}

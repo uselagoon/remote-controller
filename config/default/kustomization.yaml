@@ -49,6 +49,8 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
+# [METRICS] Expose the controller manager metrics service.
+- metrics_service.yaml
 patches:
 - path: envs.yaml
 - path: manager_auth_proxy_patch.yaml

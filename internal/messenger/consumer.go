@@ -10,8 +10,8 @@ import (
 
 	"github.com/cheshir/go-mq/v2"
 	"github.com/uselagoon/machinery/api/schema"
-	lagoonv1beta1 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta1"
-	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
+	lagoonv1beta1 "github.com/uselagoon/remote-controller/api/lagoon/v1beta1"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"

@@ -62,12 +62,12 @@ test: manifests generate fmt vet envtest ## Run tests.
 # Build manager binary
 .PHONY: manager
 manager: generate fmt vet
-	go build -o bin/manager main.go
+	go build -o bin/manager cmd/main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 .PHONY: run
 run: generate fmt vet manifests
-	go run ./main.go --controller-namespace=${CONTROLLER_NAMESPACE}
+	go run ./cmd/main.go --controller-namespace=${CONTROLLER_NAMESPACE}
 
 # Install CRDs into a cluster
 .PHONY: install
@@ -130,7 +130,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.2 ;\
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen

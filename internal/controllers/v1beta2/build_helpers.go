@@ -332,8 +332,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 
 	var serviceaccountTokenSecret string
+	var regexComp = regexp.MustCompile("^lagoon-deployer-token")
 	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+		match := regexComp.MatchString(secret.Name)
 		if match {
 			serviceaccountTokenSecret = secret.Name
 			break
@@ -920,13 +921,13 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
 	if lagooncrd.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued)
 	} else {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
 
 	}
 	return nil
@@ -979,10 +980,10 @@ Build cancelled
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
+	r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
+	r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
 	if cancelled {
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)
@@ -1004,9 +1005,13 @@ func sortBuilds(defaultPriority int, pendingBuilds *lagooncrd.LagoonBuildList) {
 			jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
 		}
 		// better sorting based on priority then creation timestamp
+		// sort by higher priority first, where the greater the number the higher the priority
+		// production have priority 6 default (highest)
+		// development have priority 5 default (mid)
+		// bulk deployments have priority 3 default (low)
 		switch {
 		case iPriority != jPriority:
-			return iPriority < jPriority
+			return iPriority > jPriority
 		default:
 			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
 		}

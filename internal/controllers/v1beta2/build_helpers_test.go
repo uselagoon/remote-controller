@@ -1,10 +1,12 @@
 package v1beta2
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/andreyvit/diff"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,23 +62,23 @@ func Test_sortBuilds(t *testing.T) {
 				Items: []lagooncrd.LagoonBuild{
 					{
 						ObjectMeta: v1.ObjectMeta{
-							Name:              "lagoon-build-abcdefg",
-							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")),
-						},
-						Spec: lagooncrd.LagoonBuildSpec{
-							Build: lagooncrd.Build{
-								Priority: helpers.IntPtr(5),
-							},
-						},
-					},
-					{
-						ObjectMeta: v1.ObjectMeta{
 							Name:              "lagoon-build-1234567",
 							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")),
 						},
 						Spec: lagooncrd.LagoonBuildSpec{
 							Build: lagooncrd.Build{
 								Priority: helpers.IntPtr(6),
+							},
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Name:              "lagoon-build-abcdefg",
+							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")),
+						},
+						Spec: lagooncrd.LagoonBuildSpec{
+							Build: lagooncrd.Build{
+								Priority: helpers.IntPtr(5),
 							},
 						},
 					},
@@ -187,6 +189,17 @@ func Test_sortBuilds(t *testing.T) {
 				Items: []lagooncrd.LagoonBuild{
 					{
 						ObjectMeta: v1.ObjectMeta{
+							Name:              "lagoon-build-abc1234",
+							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:46:00.000Z")),
+						},
+						Spec: lagooncrd.LagoonBuildSpec{
+							Build: lagooncrd.Build{
+								Priority: helpers.IntPtr(6),
+							},
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
 							Name:              "lagoon-build-1234567",
 							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")),
 						},
@@ -207,17 +220,6 @@ func Test_sortBuilds(t *testing.T) {
 							},
 						},
 					},
-					{
-						ObjectMeta: v1.ObjectMeta{
-							Name:              "lagoon-build-abc1234",
-							CreationTimestamp: v1.NewTime(timeFromString("2023-09-18T11:46:00.000Z")),
-						},
-						Spec: lagooncrd.LagoonBuildSpec{
-							Build: lagooncrd.Build{
-								Priority: helpers.IntPtr(6),
-							},
-						},
-					},
 				},
 			},
 		},
@@ -225,8 +227,13 @@ func Test_sortBuilds(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sortBuilds(tt.args.defaultPriority, tt.args.pendingBuilds)
-			if !cmp.Equal(tt.args.pendingBuilds, tt.wantBuilds) {
-				t.Errorf("sortBuilds() = %v, want %v", tt.args.pendingBuilds, tt.wantBuilds)
+			r1, _ := json.MarshalIndent(tt.args.pendingBuilds, "", "  ")
+			f1, _ := json.MarshalIndent(tt.wantBuilds, "", "  ")
+			// if !cmp.Equal(tt.args.pendingBuilds, tt.wantBuilds) {
+			// 	t.Errorf("sortBuilds() = %v, want %v", tt.args.pendingBuilds, tt.wantBuilds)
+			// }
+			if !reflect.DeepEqual(f1, r1) {
+				t.Errorf("TemplateLagoonServices() = \n%v", diff.LineDiff(string(r1), string(f1)))
 			}
 		})
 	}

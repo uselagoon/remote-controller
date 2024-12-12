@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: metrics-consumer
+  namespace: remote-controller-system
+  labels:
+    app: metrics-consumer
+spec:
+  serviceAccountName: remote-controller-controller-manager
+  containers:
+  - name: metrics-consumer
+    image: uselagoon/commons:latest
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3000"]

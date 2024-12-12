@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	lagoonv1beta2 "github.com/uselagoon/remote-controller/apis/lagoon/v1beta2"
+	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 

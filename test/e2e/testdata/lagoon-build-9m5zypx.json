@@ -15,6 +15,11 @@
             \"gitReference\": \"origin\/main\",
             \"project\": {
                 \"name\": \"nginx-example\",
+                \"id\": 1,
+                \"organization\": {
+                    \"id\": 123,
+                    \"name\": \"test-org\"
+                },
                 \"environment\": \"main\",
                 \"uiLink\": \"https:\/\/dashboard.amazeeio.cloud\/projects\/project\/project-environment\/deployments\/lagoon-build-9m5zypx\",
                 \"routerPattern\": \"main-nginx-example\",

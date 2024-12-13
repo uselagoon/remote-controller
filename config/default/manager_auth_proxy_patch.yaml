@@ -34,6 +34,7 @@ spec:
         - "--rabbitmq-cacert=/ca.crt"
         - "--rabbitmq-clientcert=/tls.crt"
         - "--rabbitmq-clientkey=/tls.key"
+        - "--cleanup-harbor-repository-on-delete" # enabled for tests
         ports:
         - containerPort: 8443
           name: https

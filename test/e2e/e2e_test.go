@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,6 +58,10 @@ var (
 		"lagoon_tasks_running_current",
 		"lagoon_tasks_started_total",
 	}
+
+	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
+	deletePolicyWant        = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
+	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/main/nginx","pull_count":1}]`
 )
 
 func init() {
@@ -65,12 +70,20 @@ func init() {
 }
 
 var _ = Describe("controller", Ordered, func() {
+	// get the ingress lb ip for use later
+	ip, err := utils.GetIngressLB()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 	BeforeAll(func() {
 		By("start local services")
 		Expect(utils.StartLocalServices()).To(Succeed())
 
+		By("removing manager namespace")
+		cmd := exec.Command(utils.Kubectl(), "delete", "ns", namespace)
+		_, _ = utils.Run(cmd)
+
 		By("creating manager namespace")
-		cmd := exec.Command(utils.Kubectl(), "create", "ns", namespace)
+		cmd = exec.Command(utils.Kubectl(), "create", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
 		// when running a re-test, it is best to make sure the old namespace doesn't exist
@@ -80,6 +93,9 @@ var _ = Describe("controller", Ordered, func() {
 		utils.CleanupNamespace("nginx-example-dev1")
 		utils.CleanupNamespace("nginx-example-dev2")
 		utils.CleanupNamespace("nginx-example-dev3")
+
+		By("delete harbor project")
+		_ = utils.DeleteHarborProject(ip, "nginx-example")
 
 		// clean up the k8up crds
 		utils.UninstallK8upCRDs()
@@ -202,22 +218,7 @@ var _ = Describe("controller", Ordered, func() {
 			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx"} {
 				if name == "9m5zypx" {
 					By("creating a LagoonBuild resource via rabbitmq")
-					cmd = exec.Command(
-						"curl",
-						"-s",
-						"-u",
-						"guest:guest",
-						"-H",
-						"'Accept: application/json'",
-						"-H",
-						"'Content-Type:application/json'",
-						"-X",
-						"POST",
-						"-d",
-						fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name),
-						"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
-					)
-					_, err = utils.Run(cmd)
+					err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name))
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 				} else {
 					By("creating a LagoonBuild resource")
@@ -393,22 +394,7 @@ var _ = Describe("controller", Ordered, func() {
 				time.Sleep(10 * time.Second)
 
 				By(fmt.Sprintf("creating a %s restore task via rabbitmq", name))
-				cmd = exec.Command(
-					"curl",
-					"-s",
-					"-u",
-					"guest:guest",
-					"-H",
-					"'Accept: application/json'",
-					"-H",
-					"'Content-Type:application/json'",
-					"-X",
-					"POST",
-					"-d",
-					fmt.Sprintf("@test/e2e/testdata/%s-restore.json", name),
-					"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
-				)
-				_, err = utils.Run(cmd)
+				err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/%s-restore.json", name))
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 				time.Sleep(10 * time.Second)
@@ -462,6 +448,43 @@ var _ = Describe("controller", Ordered, func() {
 			// this tests the build qos functionality by starting 4 builds with a qos of max 3 (defined in the controller config provided by kustomize)
 			testBuildQoS(timeout, duration, interval)
 
+			// test the harbor policy cleanup process
+			By("check harbor project policies before creating policy")
+			_, err = utils.QueryHarborProjectPolicies(ip, "nginx-example")
+			if err != nil {
+				if !strings.Contains(err.Error(), "project metadata value is empty: retention_id") {
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				}
+			}
+			By("creating harbor policy update via rabbitmq")
+			err = utils.PublishMessage("@test/e2e/testdata/create-retention-policy.json")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			time.Sleep(10 * time.Second)
+			By("check harbor project policies after creating policy")
+			after, err := utils.QueryHarborProjectPolicies(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = comparePolicy(createPolicyWant, after)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("delete harbor policy via rabbitmq")
+			err = utils.PublishMessage("@test/e2e/testdata/remove-retention-policy.json")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			time.Sleep(10 * time.Second)
+			By("check harbor project policies after deleting policy")
+			after, err = utils.QueryHarborProjectPolicies(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = comparePolicy(deletePolicyWant, after)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("check harbor project repositories before deleting environment")
+			before, err := utils.QueryHarborRepositories(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = compareRepositories(projectRepositoriesWant, before)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			By("delete environment via rabbitmq")
+			err = utils.PublishMessage("@test/e2e/testdata/remove-environment.json")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 			time.Sleep(5 * time.Second)
 
 			// this tests the task qos functionality by starting 4 tasks with a qos of max 3 (defined in the controller config provided by kustomize)
@@ -508,6 +531,12 @@ var _ = Describe("controller", Ordered, func() {
 				EventuallyWithOffset(1, verifyNamespaceRemoved, duration, interval).Should(Succeed())
 			}
 
+			By("check harbor project repositories after deleting environment")
+			after, err = utils.QueryHarborRepositories(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = compareRepositories("null", after)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 			By("validating that unauthenticated metrics requests fail")
 			runCmd := `curl -s -k https://remote-controller-controller-manager-metrics-service.remote-controller-system.svc.cluster.local:8443/metrics | grep -v "#" | grep "lagoon_"`
 			_, err = utils.RunCommonsCommand(namespace, runCmd)
@@ -524,3 +553,45 @@ var _ = Describe("controller", Ordered, func() {
 		})
 	})
 })
+
+func comparePolicy(want, got string) error {
+	// this removes the next scheduled time from the payload as it can vary
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &m); err != nil {
+		return err
+	}
+	delete(m["scope"].(map[string]interface{}), "ref")
+	delete(m["trigger"].(map[string]interface{})["settings"].(map[string]interface{}), "next_scheduled_time")
+	delete(m, "id")
+	p, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if want != string(p) {
+		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", want, string(p))
+	}
+	return nil
+}
+
+func compareRepositories(want, got string) error {
+	if got == "null" && want == "null" {
+		return nil
+	}
+	// this removes the next scheduled time from the payload as it can vary
+	var m []interface{}
+	if err := json.Unmarshal([]byte(got), &m); err != nil {
+		return err
+	}
+	delete(m[0].(map[string]interface{}), "id")
+	delete(m[0].(map[string]interface{}), "creation_time")
+	delete(m[0].(map[string]interface{}), "update_time")
+	delete(m[0].(map[string]interface{}), "project_id")
+	p, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if want != string(p) {
+		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", want, string(p))
+	}
+	return nil
+}

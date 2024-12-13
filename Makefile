@@ -18,11 +18,32 @@ INGRESS_VERSION=4.9.1
 HARBOR_VERSION=1.14.3
 
 KIND_CLUSTER ?= remote-controller
+KIND_NETWORK ?= remote-controller
 
 TIMEOUT = 30m
 HELM = helm
 KUBECTL = kubectl
 JQ = jq
+
+ARCH := $(shell uname | tr '[:upper:]' '[:lower:]')
+
+KIND = $(realpath ./local-dev/kind)
+KIND_VERSION = v0.25.0
+
+.PHONY: local-dev/kind
+local-dev/kind:
+ifeq ($(KIND_VERSION), $(shell kind version 2>/dev/null | sed -nE 's/kind (v[0-9.]+).*/\1/p'))
+	$(info linking local kind version $(KIND_VERSION))
+	ln -sf $(shell command -v kind) ./local-dev/kind
+else
+ifneq ($(KIND_VERSION), $(shell ./local-dev/kind version 2>/dev/null | sed -nE 's/kind (v[0-9.]+).*/\1/p'))
+	$(info downloading kind version $(KIND_VERSION) for $(ARCH))
+	mkdir -p local-dev
+	rm local-dev/kind || true
+	curl -sSLo local-dev/kind https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-$(ARCH)-amd64
+	chmod a+x local-dev/kind
+endif
+endif
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -140,7 +161,7 @@ endif
 
 .PHONY: install-metallb
 install-metallb:
-	LAGOON_KIND_CIDR_BLOCK=$$(docker network inspect $(KIND_CLUSTER) | $(JQ) '. [0].IPAM.Config[0].Subnet' | tr -d '"') && \
+	LAGOON_KIND_CIDR_BLOCK=$$(docker network inspect $(KIND_NETWORK) | $(JQ) '. [0].IPAM.Config[0].Subnet' | tr -d '"') && \
 	export LAGOON_KIND_NETWORK_RANGE=$$(echo $${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $$1,$$2,$$3,240}' OFS='.')/29 && \
 	$(HELM) upgrade \
 		--install \
@@ -152,7 +173,7 @@ install-metallb:
 		metallb \
 		metallb/metallb && \
 	$$(envsubst < test-resources/test-suite.metallb-pool.yaml.tpl > test-resources/test-suite.metallb-pool.yaml) && \
-	$(KUBECTL) apply -f test-resources/test-suite.metallb-pool.yaml \
+	$(KUBECTL) apply -f test-resources/test-suite.metallb-pool.yaml
 
 # cert-manager is used to allow self-signed certificates to be generated automatically by ingress in the same way lets-encrypt would
 .PHONY: install-certmanager
@@ -246,11 +267,12 @@ install-lagoon-remote: install-registry
 
 .PHONY: create-kind-cluster
 create-kind-cluster:
-	docker network inspect $(KIND_CLUSTER) >/dev/null || docker network create $(KIND_CLUSTER) \
-		&& LAGOON_KIND_CIDR_BLOCK=$$(docker network inspect $(KIND_CLUSTER) | $(JQ) '. [0].IPAM.Config[0].Subnet' | tr -d '"') \
+	docker network inspect $(KIND_NETWORK) >/dev/null || docker network create $(KIND_NETWORK) \
+		&& LAGOON_KIND_CIDR_BLOCK=$$(docker network inspect $(KIND_NETWORK) | $(JQ) '. [0].IPAM.Config[0].Subnet' | tr -d '"') \
 		&& export KIND_NODE_IP=$$(echo $${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $$1,$$2,$$3,240}' OFS='.') \
  		&& envsubst < test-resources/test-suite.kind-config.yaml.tpl > test-resources/test-suite.kind-config.yaml \
- 		&& kind create cluster --wait=60s --name=$(KIND_CLUSTER) --config=test-resources/test-suite.kind-config.yaml
+		&& export KIND_EXPERIMENTAL_DOCKER_NETWORK=$(KIND_NETWORK) \
+		&& $(KIND) create cluster --wait=60s --name=$(KIND_CLUSTER) --config=test-resources/test-suite.kind-config.yaml
 
 # Create a kind cluster locally and run the test e2e test suite against it
 .PHONY: kind/test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up locally
@@ -259,7 +281,7 @@ kind/test-e2e: create-kind-cluster install-lagoon-remote kind/re-test-e2e
 .PHONY: local-kind/test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up locally
 kind/re-test-e2e:
 	export KIND_CLUSTER=$(KIND_CLUSTER) && \
-	kind export kubeconfig --name=$(KIND_CLUSTER) && \
+	$(KIND) export kubeconfig --name=$(KIND_CLUSTER) && \
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
 	$(MAKE) test-e2e
@@ -267,14 +289,14 @@ kind/re-test-e2e:
 .PHONY: clean
 kind/clean:
 	docker compose down && \
-	kind delete cluster --name=$(KIND_CLUSTER) && docker network rm $(KIND_CLUSTER)
+	$(KIND) delete cluster --name=$(KIND_CLUSTER) && docker network rm $(KIND_NETWORK)
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up inside github action.
 test-e2e:
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	go test ./test/e2e/ -v -ginkgo.v
+	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e
 github/test-e2e: install-lagoon-remote test-e2e

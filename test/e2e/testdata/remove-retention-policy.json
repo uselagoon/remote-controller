@@ -1,0 +1,20 @@
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJ0eXBlIjoiaGFyYm9yUmV0ZW50aW9uUG9saWN5IiwiZXZlbnRUeXBlIjoicmVtb3ZlUG9saWN5IiwiZGF0YSI6eyJwcm9qZWN0Ijp7ImlkIjoxLCJuYW1lIjoibmdpbngtZXhhbXBsZSJ9fX0=\"
+        },
+        \"key\":\"deploytarget:harborpolicy:update\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}
+
+
+

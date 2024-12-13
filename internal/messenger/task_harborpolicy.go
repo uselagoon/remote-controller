@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
 	"github.com/uselagoon/machinery/utils/cron"
@@ -88,7 +89,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 	}
 	// get the existing one if one exists
 	existingPolicy, err := lagoonHarbor.ClientV5.GetRetentionPolicyByProject(ctx, projectName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "project metadata value is empty: retention_id") {
 		opLog.Info(fmt.Sprintf("Error getting retention policy %s: %v", project.Name, err))
 		return err
 	}
@@ -104,6 +105,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 				opLog.Info(fmt.Sprintf("Error updating retention policy %s: %v", project.Name, string(f)))
 				return err
 			}
+			opLog.Info(fmt.Sprintf("retention policy for %s updated", project.Name))
 		}
 	} else {
 		// create it if it doesn't
@@ -111,6 +113,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 			opLog.Info(fmt.Sprintf("Error creating retention policy %s: %v", project.Name, err))
 			return err
 		}
+		opLog.Info(fmt.Sprintf("retention policy for %s created", project.Name))
 	}
 	return nil
 }

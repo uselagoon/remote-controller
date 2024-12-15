@@ -212,7 +212,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			return fmt.Errorf("error getting harbor version, check your harbor configuration. Error was: %v", err)
 		}
 		if lagoonHarbor.UseV2Functions(curVer) {
-			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
+			hProject, err := lagoonHarbor.CreateProjectV2(ctx, *namespace)
 			if err != nil {
 				return fmt.Errorf("error creating harbor project: %v", err)
 			}

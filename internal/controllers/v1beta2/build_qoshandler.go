@@ -37,6 +37,14 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 		opLog.Info("Checking which build next")
 	}
 	// handle the QoS build process here
+	// if the build is already running, then there is no need to check which build can be started next
+	if lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] == lagooncrd.BuildStatusRunning.String() {
+		// this is done so that all running state updates don't try to force the queue processor to run unnecessarily
+		// downside is that this can lead to queue/state changes being less frequent for queued builds in the api
+		// any new builds, or complete/failed/cancelled builds will still force the whichbuildnext processor to run though
+		return ctrl.Result{}, nil
+	}
+	// we only care if a new build can start if one is created, cancelled, failed, or completed
 	return ctrl.Result{}, r.whichBuildNext(ctx, opLog)
 }
 

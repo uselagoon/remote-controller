@@ -12,12 +12,12 @@ RUN go mod download
 # Copy the go source
 COPY cmd/ cmd/
 COPY api/ api/
-COPY internal/controllers internal/controllers
+COPY internal/metrics internal/metrics
+COPY internal/utilities internal/utilities
 COPY internal/harbor internal/harbor
 COPY internal/helpers internal/helpers
 COPY internal/messenger internal/messenger
-COPY internal/metrics internal/metrics
-COPY internal/utilities internal/utilities
+COPY internal/controllers internal/controllers
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} GO111MODULE=on go build -a -o manager cmd/main.go

@@ -9,9 +9,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -928,7 +930,6 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
-
 	}
 	return nil
 }
@@ -985,10 +986,31 @@ Build cancelled
 	if cancelled {
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
 	}
-	// delete the build from the lagoon namespace in kubernetes entirely
-	err = r.Delete(ctx, &lagoonBuild)
-	if err != nil {
-		return fmt.Errorf("there was an error deleting the lagoon build. Error was: %v", err)
+	// check if the build has a `BuildStep` type condition
+	buildStep := meta.FindStatusCondition(lagoonBuild.Status.Conditions, "BuildStep")
+	if buildStep != nil && buildStep.Reason == "Queued" {
+		// if the build was cancelled at the queued phase of a build, then it is likely it was cancelled by a new build
+		// update the buildstep to be cancelled by new build for clearer visibility in the resource status
+		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
+			condition := metav1.Condition{
+				Type:               "BuildStep",
+				Reason:             "CancelledByNewBuild",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Now().UTC()),
+			}
+			_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+		}
+		// finaly patch the build with the cancelled status phase
+		mergeMap := map[string]interface{}{
+			"status": map[string]interface{}{
+				"conditions": lagoonBuild.Status.Conditions,
+				"phase":      lagooncrd.BuildStatusCancelled.String(),
+			},
+		}
+		mergePatch, _ := json.Marshal(mergeMap)
+		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			opLog.Error(err, "unable to update resource")
+		}
 	}
 	return nil
 }

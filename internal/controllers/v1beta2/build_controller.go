@@ -19,10 +19,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -124,15 +126,14 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// if the build isn't being deleted, but the status is cancelled
 		// then clean up the undeployable build
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+			// if cancelled, handle the cancellation process
 			if value == lagooncrd.BuildStatusCancelled.String() {
-				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok {
-					if value == "true" {
-						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
-						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
-					} else {
-						opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
-						r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
-					}
+				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
+					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
+					r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
+				} else {
+					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
+					r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
 				}
 			}
 		}
@@ -330,6 +331,17 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, la
 	// all new builds start as "queued" but will transition to pending or running fairly quickly
 	// unless they are actually queued :D
 	newBuild.Status.Phase = "Queued"
+	// also create the build with a queued buildstep
+	newBuild.Status.Conditions = []metav1.Condition{
+		{
+			Type: "BuildStep",
+			// Reason needs to be CamelCase not camelCase. Would need to update the `build-deploy-tool` to use CamelCase
+			// to eventually remove the need for `cases`
+			Reason:             "Queued",
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
+		},
+	}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: ns,
 		Name:      newBuild.ObjectMeta.Name,

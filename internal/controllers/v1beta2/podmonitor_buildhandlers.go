@@ -564,11 +564,18 @@ Build %s
 			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
 		}
 		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+		// add every build step as its own status condition too
+		condition = metav1.Condition{
+			Type:               cases.Title(language.English, cases.NoLower).String(buildStep),
+			Reason:             buildCondition.String(),
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
+		}
+		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
 		mergeMap["status"] = map[string]interface{}{
 			"conditions": lagoonBuild.Status.Conditions,
 			"phase":      buildCondition.String(),
 		}
-
 		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
 		var lagoonEnv corev1.ConfigMap
 		if err := r.Get(ctx, types.NamespacedName{

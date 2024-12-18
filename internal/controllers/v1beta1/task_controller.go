@@ -228,6 +228,16 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							Value: r.ProxyConfig.NoProxy,
 						})
 					}
+					if lagoonTask.Spec.Project.Variables.Organization != nil {
+						// if this is 2 bytes long, then it means its just an empty json array
+						// we only want to add it if it is more than 2 bytes
+						if len(lagoonTask.Spec.Project.Variables.Organization) > 2 {
+							dep.Spec.Template.Spec.Containers[idx].Env = append(dep.Spec.Template.Spec.Containers[idx].Env, corev1.EnvVar{
+								Name:  "LAGOON_ORGANIZATION_VARIABLES",
+								Value: string(lagoonTask.Spec.Project.Variables.Organization),
+							})
+						}
+					}
 					if lagoonTask.Spec.Project.Variables.Project != nil {
 						// if this is 2 bytes long, then it means its just an empty json array
 						// we only want to add it if it is more than 2 bytes
@@ -511,6 +521,16 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			Name:  "TASK_DATA_ID",
 			Value: lagoonTask.Spec.Task.ID,
 		},
+	}
+	if lagoonTask.Spec.Project.Variables.Organization != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonTask.Spec.Project.Variables.Organization) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_ORGANIZATION_VARIABLES",
+				Value: string(lagoonTask.Spec.Project.Variables.Organization),
+			})
+		}
 	}
 	if lagoonTask.Spec.Project.Variables.Project != nil {
 		// if this is 2 bytes long, then it means its just an empty json array

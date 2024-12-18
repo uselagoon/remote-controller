@@ -143,8 +143,9 @@ type Organization struct {
 
 // Variables contains the project and environment variables from lagoon.
 type LagoonVariables struct {
-	Project     []byte `json:"project,omitempty"`
-	Environment []byte `json:"environment,omitempty"`
+	Organization []byte `json:"organization,omitempty"`
+	Project      []byte `json:"project,omitempty"`
+	Environment  []byte `json:"environment,omitempty"`
 }
 
 // Branch contains the branch name used for a branch deployment.

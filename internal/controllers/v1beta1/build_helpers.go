@@ -571,8 +571,10 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
 		// unmarshal the project variables
+		lagoonOrganizationVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
+		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Organization, lagoonOrganizationVariables)
 		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
 		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
 		// check if INTERNAL_REGISTRY_SOURCE_LAGOON is defined, and if it isn't true
@@ -580,7 +582,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// if it is false, or not set, then we use what is provided by this controller
 		// this allows us to make it so a specific environment or the project entirely
 		// can still use whats provided by lagoon
-		if !helpers.VariableExists(lagoonProjectVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
+		if !helpers.VariableExists(lagoonOrganizationVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
+			!helpers.VariableExists(lagoonProjectVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") ||
 			!helpers.VariableExists(lagoonEnvironmentVariables, "INTERNAL_REGISTRY_SOURCE_LAGOON", "true") {
 			// source the robot credential, and inject it into the lagoon project variables
 			// this will overwrite what is provided by lagoon (if lagoon has provided them)
@@ -615,6 +618,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// these values are being overwritten and injected directly into the build pod to be consumed
 			// by the build pod image
 			lagoonBuild.Spec.Project.Variables.Project, _ = json.Marshal(lagoonProjectVariables)
+		}
+	}
+	if lagoonBuild.Spec.Project.Variables.Organization != nil {
+		// if this is 2 bytes long, then it means its just an empty json array
+		// we only want to add it if it is more than 2 bytes
+		if len(lagoonBuild.Spec.Project.Variables.Organization) > 2 {
+			podEnvs = append(podEnvs, corev1.EnvVar{
+				Name:  "LAGOON_ORGANIZATION_VARIABLES",
+				Value: string(lagoonBuild.Spec.Project.Variables.Organization),
+			})
 		}
 	}
 	if lagoonBuild.Spec.Project.Variables.Project != nil {

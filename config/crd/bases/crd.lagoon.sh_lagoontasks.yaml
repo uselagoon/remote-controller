@@ -120,13 +120,16 @@ spec:
                         type: string
                     type: object
                   variables:
-                    description: Variables contains the project and environment variables
-                      from lagoon.
+                    description: Variables contains the organization, project,
+                      and environment variables from lagoon.
                     properties:
                       environment:
                         format: byte
                         type: string
                       project:
+                        format: byte
+                        type: string
+                      organization:
                         format: byte
                         type: string
                     type: object
@@ -788,13 +791,16 @@ spec:
                         type: string
                     type: object
                   variables:
-                    description: Variables contains the project and environment variables
-                      from lagoon.
+                    description: Variables contains the organization, project,
+                      and environment variables from lagoon.
                     properties:
                       environment:
                         format: byte
                         type: string
                       project:
+                        format: byte
+                        type: string
+                      organization:
                         format: byte
                         type: string
                     type: object

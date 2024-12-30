@@ -16,8 +16,6 @@ import (
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -555,23 +553,9 @@ Build %s
 				},
 			},
 		}
-		condition := metav1.Condition{
-			Type: "BuildStep",
-			// Reason needs to be CamelCase not camelCase. Would need to update the `build-deploy-tool` to use CamelCase
-			// to eventually remove the need for `cases`
-			Reason:             cases.Title(language.English, cases.NoLower).String(buildStep),
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
-		}
-		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
-		// add every build step as its own status condition too
-		condition = metav1.Condition{
-			Type:               cases.Title(language.English, cases.NoLower).String(buildStep),
-			Reason:             buildCondition.String(),
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
-		}
-		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+		condition1, condition2 := helpers.BuildStepToStatusConditions(buildStep, buildCondition.String(), time.Now().UTC())
+		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition1)
+		_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition2)
 		mergeMap["status"] = map[string]interface{}{
 			"conditions": lagoonBuild.Status.Conditions,
 			"phase":      buildCondition.String(),

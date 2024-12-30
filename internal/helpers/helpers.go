@@ -12,7 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 const (
@@ -271,4 +276,45 @@ func GetEnvBool(key string, fallback bool) bool {
 		return rVal
 	}
 	return fallback
+}
+
+// this converts the buildstep to a status condition reason where possible
+// otherwise it will just return an unknown condition
+func BuildStepToStatusConditions(s, c string, t time.Time) (metav1.Condition, metav1.Condition) {
+	reason := cases.Title(language.English, cases.NoLower).String(s)
+	reason = strings.ReplaceAll(reason, "-", "_")
+	condition1 := metav1.Condition{
+		Type:               "BuildStep",
+		Reason:             reason,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.NewTime(t),
+	}
+	errs := metav1validation.ValidateCondition(condition1, field.NewPath("reason"))
+	if len(errs) > 0 {
+		// if the build step can't be converted, just return unknown
+		condition1.Reason = "Unknown"
+	}
+	condition2 := metav1.Condition{
+		Type:               reason,
+		Reason:             c,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.NewTime(t),
+	}
+	errs = metav1validation.ValidateCondition(condition2, field.NewPath("type"))
+	if len(errs) > 0 {
+		// if the build step can't be converted, just return unknown
+		condition2.Type = "Unknown"
+	}
+	return condition1, condition2
+}
+
+// this converts the taskstep to a status condition reason where possible
+// otherwise it will just return an unknown condition
+func TaskStepToStatusCondition(c string, t time.Time) metav1.Condition {
+	return metav1.Condition{
+		Type:               "TaskCondition",
+		Reason:             c,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.NewTime(t),
+	}
 }

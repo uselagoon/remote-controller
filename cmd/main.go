@@ -48,6 +48,7 @@ import (
 	lagoonv1beta1 "github.com/uselagoon/remote-controller/api/lagoon/v1beta1"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	harborctrl "github.com/uselagoon/remote-controller/internal/controllers/harbor"
+	namespacectrl "github.com/uselagoon/remote-controller/internal/controllers/namespace"
 	lagoonv1beta1ctrl "github.com/uselagoon/remote-controller/internal/controllers/v1beta1"
 	lagoonv1beta2ctrl "github.com/uselagoon/remote-controller/internal/controllers/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/messenger"
@@ -891,6 +892,18 @@ func main() {
 		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
+		os.Exit(1)
+	}
+	// start the namespace reconciler
+	if err = (&namespacectrl.NamespaceReconciler{
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("namespace").WithName("Namespace"),
+		Scheme:           mgr.GetScheme(),
+		EnableMQ:         enableMQ,
+		Messaging:        messaging,
+		LagoonTargetName: lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)
 	}
 

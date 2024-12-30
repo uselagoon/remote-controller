@@ -337,12 +337,7 @@ Task %s
 			},
 		}
 
-		condition := metav1.Condition{
-			Reason:             taskCondition.String(),
-			Type:               "TaskCondition",
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.NewTime(time.Now().UTC()),
-		}
+		condition := helpers.TaskStepToStatusCondition(taskCondition.String(), time.Now().UTC())
 		_ = meta.SetStatusCondition(&lagoonTask.Status.Conditions, condition)
 		mergeMap["status"] = map[string]interface{}{
 			"conditions": lagoonTask.Status.Conditions,

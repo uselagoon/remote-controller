@@ -4,6 +4,9 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestShortName(t *testing.T) {
@@ -252,6 +255,146 @@ func TestGetLagoonFeatureFlags(t *testing.T) {
 			}
 			for e := range tt.set {
 				os.Unsetenv(e)
+			}
+		})
+	}
+}
+
+func TestBuildStepToStatusConditions(t *testing.T) {
+	type args struct {
+		step      string
+		condition string
+		time      int64
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  metav1.Condition
+		want2 metav1.Condition
+	}{
+		{
+			name: "test1-valid",
+			args: args{
+				step:      "buildingImages",
+				condition: "Running",
+				time:      1735516457,
+			},
+			want: metav1.Condition{
+				Type:               "BuildStep",
+				Reason:             "BuildingImages",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+			want2: metav1.Condition{
+				Type:               "BuildingImages",
+				Reason:             "Running",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+		},
+		{
+			name: "test2-valid",
+			args: args{
+				step:      "buildingImages-nginx",
+				condition: "Running",
+				time:      1735516457,
+			},
+			want: metav1.Condition{
+				Type:               "BuildStep",
+				Reason:             "BuildingImages_Nginx",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+			want2: metav1.Condition{
+				Type:               "BuildingImages_Nginx",
+				Reason:             "Running",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+		},
+		{
+			name: "test3-valid",
+			args: args{
+				step:      "buildingImages-nginx-3",
+				condition: "Running",
+				time:      1735516457,
+			},
+			want: metav1.Condition{
+				Type:               "BuildStep",
+				Reason:             "BuildingImages_Nginx_3",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+			want2: metav1.Condition{
+				Type:               "BuildingImages_Nginx_3",
+				Reason:             "Running",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+		},
+		{
+			name: "test4-invalid",
+			args: args{
+				step:      "buildingImages-nginx-3#",
+				condition: "Running",
+				time:      1735516457,
+			},
+			want: metav1.Condition{
+				Type:               "BuildStep",
+				Reason:             "Unknown",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+			want2: metav1.Condition{
+				Type:               "Unknown",
+				Reason:             "Running",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1, got2 := BuildStepToStatusConditions(tt.args.step, tt.args.condition, time.Unix(tt.args.time, 0))
+			if got1 != tt.want {
+				t.Errorf("BuildStepToStatusConditions() = %v, want %v", got1, tt.want)
+			}
+			if got2 != tt.want2 {
+				t.Errorf("BuildStepToStatusConditions() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+func TestTaskStepToStatusCondition(t *testing.T) {
+	type args struct {
+		condition string
+		time      int64
+	}
+	tests := []struct {
+		name string
+		args args
+		want metav1.Condition
+	}{
+		{
+			name: "test1",
+			args: args{
+				condition: "Running",
+				time:      1735516457,
+			},
+			want: metav1.Condition{
+				Type:               "TaskCondition",
+				Reason:             "Running",
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Unix(1735516457, 0)),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TaskStepToStatusCondition(tt.args.condition, time.Unix(tt.args.time, 0))
+			if got != tt.want {
+				t.Errorf("TaskStepToStatusCondition() = %v, want %v", got, tt.want)
 			}
 		})
 	}

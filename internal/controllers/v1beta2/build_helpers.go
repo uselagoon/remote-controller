@@ -992,12 +992,7 @@ Build cancelled
 		// if the build was cancelled at the queued phase of a build, then it is likely it was cancelled by a new build
 		// update the buildstep to be cancelled by new build for clearer visibility in the resource status
 		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
-			condition := metav1.Condition{
-				Type:               "BuildStep",
-				Reason:             "CancelledByNewBuild",
-				Status:             metav1.ConditionTrue,
-				LastTransitionTime: metav1.NewTime(time.Now().UTC()),
-			}
+			condition, _ := helpers.BuildStepToStatusConditions("CancelledByNewBuild", "", time.Now().UTC())
 			_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
 		}
 		// finaly patch the build with the cancelled status phase

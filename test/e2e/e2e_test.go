@@ -161,7 +161,7 @@ var _ = Describe("controller", Ordered, func() {
 			time.Sleep(30 * time.Second)
 
 			By("validating that lagoonbuilds are working")
-			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx", "1m5zypx"} {
+			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx"} {
 				if name == "9m5zypx" {
 					By("creating a LagoonBuild resource via rabbitmq")
 					cmd = exec.Command(

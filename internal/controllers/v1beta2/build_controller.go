@@ -78,6 +78,7 @@ type LagoonBuildReconciler struct {
 	LagoonAPIConfiguration           helpers.LagoonAPIConfiguration
 	ProxyConfig                      ProxyConfig
 	UnauthenticatedRegistry          string
+	ImagePullPolicy                  corev1.PullPolicy
 }
 
 // BackupConfig holds all the backup configuration settings

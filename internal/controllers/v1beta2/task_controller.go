@@ -34,6 +34,7 @@ import (
 
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/messenger"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 )
 
@@ -42,6 +43,8 @@ type LagoonTaskReconciler struct {
 	client.Client
 	Log                    logr.Logger
 	Scheme                 *runtime.Scheme
+	EnableMQ               bool
+	Messaging              *messenger.Messenger
 	ControllerNamespace    string
 	NamespacePrefix        string
 	RandomNamespacePrefix  bool
@@ -49,6 +52,9 @@ type LagoonTaskReconciler struct {
 	EnableDebug            bool
 	LagoonTargetName       string
 	ProxyConfig            ProxyConfig
+	LFFTaskQoSEnabled      bool
+	TaskQoS                TaskQoS
+	ImagePullPolicy        corev1.PullPolicy
 }
 
 var (
@@ -70,15 +76,40 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
-		// check if the task that has been recieved is a standard or advanced task
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusPending.String() &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
-			return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
+		if r.LFFTaskQoSEnabled {
+			// handle QoS tasks here
+			// if we do have a `lagoon.sh/taskStatus` set as running, then process it
+			runningNSTasks := &lagooncrd.LagoonTaskList{}
+			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.InNamespace(req.Namespace),
+				client.MatchingLabels(map[string]string{
+					"lagoon.sh/taskStatus": lagooncrd.TaskStatusRunning.String(),
+					"lagoon.sh/controller": r.ControllerNamespace,
+				}),
+			})
+			// // list any tasks that are running
+			if err := r.List(ctx, runningNSTasks, listOption); err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to list tasks in the namespace, there may be none or something went wrong: %v", err)
+			}
+			for _, runningTask := range runningNSTasks.Items {
+				// if the running task is the one from this request then process it
+				if lagoonTask.ObjectMeta.Name == runningTask.ObjectMeta.Name {
+					// actually process the task here
+					if _, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStarted"]; !ok {
+						if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
+							return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
+						}
+						if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeAdvanced.String() {
+							return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
+						}
+					}
+				} // end check if running task is current LagoonTask
+			} // end loop for running tasks
+			// // once running tasks are processed, run the qos handler
+			return r.qosTaskProcessor(ctx, opLog, lagoonTask)
 		}
-		if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusPending.String() &&
-			lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeAdvanced.String() {
-			return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
-		}
+		// if qos is not enabled, just process it as a standard task
+		return r.standardTaskProcessor(ctx, opLog, lagoonTask)
 	} else {
 		// The object is being deleted
 		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
@@ -567,7 +598,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					{
 						Name:            "lagoon-task",
 						Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
-						ImagePullPolicy: "Always",
+						ImagePullPolicy: r.ImagePullPolicy,
 						EnvFrom: []corev1.EnvFromSource{
 							{
 								ConfigMapRef: &corev1.ConfigMapEnvSource{

@@ -1,0 +1,4 @@
+# this is an image used for the qos task test to ensure that the task runs for a long enough time
+FROM alpine
+
+CMD ["sleep", "30"]

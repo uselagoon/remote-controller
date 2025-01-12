@@ -831,7 +831,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				{
 					Name:            "lagoon-build",
 					Image:           buildImage,
-					ImagePullPolicy: "Always",
+					ImagePullPolicy: r.ImagePullPolicy,
 					Env:             podEnvs,
 					VolumeMounts:    volumeMounts,
 				},

@@ -24,6 +24,11 @@ spec:
         - "--enable-deprecated-apis"
         - "--lagoon-feature-flag-support-k8upv2"
         - "--skip-tls-verify"
+        - "--enable-task-qos"
+        - "--qos-max-tasks=3"
+        - "--qos-max-namespace-tasks=3"
+        - "--task-image-pull-policy=IfNotPresent"
+        - "--build-image-pull-policy=IfNotPresent"
         ports:
         - containerPort: 8443
           name: https

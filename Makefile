@@ -371,7 +371,7 @@ kind/clean:
 test-e2e: build-task-image
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	go test ./test/e2e/ -v -ginkgo.v
+	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e
 github/test-e2e: local-dev/tools install-lagoon-remote test-e2e

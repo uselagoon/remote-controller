@@ -332,7 +332,8 @@ Task %s
 		mergeMap := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/taskStatus": taskCondition.String(),
+					"lagoon.sh/taskStatus":  taskCondition.String(),
+					"lagoon.sh/taskStarted": "true",
 				},
 			},
 		}

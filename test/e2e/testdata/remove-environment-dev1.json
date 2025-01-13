@@ -1,0 +1,10 @@
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:remove",
+    "payload":"{
+        \"projectName\": \"nginx-example\",
+        \"type\":\"branch\",
+        \"forceDeleteProductionEnvironment\":true,
+        \"branch\":\"dev1\",
+        \"openshiftProjectName\":\"nginx-example-dev1\"
+    }",
+"payload_encoding":"string"
+}

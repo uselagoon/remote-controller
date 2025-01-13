@@ -35,6 +35,9 @@ const (
 )
 
 var (
+	// projectimage stores the name of the image used in the example
+	projectimage     = "example.com/remote-controller:v0.0.1"
+	testtaskimage    = "example.com/test-task-image:v0.0.1"
 	harborversion    string
 	builddeployimage string
 
@@ -73,19 +76,45 @@ var _ = Describe("controller", Ordered, func() {
 		// when running a re-test, it is best to make sure the old namespace doesn't exist
 		By("removing existing test resources")
 		// remove the old namespace
-		cmd = exec.Command(utils.Kubectl(), "delete", "ns", "nginx-example-main")
-		_, _ = utils.Run(cmd)
+		utils.CleanupNamespace("nginx-example-main")
+		utils.CleanupNamespace("nginx-example-dev1")
+		utils.CleanupNamespace("nginx-example-dev2")
+		utils.CleanupNamespace("nginx-example-dev3")
+
 		// clean up the k8up crds
 		utils.UninstallK8upCRDs()
 	})
 
 	// comment to prevent cleaning up controller namespace and local services
 	AfterAll(func() {
+		By("dump controller logs")
+		cmd := exec.Command(utils.Kubectl(), "get",
+			"pods", "-l", "control-plane=controller-manager",
+			"-o", "go-template={{ range .items }}"+
+				"{{ if not .metadata.deletionTimestamp }}"+
+				"{{ .metadata.name }}"+
+				"{{ \"\\n\" }}{{ end }}{{ end }}",
+			"-n", namespace,
+		)
+		podOutput, err := utils.Run(cmd)
+		if err == nil {
+			podNames := utils.GetNonEmptyLines(string(podOutput))
+			controllerPodName := podNames[0]
+			cmd = exec.Command(utils.Kubectl(), "logs",
+				controllerPodName, "-c", "manager",
+				"-n", namespace,
+			)
+			podlogs, err := utils.Run(cmd)
+			if err == nil {
+				fmt.Fprintf(GinkgoWriter, "info: %s\n", podlogs)
+			}
+		}
+
 		By("stop metrics consumer")
 		utils.StopMetricsConsumer()
 
 		By("removing manager namespace")
-		cmd := exec.Command(utils.Kubectl(), "delete", "ns", namespace)
+		cmd = exec.Command(utils.Kubectl(), "delete", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
 		By("stop local services")
@@ -98,9 +127,6 @@ var _ = Describe("controller", Ordered, func() {
 			var controllerPodName string
 			var err error
 
-			// projectimage stores the name of the image used in the example
-			var projectimage = "example.com/remote-controller:v0.0.1"
-
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
 			_, err = utils.Run(cmd)
@@ -108,6 +134,10 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("loading the the manager(Operator) image on Kind")
 			err = utils.LoadImageToKindClusterWithName(projectimage)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("loading the the test-task-image image on Kind")
+			err = utils.LoadImageToKindClusterWithName(testtaskimage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("installing CRDs")
@@ -158,7 +188,7 @@ var _ = Describe("controller", Ordered, func() {
 			By("start metrics consumer")
 			Expect(utils.StartMetricsConsumer()).To(Succeed())
 
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 
 			By("validating that lagoonbuilds are working")
 			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx"} {
@@ -271,7 +301,7 @@ var _ = Describe("controller", Ordered, func() {
 			EventuallyWithOffset(1, verifyOnlyOneBuildPod, duration, interval).Should(Succeed())
 
 			By("validating that LagoonTasks are working")
-			for _, name := range []string{"1m5zypx"} {
+			for _, name := range []string{"1m5zypx", "7m5zypx"} {
 				if name == "1m5zypx" {
 					By("creating dynamic secret resource")
 					cmd = exec.Command(
@@ -282,16 +312,37 @@ var _ = Describe("controller", Ordered, func() {
 					)
 					_, err = utils.Run(cmd)
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+					By("creating a LagoonTask resource")
+					cmd = exec.Command(
+						utils.Kubectl(),
+						"apply",
+						"-f",
+						fmt.Sprintf("test/e2e/testdata/lagoon-task-%s.yaml", name),
+					)
+					_, err = utils.Run(cmd)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				} else {
+					By("creating a LagoonTask resource via rabbitmq")
+					cmd := exec.Command(
+						"curl",
+						"-s",
+						"-u",
+						"guest:guest",
+						"-H",
+						"'Accept: application/json'",
+						"-H",
+						"'Content-Type:application/json'",
+						"-X",
+						"POST",
+						"-d",
+						fmt.Sprintf("@test/e2e/testdata/lagoon-task-%s.json", name),
+						"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
+					)
+					_, err := utils.Run(cmd)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 				}
-				By("creating a LagoonTask resource")
-				cmd = exec.Command(
-					utils.Kubectl(),
-					"apply",
-					"-f",
-					fmt.Sprintf("test/e2e/testdata/lagoon-task-%s.yaml", name),
-				)
-				_, err = utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				time.Sleep(10 * time.Second)
 
 				By("validating that the lagoon-task pod completes as expected")
 				verifyTaskPodCompletes := func() error {
@@ -331,7 +382,7 @@ var _ = Describe("controller", Ordered, func() {
 				err := utils.InstallK8upCRD(name)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-				time.Sleep(5 * time.Second)
+				time.Sleep(10 * time.Second)
 
 				By(fmt.Sprintf("creating a %s restore task via rabbitmq", name))
 				cmd = exec.Command(
@@ -400,40 +451,54 @@ var _ = Describe("controller", Ordered, func() {
 			}
 			EventuallyWithOffset(1, verifyRobotCredentialsRotate, duration, interval).Should(Succeed())
 
-			By("delete environment via rabbitmq")
-			cmd = exec.Command(
-				"curl",
-				"-s",
-				"-u",
-				"guest:guest",
-				"-H",
-				"'Accept: application/json'",
-				"-H",
-				"'Content-Type:application/json'",
-				"-X",
-				"POST",
-				"-d",
-				"@test/e2e/testdata/remove-environment.json",
-				"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
-			)
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			// this tests the build qos functionality by starting 4 builds with a qos of max 3 (defined in the controller config provided by kustomize)
+			testBuildQoS(timeout, duration, interval)
 
-			By("validating that the namespace deletes")
-			verifyNamespaceRemoved := func() error {
-				cmd = exec.Command(utils.Kubectl(), "get",
-					"namespace", "nginx-example-main", "-o", "jsonpath={.status.phase}",
+			time.Sleep(5 * time.Second)
+
+			// this tests the task qos functionality by starting 4 tasks with a qos of max 3 (defined in the controller config provided by kustomize)
+			testTaskQoS(timeout, duration, interval)
+
+			time.Sleep(5 * time.Second)
+
+			By("delete environments via rabbitmq")
+			for _, env := range []string{"main", "dev1", "dev2", "dev3"} {
+				cmd = exec.Command(
+					"curl",
+					"-s",
+					"-u",
+					"guest:guest",
+					"-H",
+					"'Accept: application/json'",
+					"-H",
+					"'Content-Type:application/json'",
+					"-X",
+					"POST",
+					"-d",
+					fmt.Sprintf("@test/e2e/testdata/remove-environment-%s.json", env),
+					"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
 				)
-				status, err := utils.Run(cmd)
-				if err == nil {
-					ExpectWithOffset(2, err).NotTo(HaveOccurred())
-					if string(status) == "Active" || string(status) == "Terminating" {
-						return fmt.Errorf("namespace in %s status\n", status)
-					}
-				}
-				return nil
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
-			EventuallyWithOffset(1, verifyNamespaceRemoved, duration, interval).Should(Succeed())
+			By("validating that the namespaces are deleted")
+			for _, env := range []string{"main", "dev1", "dev2", "dev3"} {
+				verifyNamespaceRemoved := func() error {
+					cmd = exec.Command(utils.Kubectl(), "get",
+						"namespace", fmt.Sprintf("nginx-example-%s", env),
+						"-o", "jsonpath={.status.phase}",
+					)
+					status, err := utils.Run(cmd)
+					if err == nil {
+						ExpectWithOffset(2, err).NotTo(HaveOccurred())
+						if string(status) == "Active" || string(status) == "Terminating" {
+							return fmt.Errorf("namespace in %s status\n", status)
+						}
+					}
+					return nil
+				}
+				EventuallyWithOffset(1, verifyNamespaceRemoved, duration, interval).Should(Succeed())
+			}
 
 			By("validating that unauthenticated metrics requests fail")
 			runCmd := `curl -s -k https://remote-controller-controller-manager-metrics-service.remote-controller-system.svc.cluster.local:8443/metrics | grep -v "#" | grep "lagoon_"`

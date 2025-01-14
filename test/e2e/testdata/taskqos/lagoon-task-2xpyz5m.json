@@ -18,7 +18,7 @@
         },
         \"environment\": {
             \"id\": 1,
-            \"environmentType\": \"production\",
+            \"environmentType\": \"development\",
             \"name\": \"dev1\",
             \"project\": \"nginx-example\"
         },

@@ -126,7 +126,7 @@ func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 				Environment: lagoonTask.Spec.Environment.Name,
 				JobName:     lagoonTask.ObjectMeta.Name,
 				JobStatus:   condition,
-				RemoteID:    string(jobPod.ObjectMeta.UID),
+				RemoteID:    string(lagoonTask.ObjectMeta.UID),
 				Key:         lagoonTask.Spec.Key,
 				Cluster:     r.LagoonTargetName,
 			},
@@ -151,6 +151,15 @@ Logs on pod %s, assigned to cluster %s
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
 			return err
+		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published event %s for %s to lagoon-logs exchange",
+					fmt.Sprintf("task-logs:job-kubernetes:%s", jobPod.ObjectMeta.Name),
+					jobPod.ObjectMeta.Name,
+				),
+			)
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
@@ -186,7 +195,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 				ProjectID:     lagoonTask.Spec.Project.ID,
 				JobName:       lagoonTask.ObjectMeta.Name,
 				JobStatus:     condition,
-				RemoteID:      string(jobPod.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
@@ -217,6 +226,14 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 			// really matter if we don't smootly transition in what we send back to lagoon
 			return err
 		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published task update message for %s to lagoon-tasks:controller queue",
+					jobPod.ObjectMeta.Name,
+				),
+			)
+		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
 	}
@@ -226,7 +243,6 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 // taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagooncrd.LagoonTask,
-	jobPod *corev1.Pod,
 	condition string,
 ) error {
 	if r.EnableMQ && lagoonTask != nil {
@@ -242,7 +258,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 				ProjectID:     lagoonTask.Spec.Project.ID,
 				JobName:       lagoonTask.ObjectMeta.Name,
 				JobStatus:     condition,
-				RemoteID:      string(jobPod.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.ObjectMeta.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
@@ -262,6 +278,15 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
 			return err
+		}
+		if r.EnableDebug {
+			opLog.Info(
+				fmt.Sprintf(
+					"Published event %s for %s to lagoon-logs exchange",
+					fmt.Sprintf("task:job-kubernetes:%s", condition),
+					lagoonTask.ObjectMeta.Name,
+				),
+			)
 		}
 		// if we are able to publish the message, then we need to remove any pending messages from the resource
 		// and make sure we don't try and publish again
@@ -347,7 +372,7 @@ Task %s
 
 		// send any messages to lagoon message queues
 		// update the deployment with the status
-		if err = r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {
+		if err = r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, taskCondition.ToLower()); err != nil {
 			opLog.Error(err, "unable to publish task status logs")
 		}
 		if err = r.updateLagoonTask(opLog, &lagoonTask, &jobPod, taskCondition.ToLower()); err != nil {

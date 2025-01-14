@@ -108,6 +108,14 @@ var _ = Describe("controller", Ordered, func() {
 			if err == nil {
 				fmt.Fprintf(GinkgoWriter, "info: %s\n", podlogs)
 			}
+			// cmd = exec.Command(utils.Kubectl(), "logs",
+			// 	controllerPodName, "-c", "manager",
+			// 	"-n", namespace, "--previous",
+			// )
+			// podlogs, err = utils.Run(cmd)
+			// if err == nil {
+			// 	fmt.Fprintf(GinkgoWriter, "info: previous %s\n", podlogs)
+			// }
 		}
 
 		By("stop metrics consumer")

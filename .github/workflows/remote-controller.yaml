@@ -94,8 +94,8 @@ jobs:
         
     - name: Configure node IP in kind-config.yaml
       run: |
-        docker network create remote-controller
-        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect remote-controller | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"') 
+        docker network create kind
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"') 
         export KIND_NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
         envsubst < test-resources/test-suite.kind-config.yaml.tpl > test-resources/test-suite.kind-config.yaml
 
@@ -110,7 +110,7 @@ jobs:
   
     - name: Check node IP matches kind configuration
       run: |
-        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect remote-controller | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
         NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
         echo Checking for NODE_IP "$NODE_IP"
         grep $NODE_IP test-resources/test-suite.kind-config.yaml
@@ -127,4 +127,4 @@ jobs:
 
     - name: Run github/test-e2e
       run: |
-        make github/test-e2e HARBOR_VERSION=${{matrix.harbor}} OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}"
+        make github/test-e2e HARBOR_VERSION=${{matrix.harbor}} OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}" KIND_NETWORK=kind

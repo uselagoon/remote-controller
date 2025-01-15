@@ -67,13 +67,13 @@ var _ = Describe("controller", Ordered, func() {
 		Expect(utils.StartLocalServices()).To(Succeed())
 
 		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "create", "ns", namespace)
+		cmd := exec.Command(utils.Kubectl(), "create", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
 		// when running a re-test, it is best to make sure the old namespace doesn't exist
 		By("removing existing test resources")
 		// remove the old namespace
-		cmd = exec.Command("kubectl", "delete", "ns", "nginx-example-main")
+		cmd = exec.Command(utils.Kubectl(), "delete", "ns", "nginx-example-main")
 		_, _ = utils.Run(cmd)
 		// clean up the k8up crds
 		utils.UninstallK8upCRDs()
@@ -85,7 +85,7 @@ var _ = Describe("controller", Ordered, func() {
 		utils.StopMetricsConsumer()
 
 		By("removing manager namespace")
-		cmd := exec.Command("kubectl", "delete", "ns", namespace)
+		cmd := exec.Command(utils.Kubectl(), "delete", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
 		By("stop local services")
@@ -124,7 +124,7 @@ var _ = Describe("controller", Ordered, func() {
 			verifyControllerUp := func() error {
 				// Get pod name
 
-				cmd = exec.Command("kubectl", "get",
+				cmd = exec.Command(utils.Kubectl(), "get",
 					"pods", "-l", "control-plane=controller-manager",
 					"-o", "go-template={{ range .items }}"+
 						"{{ if not .metadata.deletionTimestamp }}"+
@@ -142,7 +142,7 @@ var _ = Describe("controller", Ordered, func() {
 				controllerPodName = podNames[0]
 				ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
 
-				cmd = exec.Command("kubectl", "get",
+				cmd = exec.Command(utils.Kubectl(), "get",
 					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
 					"-n", namespace,
 				)
@@ -184,7 +184,7 @@ var _ = Describe("controller", Ordered, func() {
 				} else {
 					By("creating a LagoonBuild resource")
 					cmd = exec.Command(
-						"kubectl",
+						utils.Kubectl(),
 						"apply",
 						"-f",
 						fmt.Sprintf("test/e2e/testdata/lagoon-build-%s.yaml", name),
@@ -197,7 +197,7 @@ var _ = Describe("controller", Ordered, func() {
 
 				By("validating that the LagoonBuild build pod is created")
 				cmd = exec.Command(
-					"kubectl",
+					utils.Kubectl(),
 					"-n", "nginx-example-main",
 					"wait",
 					"--for=condition=Ready",
@@ -211,7 +211,7 @@ var _ = Describe("controller", Ordered, func() {
 				By("validating that the lagoon-build pod completes as expected")
 				verifyBuildPodCompletes := func() error {
 					// Validate pod status
-					cmd = exec.Command("kubectl", "get",
+					cmd = exec.Command(utils.Kubectl(), "get",
 						"pods", fmt.Sprintf("lagoon-build-%s", name), "-o", "jsonpath={.status.phase}",
 						"-n", "nginx-example-main",
 					)
@@ -227,7 +227,7 @@ var _ = Describe("controller", Ordered, func() {
 				if name == "8m5zypx" {
 					By("validating that the namespace has organization name label")
 					cmd = exec.Command(
-						"kubectl",
+						utils.Kubectl(),
 						"get",
 						"namespace",
 						"-l",
@@ -237,7 +237,7 @@ var _ = Describe("controller", Ordered, func() {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 					By("validating that the namespace has organization id label")
 					cmd = exec.Command(
-						"kubectl",
+						utils.Kubectl(),
 						"get",
 						"namespace",
 						"-l",
@@ -250,7 +250,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("validating that only 1 build pod remains in a namespace")
 			verifyOnlyOneBuildPod := func() error {
-				cmd = exec.Command("kubectl", "get",
+				cmd = exec.Command(utils.Kubectl(), "get",
 					"pods", "-l", "lagoon.sh/jobType=build",
 					"-o", "go-template={{ range .items }}"+
 						"{{ if not .metadata.deletionTimestamp }}"+
@@ -275,7 +275,7 @@ var _ = Describe("controller", Ordered, func() {
 				if name == "1m5zypx" {
 					By("creating dynamic secret resource")
 					cmd = exec.Command(
-						"kubectl",
+						utils.Kubectl(),
 						"apply",
 						"-f",
 						fmt.Sprintf("test/e2e/testdata/dynamic-secret-%s.yaml", name),
@@ -285,7 +285,7 @@ var _ = Describe("controller", Ordered, func() {
 				}
 				By("creating a LagoonTask resource")
 				cmd = exec.Command(
-					"kubectl",
+					utils.Kubectl(),
 					"apply",
 					"-f",
 					fmt.Sprintf("test/e2e/testdata/lagoon-task-%s.yaml", name),
@@ -296,7 +296,7 @@ var _ = Describe("controller", Ordered, func() {
 				By("validating that the lagoon-task pod completes as expected")
 				verifyTaskPodCompletes := func() error {
 					// Validate pod status
-					cmd = exec.Command("kubectl", "get",
+					cmd = exec.Command(utils.Kubectl(), "get",
 						"pods", fmt.Sprintf("lagoon-task-%s", name), "-o", "jsonpath={.status.phase}",
 						"-n", "nginx-example-main",
 					)
@@ -311,7 +311,7 @@ var _ = Describe("controller", Ordered, func() {
 
 				if name == "1m5zypx" {
 					By("validating that the dynamic secret is mounted")
-					cmd = exec.Command("kubectl", "get",
+					cmd = exec.Command(utils.Kubectl(), "get",
 						"pods", fmt.Sprintf("lagoon-task-%s", name), "-o", "jsonpath={.spec.containers[0].volumeMounts}",
 						"-n", "nginx-example-main",
 					)
@@ -361,7 +361,7 @@ var _ = Describe("controller", Ordered, func() {
 				if name == "k8up-v1alpha1" {
 					restoreversion = "restores.backup.appuio.ch"
 				}
-				cmd = exec.Command("kubectl", "get",
+				cmd = exec.Command(utils.Kubectl(), "get",
 					restoreversion, restore,
 					"-n", "nginx-example-main", "-o", fmt.Sprintf("go-template=%s", string(tmpl)),
 				)
@@ -373,7 +373,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			By("validating that the harbor robot credentials get rotated successfully")
-			cmd = exec.Command("kubectl", "get",
+			cmd = exec.Command(utils.Kubectl(), "get",
 				"pods", "-l", "control-plane=controller-manager",
 				"-o", "go-template={{ range .items }}"+
 					"{{ if not .metadata.deletionTimestamp }}"+
@@ -387,7 +387,7 @@ var _ = Describe("controller", Ordered, func() {
 			controllerPodName = podNames[0]
 			ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
 			verifyRobotCredentialsRotate := func() error {
-				cmd = exec.Command("kubectl", "logs",
+				cmd = exec.Command(utils.Kubectl(), "logs",
 					controllerPodName, "-c", "manager",
 					"-n", namespace,
 				)
@@ -421,7 +421,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("validating that the namespace deletes")
 			verifyNamespaceRemoved := func() error {
-				cmd = exec.Command("kubectl", "get",
+				cmd = exec.Command(utils.Kubectl(), "get",
 					"namespace", "nginx-example-main", "-o", "jsonpath={.status.phase}",
 				)
 				status, err := utils.Run(cmd)

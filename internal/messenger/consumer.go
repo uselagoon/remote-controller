@@ -104,7 +104,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err)
 	}
 
 	// Handle any tasks that go to the `remove` queue
@@ -228,7 +228,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "remove-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "remove-queue", err)
 	}
 
 	// Handle any tasks that go to the `jobs` queue
@@ -286,7 +286,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err)
 	}
 
 	// Handle any tasks that go to the `misc` queue
@@ -499,7 +499,7 @@ func (m *Messenger) Consumer(targetName string) { //error {
 		message.Ack(false) // ack to remove from queue
 	})
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("Failed to set handler to consumer `%s`: %v", "misc-queue", err))
+		log.Fatalf("Failed to set handler to consumer `%s`: %v", "misc-queue", err)
 	}
 	<-forever
 }

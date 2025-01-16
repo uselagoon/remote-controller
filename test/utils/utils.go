@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 )
@@ -32,6 +33,10 @@ const (
 
 func warnError(err error) {
 	fmt.Fprintf(ginkgo.GinkgoWriter, "warning: %v\n", err)
+}
+
+func infoError(err error) {
+	fmt.Fprintf(ginkgo.GinkgoWriter, "info: %v\n", err)
 }
 
 var kubectlPath, kindPath string
@@ -58,6 +63,12 @@ func Kubectl() string {
 func StartLocalServices() error {
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	_, err := Run(cmd)
+	if err != nil {
+		return err
+	}
+	time.Sleep(10 * time.Second)
+	cmd = exec.Command("docker", "compose", "exec", "local-broker", "rabbitmqadmin", "declare", "exchange", "--vhost=/", "name=lagoon-logs", "type=direct")
+	_, err = Run(cmd)
 	return err
 }
 
@@ -66,6 +77,73 @@ func StopLocalServices() {
 	cmd := exec.Command("docker", "compose", "down")
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
+	}
+}
+
+// CleanupNamespace cleans up a namespace and all potentially stuck resources
+func CleanupNamespace(namespace string) {
+	cmd := exec.Command(kubectlPath, "delete", "ns", namespace, "--timeout=30s")
+	if _, err := Run(cmd); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return
+		}
+		infoError(err)
+	}
+	// check for builds
+	cmd = exec.Command(kubectlPath, "-n", namespace, "get", "lagoonbuilds",
+		"-o", "go-template={{ range .items }}"+
+			"{{ .metadata.name }}"+
+			"{{ \"\\n\" }}{{ end }}",
+	)
+	output, err := Run(cmd)
+	if err != nil {
+		infoError(err)
+	}
+	builds := GetNonEmptyLines(string(output))
+	if len(builds) > 0 {
+		for _, build := range builds {
+			fmt.Fprintf(ginkgo.GinkgoWriter, "info: %v\n", "patching stuck builds for removal")
+			cmd = exec.Command(kubectlPath, "-n", namespace, "patch", "lagoonbuild",
+				build, "--type", "merge",
+				"-p", "{\"metadata\":{\"finalizers\":null}}",
+			)
+			_, err := Run(cmd)
+			if err != nil {
+				infoError(err)
+			}
+		}
+		cmd = exec.Command(kubectlPath, "delete", "ns", namespace)
+		if _, err := Run(cmd); err != nil {
+			infoError(err)
+		}
+	}
+	// check for tasks
+	cmd = exec.Command(kubectlPath, "-n", namespace, "get", "lagoontasks",
+		"-o", "go-template={{ range .items }}"+
+			"{{ .metadata.name }}"+
+			"{{ \"\\n\" }}{{ end }}",
+	)
+	tasksoutput, err := Run(cmd)
+	if err != nil {
+		infoError(err)
+	}
+	tasks := GetNonEmptyLines(string(tasksoutput))
+	if len(tasks) > 0 {
+		for _, task := range tasks {
+			fmt.Fprintf(ginkgo.GinkgoWriter, "info: %v\n", "patching stuck tasks for removal")
+			cmd = exec.Command(kubectlPath, "-n", namespace, "patch", "lagoontask",
+				task, "--type", "merge",
+				"-p", "{\"metadata\":{\"finalizers\":null}}",
+			)
+			_, err := Run(cmd)
+			if err != nil {
+				infoError(err)
+			}
+		}
+		cmd = exec.Command(kubectlPath, "delete", "ns", namespace)
+		if _, err := Run(cmd); err != nil {
+			infoError(err)
+		}
 	}
 }
 

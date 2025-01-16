@@ -210,7 +210,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			return fmt.Errorf("error getting harbor version, check your harbor configuration. Error was: %v", err)
 		}
 		if lagoonHarbor.UseV2Functions(curVer) {
-			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
+			hProject, err := lagoonHarbor.CreateProjectV2(ctx, *namespace)
 			if err != nil {
 				return fmt.Errorf("error creating harbor project: %v", err)
 			}
@@ -330,8 +330,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 
 	var serviceaccountTokenSecret string
+	reg, _ := regexp.Compile("^lagoon-deployer-token")
 	for _, secret := range serviceAccount.Secrets {
-		match, _ := regexp.MatchString("^lagoon-deployer-token", secret.Name)
+		match := reg.MatchString(secret.Name)
 		if match {
 			serviceaccountTokenSecret = secret.Name
 			break
@@ -896,13 +897,13 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
 	if lagoonv1beta1.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusQueued)
 	} else {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
+		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusPending)
 
 	}
 	return nil
@@ -955,10 +956,10 @@ Build cancelled
 	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+	r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
+	r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagoonv1beta1.BuildStatusCancelled, "cancelled")
 	if cancelled {
-		r.buildLogsToLagoonLogs(ctx, opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
+		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagoonv1beta1.BuildStatusCancelled)
 	}
 	// delete the build from the lagoon namespace in kubernetes entirely
 	err = r.Delete(ctx, &lagoonBuild)

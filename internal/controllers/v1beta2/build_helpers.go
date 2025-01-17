@@ -279,22 +279,6 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	return nil
 }
 
-func (r *LagoonBuildReconciler) getOrCreateConfigMap(ctx context.Context, cmName string, configMap *corev1.ConfigMap, ns string) error {
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: ns,
-		Name:      cmName,
-	}, configMap)
-	if err != nil {
-		configMap.SetNamespace(ns)
-		configMap.SetName(cmName)
-		//we create it
-		if err = r.Create(ctx, configMap); err != nil {
-			return fmt.Errorf("there was an error creating the configmap '%v'. Error was: %v", cmName, err)
-		}
-	}
-	return nil
-}
-
 // processBuild will actually process the build.
 func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagooncrd.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
@@ -905,30 +889,15 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 %s
 ========================================
 `, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
-	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
-	var lagoonEnv corev1.ConfigMap
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonBuild.ObjectMeta.Namespace,
-		Name:      "lagoon-env",
-	},
-		&lagoonEnv,
-	)
-	if err != nil {
-		// if there isn't a configmap, just info it and move on
-		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
-		}
-	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
 	if lagooncrd.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued)
 	} else {
-		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
 	}
 	return nil
@@ -964,25 +933,10 @@ Build cancelled
 			opLog.Error(err, "Unable to update build status")
 		}
 	}
-	// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
-	var lagoonEnv corev1.ConfigMap
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonBuild.ObjectMeta.Namespace,
-		Name:      "lagoon-env",
-	},
-		&lagoonEnv,
-	)
-	if err != nil {
-		// if there isn't a configmap, just info it and move on
-		// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
-		}
-	}
 	// send any messages to lagoon message queues
 	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
+	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, "cancelled")
+	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, "cancelled")
 	if cancelled {
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
 	}

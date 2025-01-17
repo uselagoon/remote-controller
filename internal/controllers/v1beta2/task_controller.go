@@ -599,20 +599,66 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						Name:            "lagoon-task",
 						Image:           lagoonTask.Spec.AdvancedTask.RunnerImage,
 						ImagePullPolicy: r.ImagePullPolicy,
-						EnvFrom: []corev1.EnvFromSource{
-							{
-								ConfigMapRef: &corev1.ConfigMapEnvSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "lagoon-env",
-									},
-								},
-							},
-						},
-						Env:          podEnvs,
-						VolumeMounts: volumeMounts,
+						Env:             podEnvs,
+						VolumeMounts:    volumeMounts,
 					},
 				},
 			},
+		}
+		// check if the lagoon-env secret(s) exist and mount them to the pod as required, or fall back to the configmap
+		lagoonEnvSecret := &corev1.Secret{}
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Name:      "lagoon-env",
+		}, lagoonEnvSecret)
+		if err != nil {
+			// fall back to check if the lagoon-env configmap exists
+			lagoonEnvConfigMap := &corev1.ConfigMap{}
+			err := r.Get(ctx, types.NamespacedName{
+				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Name:      "lagoon-env",
+			}, lagoonEnvConfigMap)
+			if err != nil {
+				// just log the warning
+				opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap %s", lagoonTask.ObjectMeta.Namespace))
+			} else {
+				// add the lagoon-env configmap to the build-pod
+				newPod.Spec.Containers[0].EnvFrom = append(newPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "lagoon-env",
+						},
+					},
+				})
+			}
+		} else {
+			// else check the platform env secret exists
+			lagoonPlatformEnvSecret := &corev1.Secret{}
+			err := r.Get(ctx, types.NamespacedName{
+				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Name:      "lagoon-platform-env",
+			}, lagoonPlatformEnvSecret)
+			if err != nil {
+				// just log the warning
+				opLog.Info(fmt.Sprintf("no lagoon-platform-env secret %s", lagoonTask.ObjectMeta.Namespace))
+			} else {
+				// add the lagoon-platform-env secret to the build-pod
+				newPod.Spec.Containers[0].EnvFrom = append(newPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "lagoon-platform-env",
+						},
+					},
+				})
+			}
+			// add the lagoon-env secret to the build-pod
+			newPod.Spec.Containers[0].EnvFrom = append(newPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+				SecretRef: &corev1.SecretEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "lagoon-env",
+					},
+				},
+			})
 		}
 		if lagoonTask.Spec.Project.Organization != nil {
 			newPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)

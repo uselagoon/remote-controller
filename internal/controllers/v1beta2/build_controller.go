@@ -242,16 +242,6 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 		return ctrl.Result{}, err
 	}
 
-	// Get or create the lagoon-env configmap
-	lagoonEnvConfigMap := &corev1.ConfigMap{}
-	if r.EnableDebug {
-		opLog.Info("Checking `lagoon-env` configMap exists - creating if not")
-	}
-	err = r.getOrCreateConfigMap(ctx, "lagoon-env", lagoonEnvConfigMap, namespace.ObjectMeta.Name)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
 	// copy the build resource into a new resource and set the status to pending
 	// create the new resource and the controller will handle it via queue
 	opLog.Info(fmt.Sprintf("Creating LagoonBuild in Pending status: %s", lagoonBuild.ObjectMeta.Name))
@@ -309,7 +299,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 			continue
 		}
 		// send the status change to lagoon
-		r.updateDeploymentAndEnvironmentTask(opLog, runningBuild, nil, buildCondition, "cancelled")
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, runningBuild, false, buildCondition, "cancelled")
 		continue
 	}
 	// handle processing running but no pod/failed pod builds

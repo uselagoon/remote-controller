@@ -88,16 +88,6 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					}
 					jobPod.Status.ContainerStatuses[0] = state
 
-					// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
-					var lagoonEnv corev1.ConfigMap
-					err := r.Get(ctx, types.NamespacedName{Namespace: jobPod.ObjectMeta.Namespace, Name: "lagoon-env"}, &lagoonEnv)
-					if err != nil {
-						// if there isn't a configmap, just info it and move on
-						// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-						if r.EnableDebug {
-							opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
-						}
-					}
 					// send any messages to lagoon message queues
 					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
 					return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, []byte(logMsg), false)
@@ -224,10 +214,10 @@ Logs on pod %s, assigned to cluster %s
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
 func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
+	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
-	lagoonEnv *corev1.ConfigMap,
 	namespace *corev1.Namespace,
 	condition string,
 ) error {
@@ -311,16 +301,11 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.Services = serviceNames
 			msg.Meta.EnvironmentServices = services
 		}
+		lagoonEnv, route, routes := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
-		if lagoonEnv != nil {
-			msg.Meta.Route = ""
-			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
-				msg.Meta.Route = route
-			}
-			msg.Meta.Routes = []string{}
-			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
-				msg.Meta.Routes = strings.Split(routes, ",")
-			}
+		if lagoonEnv {
+			msg.Meta.Route = route
+			msg.Meta.Routes = routes
 		}
 		// we can add the build start time here
 		if jobPod.Status.StartTime != nil {
@@ -363,10 +348,10 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
+	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
-	lagoonEnv *corev1.ConfigMap,
 	namespace *corev1.Namespace,
 	condition string,
 ) error {
@@ -404,17 +389,13 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		var addRoute, addRoutes string
-		if lagoonEnv != nil {
-			msg.Meta.Route = ""
-			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
-				msg.Meta.Route = route
-				addRoute = fmt.Sprintf("\n%s", route)
-			}
-			msg.Meta.Routes = []string{}
-			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
-				msg.Meta.Routes = strings.Split(routes, ",")
-				addRoutes = fmt.Sprintf("\n%s", strings.Join(strings.Split(routes, ","), "\n"))
-			}
+		lagoonEnv, route, routes := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		// if we aren't being provided the lagoon config, we can skip adding the routes etc
+		if lagoonEnv {
+			msg.Meta.Route = route
+			addRoute = fmt.Sprintf("\n%s", route)
+			msg.Meta.Routes = routes
+			addRoutes = fmt.Sprintf("\n%s", strings.Join(routes, "\n"))
 		}
 		msg.Message = fmt.Sprintf("*[%s]* `%s` Build `%s` %s <%s|Logs>%s%s",
 			projectName,
@@ -542,26 +523,12 @@ Build %s
 			"conditions": lagoonBuild.Status.Conditions,
 			"phase":      buildCondition.String(),
 		}
-		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
-		var lagoonEnv corev1.ConfigMap
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: jobPod.ObjectMeta.Namespace,
-			Name:      "lagoon-env",
-		},
-			&lagoonEnv,
-		); err != nil {
-			// if there isn't a configmap, just info it and move on
-			// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", jobPod.ObjectMeta.Namespace))
-			}
-		}
 
 		// do any message publishing here, and update any pending messages if needed
-		if err = r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower()); err != nil {
+		if err = r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
 			opLog.Error(err, "unable to publish build status logs")
 		}
-		if err = r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &jobPod, &lagoonEnv, namespace, buildCondition.ToLower()); err != nil {
+		if err = r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
 			opLog.Error(err, "unable to publish build update")
 		}
 		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke

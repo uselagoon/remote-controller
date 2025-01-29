@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base32"
@@ -12,12 +13,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -317,4 +322,44 @@ func TaskStepToStatusCondition(c string, t time.Time) metav1.Condition {
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.NewTime(t),
 	}
+}
+
+// there is currently no reason to check the `lagoon-platform-env` secret, just the lagoon-env configmap or lagoon-env secret
+// as it contains values that are provided back to the API at the completion of a build/buildstep
+func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client, namespace string) (bool, string, []string) {
+	var route string
+	var routes []string
+	lagoonEnvSecret := &corev1.Secret{}
+	err := c.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      "lagoon-env",
+	}, lagoonEnvSecret)
+	if err != nil {
+		// fall back to check if the lagoon-env configmap exists
+		lagoonEnvConfigMap := &corev1.ConfigMap{}
+		err := c.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      "lagoon-env",
+		}, lagoonEnvConfigMap)
+		if err != nil {
+			// just log the warning
+			opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap in namespace %s", namespace))
+			return false, "", nil
+		} else {
+			if r, ok := lagoonEnvConfigMap.Data["LAGOON_ROUTE"]; ok {
+				route = r
+			}
+			if rs, ok := lagoonEnvConfigMap.Data["LAGOON_ROUTES"]; ok {
+				routes = strings.Split(rs, ",")
+			}
+			return true, route, routes
+		}
+	}
+	if r, ok := lagoonEnvSecret.Data["LAGOON_ROUTE"]; ok {
+		route = string(r)
+	}
+	if rs, ok := lagoonEnvSecret.Data["LAGOON_ROUTES"]; ok {
+		routes = strings.Split(string(rs), ",")
+	}
+	return true, route, routes
 }

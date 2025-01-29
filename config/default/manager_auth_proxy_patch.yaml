@@ -24,6 +24,7 @@ spec:
         - "--enable-deprecated-apis"
         - "--lagoon-feature-flag-support-k8upv2"
         - "--skip-tls-verify"
+        - "--cleanup-harbor-repository-on-delete" # enabled for tests
         ports:
         - containerPort: 8443
           name: https

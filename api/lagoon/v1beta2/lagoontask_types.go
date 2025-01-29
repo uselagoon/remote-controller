@@ -96,8 +96,6 @@ func (b TaskType) String() string {
 
 // LagoonTaskSpec defines the desired state of LagoonTask
 type LagoonTaskSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Key          string                  `json:"key,omitempty"`
 	Task         schema.LagoonTaskInfo   `json:"task,omitempty"`
 	Project      LagoonTaskProject       `json:"project,omitempty"`

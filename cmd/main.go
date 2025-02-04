@@ -385,10 +385,11 @@ func main() {
 
 	// flags to change the image pull policy used for tasks and builds
 	// defaults to Always, can change to another option as required. tests use IfNotPresent
+	// these flags are used for stability in testing, in actual production use you should never change these.
 	flag.StringVar(&taskImagePullPolicy, "task-image-pull-policy", "Always",
-		"The image pull policy to use for tasks.")
+		"The image pull policy to use for tasks. Changing this can have a negative impact and result in tasks failing.")
 	flag.StringVar(&buildImagePullPolicy, "build-image-pull-policy", "Always",
-		"The image pull policy to use for builds.")
+		"The image pull policy to use for builds. Changing this can have a negative impact and result in builds failing.")
 
 	// If installing this controller from scratch, deprecated APIs should not be configured
 	flag.BoolVar(&enableDeprecatedAPIs, "enable-deprecated-apis", false, "Flag to have this controller enable support for deprecated APIs.")

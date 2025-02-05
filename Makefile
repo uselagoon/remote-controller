@@ -368,10 +368,10 @@ kind/clean:
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up inside github action.
-test-e2e:
+test-e2e: build-task-image
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	go test ./test/e2e/ -v -ginkgo.v
+	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e
 github/test-e2e: local-dev/tools install-lagoon-remote test-e2e
@@ -402,3 +402,7 @@ GOBIN=$(LOCALBIN) go install $${package} ;\
 mv "$$(echo "$(1)" | sed "s/-$(3)$$//")" $(1) ;\
 }
 endef
+
+.PHONY: build-task-image
+build-task-image:
+	docker build . -f test-resources/Dockerfile.task -t example.com/test-task-image:v0.0.1

@@ -30,7 +30,6 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta2.Lagoo
 		// just log the error then return
 		return nil
 	}
-
 	// check if k8up crds exist in the cluster
 	k8upv1alpha1Exists := false
 	k8upv1Exists := false

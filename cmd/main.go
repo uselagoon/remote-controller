@@ -173,7 +173,6 @@ func main() {
 	var lffTaskQoSEnabled bool
 	var qosMaxTasks int
 	var qosMaxNamespaceTasks int
-	var qosTasksDefaultValue int
 
 	var taskImagePullPolicy string
 	var buildImagePullPolicy string
@@ -381,7 +380,6 @@ func main() {
 	flag.BoolVar(&lffTaskQoSEnabled, "enable-task-qos", false, "Flag to enable this controller with QoS for tasks.")
 	flag.IntVar(&qosMaxTasks, "qos-max-tasks", 200, "The total number of tasks that can run at any one time.")
 	flag.IntVar(&qosMaxNamespaceTasks, "qos-max-namespace-tasks", 20, "The total number of tasks that can run at any one time.")
-	flag.IntVar(&qosTasksDefaultValue, "task-qos-default", 5, "The default qos value to apply to tasks if one is not provided.")
 
 	// flags to change the image pull policy used for tasks and builds
 	// defaults to Always, can change to another option as required. tests use IfNotPresent

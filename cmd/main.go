@@ -27,6 +27,7 @@ import (
 
 	"github.com/cheshir/go-mq/v2"
 	str2duration "github.com/xhit/go-str2duration/v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -168,6 +169,13 @@ func main() {
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
 	var qosDefaultValue int
+
+	var lffTaskQoSEnabled bool
+	var qosMaxTasks int
+	var qosMaxNamespaceTasks int
+
+	var taskImagePullPolicy string
+	var buildImagePullPolicy string
 
 	var lffRouterURL bool
 
@@ -363,10 +371,23 @@ func main() {
 	flag.IntVar(&timeoutForLongRunningBuildPods, "timeout-longrunning-build-pod-cleanup", 6, "How many hours a build pod should run before forcefully closed.")
 	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
 
-	// QoS configuration
+	// Build QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
-	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The number of builds that can run at any one time.")
+	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The total number of builds that can run at any one time.")
 	flag.IntVar(&qosDefaultValue, "qos-default", 5, "The default qos value to apply if one is not provided.")
+
+	// Task QoS configuration
+	flag.BoolVar(&lffTaskQoSEnabled, "enable-task-qos", false, "Flag to enable this controller with QoS for tasks.")
+	flag.IntVar(&qosMaxTasks, "qos-max-tasks", 200, "The total number of tasks that can run at any one time.")
+	flag.IntVar(&qosMaxNamespaceTasks, "qos-max-namespace-tasks", 20, "The total number of tasks that can run at any one time.")
+
+	// flags to change the image pull policy used for tasks and builds
+	// defaults to Always, can change to another option as required. tests use IfNotPresent
+	// these flags are used for stability in testing, in actual production use you should never change these.
+	flag.StringVar(&taskImagePullPolicy, "task-image-pull-policy", "Always",
+		"The image pull policy to use for tasks. Changing this can have a negative impact and result in tasks failing.")
+	flag.StringVar(&buildImagePullPolicy, "build-image-pull-policy", "Always",
+		"The image pull policy to use for builds. Changing this can have a negative impact and result in builds failing.")
 
 	// If installing this controller from scratch, deprecated APIs should not be configured
 	flag.BoolVar(&enableDeprecatedAPIs, "enable-deprecated-apis", false, "Flag to have this controller enable support for deprecated APIs.")
@@ -698,6 +719,26 @@ func main() {
 		DefaultValue: qosDefaultValue,
 	}
 
+	taskQoSConfigv1beta2 := lagoonv1beta2ctrl.TaskQoS{
+		MaxTasks:          qosMaxTasks,
+		MaxNamespaceTasks: qosMaxNamespaceTasks,
+	}
+
+	tipp := corev1.PullAlways
+	switch taskImagePullPolicy {
+	case "IfNotPresent":
+		tipp = corev1.PullIfNotPresent
+	case "Never":
+		tipp = corev1.PullNever
+	}
+	bipp := corev1.PullAlways
+	switch buildImagePullPolicy {
+	case "IfNotPresent":
+		bipp = corev1.PullIfNotPresent
+	case "Never":
+		bipp = corev1.PullNever
+	}
+
 	resourceCleanup := pruner.New(mgr.GetClient(),
 		buildsToKeep,
 		buildPodsToKeep,
@@ -834,6 +875,7 @@ func main() {
 			NoProxy:    noProxy,
 		},
 		UnauthenticatedRegistry: unauthenticatedRegistry,
+		ImagePullPolicy:         bipp,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -860,6 +902,8 @@ func main() {
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonTask"),
 		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		Messaging:             messaging,
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
@@ -877,6 +921,9 @@ func main() {
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,
 		},
+		LFFTaskQoSEnabled: lffTaskQoSEnabled,
+		TaskQoS:           taskQoSConfigv1beta2,
+		ImagePullPolicy:   tipp,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

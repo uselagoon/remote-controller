@@ -62,6 +62,11 @@ var (
 	mqUser                          string
 	mqPass                          string
 	mqHost                          string
+	mqTLS                           bool
+	mqVerify                        bool
+	mqCACert                        string
+	mqClientCert                    string
+	mqClientKey                     string
 	lagoonAPIHost                   string
 	lagoonSSHHost                   string
 	lagoonSSHPort                   string
@@ -204,6 +209,16 @@ func main() {
 		"The password for the rabbitmq user.")
 	flag.StringVar(&mqHost, "rabbitmq-hostname", "localhost:5672",
 		"The hostname:port for the rabbitmq host.")
+	flag.BoolVar(&mqTLS, "rabbitmq-tls", false,
+		"To use amqps instead of amqp.")
+	flag.BoolVar(&mqVerify, "rabbitmq-verify", false,
+		"To verify rabbitmq peer connection.")
+	flag.StringVar(&mqCACert, "rabbitmq-cacert", "",
+		"The path to the ca certificate")
+	flag.StringVar(&mqClientCert, "rabbitmq-clientcert", "",
+		"The path to the client certificate")
+	flag.StringVar(&mqClientKey, "rabbitmq-clientkey", "",
+		"The path to the client key")
 	flag.IntVar(&mqWorkers, "rabbitmq-queue-workers", 1,
 		"The number of workers to start with.")
 	flag.IntVar(&rabbitRetryInterval, "rabbitmq-retry-interval", 30,
@@ -408,6 +423,11 @@ func main() {
 	mqUser = helpers.GetEnv("RABBITMQ_USERNAME", mqUser)
 	mqPass = helpers.GetEnv("RABBITMQ_PASSWORD", mqPass)
 	mqHost = helpers.GetEnv("RABBITMQ_HOSTNAME", mqHost)
+	mqTLS = helpers.GetEnvBool("RABBITMQ_TLS", mqTLS)
+	mqCACert = helpers.GetEnv("RABBITMQ_CACERT", mqCACert)
+	mqClientCert = helpers.GetEnv("RABBITMQ_CLIENTCERT", mqClientCert)
+	mqClientKey = helpers.GetEnv("RABBITMQ_CLIENTKEY", mqClientKey)
+	mqVerify = helpers.GetEnvBool("RABBITMQ_VERIFY", mqVerify)
 	lagoonTargetName = helpers.GetEnv("LAGOON_TARGET_NAME", lagoonTargetName)
 	overrideBuildDeployImage = helpers.GetEnv("OVERRIDE_BUILD_DEPLOY_DIND_IMAGE", overrideBuildDeployImage)
 	namespacePrefix = helpers.GetEnv("NAMESPACE_PREFIX", namespacePrefix)
@@ -531,6 +551,23 @@ func main() {
 	// create the cache
 	cache := expirable.NewLRU[string, string](1000, nil, time.Minute*60)
 
+	brokerDSN := fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost)
+	if mqTLS {
+		verify := "verify_none"
+		if mqVerify {
+			verify = "verify_peer"
+		}
+		brokerDSN = fmt.Sprintf("amqps://%s:%s@%s?verify=%s", mqUser, mqPass, mqHost, verify)
+		if mqCACert != "" {
+			brokerDSN = fmt.Sprintf("%s&cacertfile=%s", brokerDSN, mqCACert)
+		}
+		if mqClientCert != "" {
+			brokerDSN = fmt.Sprintf("%s&certfile=%s", brokerDSN, mqClientCert)
+		}
+		if mqClientKey != "" {
+			brokerDSN = fmt.Sprintf("%s&keyfile=%s", brokerDSN, mqClientKey)
+		}
+	}
 	config := mq.Config{
 		ReconnectDelay: time.Duration(rabbitRetryInterval) * time.Second,
 		Exchanges: mq.Exchanges{
@@ -652,7 +689,7 @@ func main() {
 				},
 			},
 		},
-		DSN: fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost),
+		DSN: brokerDSN,
 	}
 
 	harborURLParsed, _ := url.Parse(harborURL)

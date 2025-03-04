@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -195,25 +194,10 @@ Build cancelled
 		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 			opLog.Error(err, "unable to update build status")
 		}
-		// get the configmap for lagoon-env so we can use it for updating the deployment in lagoon
-		var lagoonEnv corev1.ConfigMap
-		err := r.Get(ctx, types.NamespacedName{
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
-			Name:      "lagoon-env",
-		},
-			&lagoonEnv,
-		)
-		if err != nil {
-			// if there isn't a configmap, just info it and move on
-			// the updatedeployment function will see it as nil and not bother doing the bits that require the configmap
-			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("There is no configmap %s in namespace %s ", "lagoon-env", lagoonBuild.ObjectMeta.Namespace))
-			}
-		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status of cancelled in lagoon
-		r.buildStatusLogsToLagoonLogs(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
-		r.updateDeploymentAndEnvironmentTask(opLog, &lagoonBuild, &lagoonEnv, lagooncrd.BuildStatusCancelled, "cancelled")
+		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, "cancelled")
+		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, "cancelled")
 		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
 	}
 	return nil
@@ -267,9 +251,10 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
 func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
+	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
-	lagoonEnv *corev1.ConfigMap,
+	checkLagoonEnv bool,
 	buildCondition lagooncrd.BuildStatusType,
 	buildStep string,
 ) {
@@ -331,15 +316,12 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.Services = serviceNames
 			msg.Meta.EnvironmentServices = services
 		}
-		// if we aren't being provided the lagoon config, we can skip adding the routes etc
-		if lagoonEnv != nil {
-			msg.Meta.Route = ""
-			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
+		if checkLagoonEnv {
+			route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+			// if we aren't being provided the lagoon config, we can skip adding the routes etc
+			if err == nil {
 				msg.Meta.Route = route
-			}
-			msg.Meta.Routes = []string{}
-			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
-				msg.Meta.Routes = strings.Split(routes, ",")
+				msg.Meta.Routes = routes
 			}
 		}
 		if buildCondition.ToLower() == "failed" || buildCondition.ToLower() == "complete" || buildCondition.ToLower() == "cancelled" {
@@ -361,9 +343,9 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
+	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
-	lagoonEnv *corev1.ConfigMap,
 	buildCondition lagooncrd.BuildStatusType,
 	buildStep string,
 ) {
@@ -388,16 +370,11 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 				buildCondition.ToLower(),
 			),
 		}
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
-		if lagoonEnv != nil {
-			msg.Meta.Route = ""
-			if route, ok := lagoonEnv.Data["LAGOON_ROUTE"]; ok {
-				msg.Meta.Route = route
-			}
-			msg.Meta.Routes = []string{}
-			if routes, ok := lagoonEnv.Data["LAGOON_ROUTES"]; ok {
-				msg.Meta.Routes = strings.Split(routes, ",")
-			}
+		if err == nil {
+			msg.Meta.Route = route
+			msg.Meta.Routes = routes
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {

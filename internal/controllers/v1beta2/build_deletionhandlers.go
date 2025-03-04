@@ -317,9 +317,9 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.EnvironmentServices = services
 		}
 		if checkLagoonEnv {
-			lagoonEnv, route, routes := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+			route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
 			// if we aren't being provided the lagoon config, we can skip adding the routes etc
-			if lagoonEnv {
+			if err == nil {
 				msg.Meta.Route = route
 				msg.Meta.Routes = routes
 			}
@@ -370,9 +370,9 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 				buildCondition.ToLower(),
 			),
 		}
-		lagoonEnv, route, routes := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
-		if lagoonEnv {
+		if err == nil {
 			msg.Meta.Route = route
 			msg.Meta.Routes = routes
 		}

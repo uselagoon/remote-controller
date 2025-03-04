@@ -326,7 +326,7 @@ func TaskStepToStatusCondition(c string, t time.Time) metav1.Condition {
 
 // there is currently no reason to check the `lagoon-platform-env` secret, just the lagoon-env configmap or lagoon-env secret
 // as it contains values that are provided back to the API at the completion of a build/buildstep
-func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client, namespace string) (bool, string, []string) {
+func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client, namespace string) (string, []string, error) {
 	var route string
 	var routes []string
 	lagoonEnvSecret := &corev1.Secret{}
@@ -344,7 +344,7 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 		if err != nil {
 			// just log the warning
 			opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap in namespace %s", namespace))
-			return false, "", nil
+			return "", nil, fmt.Errorf("no lagoon-env secret or configmap in namespace %s", namespace)
 		} else {
 			if r, ok := lagoonEnvConfigMap.Data["LAGOON_ROUTE"]; ok {
 				route = r
@@ -352,7 +352,7 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 			if rs, ok := lagoonEnvConfigMap.Data["LAGOON_ROUTES"]; ok {
 				routes = strings.Split(rs, ",")
 			}
-			return true, route, routes
+			return route, routes, nil
 		}
 	}
 	if r, ok := lagoonEnvSecret.Data["LAGOON_ROUTE"]; ok {
@@ -361,5 +361,5 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 	if rs, ok := lagoonEnvSecret.Data["LAGOON_ROUTES"]; ok {
 		routes = strings.Split(string(rs), ",")
 	}
-	return true, route, routes
+	return route, routes, nil
 }

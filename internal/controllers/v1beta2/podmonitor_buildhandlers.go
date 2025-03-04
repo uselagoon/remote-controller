@@ -158,17 +158,11 @@ func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(
 			buildStep = value
 		}
 		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
+		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
+		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
-		if lagoonBuild != nil {
-			envName = lagoonBuild.Spec.Project.Environment
-			envID = lagoonBuild.Spec.Project.EnvironmentID
-			projectName = lagoonBuild.Spec.Project.Name
-			projectID = lagoonBuild.Spec.Project.ID
-		}
 		remoteId := string(jobPod.ObjectMeta.UID)
 		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
 			remoteId = value
@@ -256,18 +250,12 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
-		envName := lagoonBuild.Spec.Project.Environment
-		envID := lagoonBuild.Spec.Project.EnvironmentID
-		projectName := lagoonBuild.Spec.Project.Name
-		projectID := lagoonBuild.Spec.Project.ID
-		if lagoonBuild == nil {
-			envName = namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-			eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
-			envID = helpers.UintPtr(uint(eID))
-			projectName = namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-			pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
-			projectID = helpers.UintPtr(uint(pID))
-		}
+		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envID := helpers.UintPtr(uint(eID))
+		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectID := helpers.UintPtr(uint(pID))
 		remoteId := string(jobPod.ObjectMeta.UID)
 		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
 			remoteId = value
@@ -393,17 +381,11 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
 			buildStep = value
 		}
 		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
+		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environment"])
+		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
-		if lagoonBuild != nil {
-			envName = lagoonBuild.Spec.Project.Environment
-			envID = lagoonBuild.Spec.Project.EnvironmentID
-			projectName = lagoonBuild.Spec.Project.Name
-			projectID = lagoonBuild.Spec.Project.ID
-		}
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  projectName,

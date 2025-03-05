@@ -29,6 +29,25 @@ spec:
         - "--qos-max-namespace-tasks=3"
         - "--task-image-pull-policy=IfNotPresent"
         - "--build-image-pull-policy=IfNotPresent"
+        - "--rabbitmq-tls=true"
+        - "--rabbitmq-verify=true"
+        - "--rabbitmq-cacert=/ca.crt"
+        - "--rabbitmq-clientcert=/tls.crt"
+        - "--rabbitmq-clientkey=/tls.key"
         ports:
         - containerPort: 8443
           name: https
+        volumeMounts:
+        - mountPath: /ca.crt
+          name: lagoon-broker-tls
+          subPath: ca.crt
+        - mountPath: /tls.crt
+          name: lagoon-broker-tls
+          subPath: tls.crt
+        - mountPath: /tls.key
+          name: lagoon-broker-tls
+          subPath: tls.key
+      volumes:
+      - name: lagoon-broker-tls
+        secret:
+          secretName: lagoon-broker-tls

@@ -347,6 +347,30 @@ create-kind-cluster: local-dev/tools helm/repos
 		&& export KIND_EXPERIMENTAL_DOCKER_NETWORK=$(KIND_NETWORK) \
  		&& $(KIND) create cluster --wait=60s --name=$(KIND_CLUSTER) --config=test-resources/test-suite.kind-config.yaml
 
+# generate-broker-certs will generate a ca, server and client certificate used for the test suite
+.PHONY: generate-broker-certs
+generate-broker-certs:
+	@mkdir -p local-dev/certificates
+	openssl x509 -enddate -noout -in local-dev/certificates/ca.crt > /dev/null 2>&1 || \
+    (openssl genrsa -out local-dev/certificates/ca.key 4096 && \
+	openssl req -x509 -new -nodes -key local-dev/certificates/ca.key -sha256 -days 1826 -out local-dev/certificates/ca.crt -subj '/CN=lagoon Root CA/C=IO/ST=State/L=City/O=lagoon' && \
+    openssl ecparam -name prime256v1 -genkey -noout -out local-dev/certificates/tls.key && \
+	chmod +r local-dev/certificates/tls.key && \
+	echo "subjectAltName = IP:172.17.0.1" > local-dev/certificates/extfile.cnf && \
+	openssl req -new -nodes -out local-dev/certificates/tls.csr -key local-dev/certificates/tls.key -subj '/CN=broker/C=IO/ST=State/L=City/O=lagoon' && \
+    openssl x509 -req -in local-dev/certificates/tls.csr -CA local-dev/certificates/ca.crt -extfile local-dev/certificates/extfile.cnf -CAkey local-dev/certificates/ca.key -CAcreateserial -out local-dev/certificates/tls.crt -days 730 -sha256 && \
+    openssl ecparam -name prime256v1 -genkey -noout -out local-dev/certificates/clienttls.key && \
+	chmod +r local-dev/certificates/clienttls.key && \
+	openssl req -new -nodes -out local-dev/certificates/clienttls.csr -key local-dev/certificates/clienttls.key -subj '/CN=client/C=IO/ST=State/L=City/O=lagoon' && \
+    openssl x509 -req -in local-dev/certificates/clienttls.csr -CA local-dev/certificates/ca.crt -CAkey local-dev/certificates/ca.key -CAcreateserial -out local-dev/certificates/clienttls.crt -days 730 -sha256)
+
+.PHONY: regenerate-broker-certs
+regenerate-broker-certs:
+	@mkdir -p local-dev/certificates
+	@rm local-dev/certificates/ca.key || true && \
+	rm local-dev/certificates/ca.crt || true && \
+	$(MAKE) generate-broker-certs
+
 # Create a kind cluster locally and run the test e2e test suite against it
 .PHONY: kind/test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up locally
 kind/test-e2e: create-kind-cluster install-lagoon-remote kind/re-test-e2e
@@ -368,9 +392,12 @@ kind/clean:
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up inside github action.
-test-e2e: build-task-image
+test-e2e: build-task-image generate-broker-certs
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
+	($(KUBECTL) create namespace remote-controller-system || echo "namespace exists") && \
+	($(KUBECTL) -n remote-controller-system delete secret lagoon-broker-tls || echo "lagoon-broker-tls doesn't exist, ignoring") && \
+	$(KUBECTL) -n remote-controller-system create secret generic lagoon-broker-tls --from-file=tls.crt=local-dev/certificates/clienttls.crt --from-file=tls.key=local-dev/certificates/clienttls.key --from-file=ca.crt=local-dev/certificates/ca.crt && \
 	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e

@@ -14,7 +14,7 @@ spec:
             - name: RABBITMQ_PASSWORD
               value: 'guest'
             - name: RABBITMQ_HOSTNAME
-              value: '172.17.0.1:5672'
+              value: '172.17.0.1:5671'
             - name: LAGOON_TARGET_NAME
               value: 'ci-local-controller-kubernetes'
             - name: CONTROLLER_NAMESPACE

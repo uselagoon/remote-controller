@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
+func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	opLog logr.Logger,
 	req ctrl.Request,
 	jobPod corev1.Pod,
@@ -129,7 +129,7 @@ func (r *LagoonMonitorReconciler) handleBuildMonitor(ctx context.Context,
 
 // buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonMonitorReconciler) buildLogsToLagoonLogs(
+func (r *BuildMonitorReconciler) buildLogsToLagoonLogs(
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
 	jobPod *corev1.Pod,
@@ -213,7 +213,7 @@ Logs on pod %s, assigned to cluster %s
 
 // updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
+func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
@@ -347,7 +347,7 @@ func (r *LagoonMonitorReconciler) updateDeploymentAndEnvironmentTask(
 }
 
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
+func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 	ctx context.Context,
 	opLog logr.Logger,
 	lagoonBuild *lagooncrd.LagoonBuild,
@@ -432,7 +432,7 @@ func (r *LagoonMonitorReconciler) buildStatusLogsToLagoonLogs(
 }
 
 // updateDeploymentWithLogs collects logs from the build containers and ships or stores them
-func (r *LagoonMonitorReconciler) updateDeploymentWithLogs(
+func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
 	lagoonBuild lagooncrd.LagoonBuild,

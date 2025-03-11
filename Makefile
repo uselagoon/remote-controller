@@ -428,9 +428,6 @@ kind/clean:
 test-e2e: build-task-image generate-broker-certs
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	($(KUBECTL) create namespace remote-controller-system || echo "namespace exists") && \
-	($(KUBECTL) -n remote-controller-system delete secret lagoon-broker-tls || echo "lagoon-broker-tls doesn't exist, ignoring") && \
-	$(KUBECTL) -n remote-controller-system create secret generic lagoon-broker-tls --from-file=tls.crt=local-dev/certificates/clienttls.crt --from-file=tls.key=local-dev/certificates/clienttls.key --from-file=ca.crt=local-dev/certificates/ca.crt && \
 	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e

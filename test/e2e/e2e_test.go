@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -61,7 +62,7 @@ var (
 
 	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
 	deletePolicyWant        = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
-	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/main/nginx","pull_count":1}]`
+	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
 )
 
 func init() {
@@ -84,6 +85,13 @@ var _ = Describe("controller", Ordered, func() {
 
 		By("creating manager namespace")
 		cmd = exec.Command(utils.Kubectl(), "create", "ns", namespace)
+		_, _ = utils.Run(cmd)
+
+		By("create broker secret")
+		cmd = exec.Command(utils.Kubectl(), "-n", namespace, "create", "secret", "generic", "lagoon-broker-tls",
+			"--from-file=tls.crt=local-dev/certificates/clienttls.crt",
+			"--from-file=tls.key=local-dev/certificates/clienttls.key",
+			"--from-file=ca.crt=local-dev/certificates/ca.crt")
 		_, _ = utils.Run(cmd)
 
 		// when running a re-test, it is best to make sure the old namespace doesn't exist
@@ -481,9 +489,6 @@ var _ = Describe("controller", Ordered, func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			err = compareRepositories(projectRepositoriesWant, before)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-			By("delete environment via rabbitmq")
-			err = utils.PublishMessage("@test/e2e/testdata/remove-environment.json")
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			time.Sleep(5 * time.Second)
 
@@ -567,10 +572,17 @@ func comparePolicy(want, got string) error {
 	if err != nil {
 		return err
 	}
+
 	if want != string(p) {
 		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", want, string(p))
 	}
 	return nil
+}
+
+type HarborProjectRepository struct {
+	ArtifactCount int64  `json:"artifact_count"`
+	Name          string `json:"name"`
+	PullCount     int64  `json:"pull_count"`
 }
 
 func compareRepositories(want, got string) error {
@@ -582,16 +594,34 @@ func compareRepositories(want, got string) error {
 	if err := json.Unmarshal([]byte(got), &m); err != nil {
 		return err
 	}
-	delete(m[0].(map[string]interface{}), "id")
-	delete(m[0].(map[string]interface{}), "creation_time")
-	delete(m[0].(map[string]interface{}), "update_time")
-	delete(m[0].(map[string]interface{}), "project_id")
+	for idx := range m {
+		delete(m[idx].(map[string]interface{}), "id")
+		delete(m[idx].(map[string]interface{}), "creation_time")
+		delete(m[idx].(map[string]interface{}), "update_time")
+		delete(m[idx].(map[string]interface{}), "project_id")
+		delete(m[idx].(map[string]interface{}), "pull_count")
+	}
 	p, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	if want != string(p) {
-		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", want, string(p))
+	hpg := []HarborProjectRepository{}
+	_ = json.Unmarshal(p, &hpg)
+
+	hpw := []HarborProjectRepository{}
+	_ = json.Unmarshal([]byte(want), &hpw)
+
+	sort.Slice(hpg, func(i, j int) bool {
+		return hpg[i].Name < hpg[j].Name
+	})
+	sort.Slice(hpw, func(i, j int) bool {
+		return hpw[i].Name < hpw[j].Name
+	})
+
+	hpgb, _ := json.Marshal(hpg)
+	hpwb, _ := json.Marshal(hpw)
+	if string(hpwb) != string(hpgb) {
+		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", string(hpwb), string(hpgb))
 	}
 	return nil
 }

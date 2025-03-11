@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog logr.Logger, req ctrl.Request, jobPod corev1.Pod) error {
+func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog logr.Logger, req ctrl.Request, jobPod corev1.Pod) error {
 	// get the task associated to this pod, we wil need update it at some point
 	var lagoonTask lagooncrd.LagoonTask
 	err := r.Get(ctx, types.NamespacedName{
@@ -110,7 +110,7 @@ func (r *LagoonMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog l
 
 // taskLogsToLagoonLogs sends the task logs to the lagoon-logs message queue
 // it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
+func (r *TaskMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagooncrd.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
@@ -169,7 +169,7 @@ Logs on pod %s, assigned to cluster %s
 
 // updateLagoonTask sends the status of the task and deployment to the controllerhandler message queue in lagoon,
 // this is for the handler in lagoon to process.
-func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
+func (r *TaskMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 	lagoonTask *lagooncrd.LagoonTask,
 	jobPod *corev1.Pod,
 	condition string,
@@ -241,7 +241,7 @@ func (r *LagoonMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 }
 
 // taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
+func (r *TaskMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 	lagoonTask *lagooncrd.LagoonTask,
 	condition string,
 ) error {
@@ -295,7 +295,7 @@ func (r *LagoonMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 }
 
 // updateTaskWithLogs collects logs from the task containers and ships or stores them
-func (r *LagoonMonitorReconciler) updateTaskWithLogs(
+func (r *TaskMonitorReconciler) updateTaskWithLogs(
 	ctx context.Context,
 	req ctrl.Request,
 	lagoonTask lagooncrd.LagoonTask,

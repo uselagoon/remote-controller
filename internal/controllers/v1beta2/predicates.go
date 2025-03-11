@@ -12,15 +12,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// PodPredicates is used by the filter for the monitor controller to make sure the correct resources
+// BuildPodPredicates is used by the filter for the monitor controller to make sure the correct resources
 // are acted on.
-type PodPredicates struct {
+type BuildPodPredicates struct {
 	predicate.Funcs
 	ControllerNamespace string
 }
 
 // Create is used when a creation event is received by the controller.
-func (p PodPredicates) Create(e event.CreateEvent) bool {
+func (p BuildPodPredicates) Create(e event.CreateEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
@@ -28,11 +28,6 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 						match, _ := regexp.MatchString("^lagoon-build", value)
 						return match
-					}
-					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value == "task" {
-							return true
-						}
 					}
 				}
 			}
@@ -42,7 +37,7 @@ func (p PodPredicates) Create(e event.CreateEvent) bool {
 }
 
 // Delete is used when a deletion event is received by the controller.
-func (p PodPredicates) Delete(e event.DeleteEvent) bool {
+func (p BuildPodPredicates) Delete(e event.DeleteEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
@@ -50,11 +45,6 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
 						match, _ := regexp.MatchString("^lagoon-build", value)
 						return match
-					}
-					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value == "task" {
-							return true
-						}
 					}
 				}
 			}
@@ -64,7 +54,7 @@ func (p PodPredicates) Delete(e event.DeleteEvent) bool {
 }
 
 // Update is used when an update event is received by the controller.
-func (p PodPredicates) Update(e event.UpdateEvent) bool {
+func (p BuildPodPredicates) Update(e event.UpdateEvent) bool {
 	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
@@ -97,6 +87,79 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 							return match
 						}
 					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// Generic is used when any other event is received by the controller.
+func (p BuildPodPredicates) Generic(e event.GenericEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == p.ControllerNamespace {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
+						match, _ := regexp.MatchString("^lagoon-build", value)
+						return match
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// TaskPodPredicates is used by the filter for the monitor controller to make sure the correct resources
+// are acted on.
+type TaskPodPredicates struct {
+	predicate.Funcs
+	ControllerNamespace string
+}
+
+// Create is used when a creation event is received by the controller.
+func (p TaskPodPredicates) Create(e event.CreateEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == p.ControllerNamespace {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
+						if value == "task" {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// Delete is used when a deletion event is received by the controller.
+func (p TaskPodPredicates) Delete(e event.DeleteEvent) bool {
+	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == p.ControllerNamespace {
+			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
+					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
+						if value == "task" {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// Update is used when an update event is received by the controller.
+func (p TaskPodPredicates) Update(e event.UpdateEvent) bool {
+	if controller, ok := e.ObjectOld.GetLabels()["lagoon.sh/controller"]; ok {
+		if controller == p.ControllerNamespace {
+			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
+				if value == crdVersion {
 					if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/jobType"]; ok {
 						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/jobType"]; ok {
 							if value == "task" {
@@ -112,15 +175,11 @@ func (p PodPredicates) Update(e event.UpdateEvent) bool {
 }
 
 // Generic is used when any other event is received by the controller.
-func (p PodPredicates) Generic(e event.GenericEvent) bool {
+func (p TaskPodPredicates) Generic(e event.GenericEvent) bool {
 	if controller, ok := e.Object.GetLabels()["lagoon.sh/controller"]; ok {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
-					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-build", value)
-						return match
-					}
 					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
 						if value == "task" {
 							return true

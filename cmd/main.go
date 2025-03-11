@@ -851,8 +851,7 @@ func main() {
 
 	c.Start()
 
-	setupLog.Info("starting controllers")
-
+	setupLog.Info("starting build controller")
 	// v1beta2 is the latest version
 	if err = (&lagoonv1beta2ctrl.LagoonBuildReconciler{
 		Client:                mgr.GetClient(),
@@ -917,24 +916,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
 	}
-	if err = (&lagoonv1beta2ctrl.LagoonMonitorReconciler{
-		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonMonitor"),
-		Scheme:                mgr.GetScheme(),
-		EnableMQ:              enableMQ,
-		Messaging:             messaging,
-		ControllerNamespace:   controllerNamespace,
-		NamespacePrefix:       namespacePrefix,
-		RandomNamespacePrefix: randomPrefix,
-		EnableDebug:           enableDebug,
-		LagoonTargetName:      lagoonTargetName,
-		LFFQoSEnabled:         lffQoSEnabled,
-		BuildQoS:              buildQoSConfigv1beta2,
-		Cache:                 cache,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "LagoonMonitor")
-		os.Exit(1)
-	}
+	setupLog.Info("starting task controller")
 	if err = (&lagoonv1beta2ctrl.LagoonTaskReconciler{
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonTask"),
@@ -963,6 +945,42 @@ func main() {
 		ImagePullPolicy:   tipp,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
+		os.Exit(1)
+	}
+	setupLog.Info("starting build pod monitor controller")
+	if err = (&lagoonv1beta2ctrl.BuildMonitorReconciler{
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuildPodMonitor"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		Messaging:             messaging,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		EnableDebug:           enableDebug,
+		LagoonTargetName:      lagoonTargetName,
+		LFFQoSEnabled:         lffQoSEnabled,
+		BuildQoS:              buildQoSConfigv1beta2,
+		Cache:                 cache,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuildPodMonitor")
+		os.Exit(1)
+	}
+	setupLog.Info("starting task pod monitor controller")
+	if err = (&lagoonv1beta2ctrl.TaskMonitorReconciler{
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonTaskPodMonitor"),
+		Scheme:                mgr.GetScheme(),
+		EnableMQ:              enableMQ,
+		Messaging:             messaging,
+		ControllerNamespace:   controllerNamespace,
+		NamespacePrefix:       namespacePrefix,
+		RandomNamespacePrefix: randomPrefix,
+		EnableDebug:           enableDebug,
+		LagoonTargetName:      lagoonTargetName,
+		Cache:                 cache,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LagoonTaskPodMonitor")
 		os.Exit(1)
 	}
 

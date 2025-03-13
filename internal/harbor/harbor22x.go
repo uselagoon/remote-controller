@@ -13,6 +13,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	dockerconfig "github.com/docker/cli/cli/config/configfile"
 )
 
 // CreateProjectV2 will create a project if one doesn't exist, but will update as required.
@@ -124,7 +126,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	environmentName, namespace string,
 	expiry time.Duration,
 	force bool,
-) (*helpers.RegistryCredentials, error) {
+) (*RobotAccountCredential, error) {
 	// create a cluster specific robot account name
 	robotName := h.generateRobotName(environmentName)
 
@@ -151,7 +153,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	}
 	// check if the secret contains the .dockerconfigjson data
 	if secretData, ok := secret.Data[".dockerconfigjson"]; ok {
-		auths := helpers.Auths{}
+		auths := dockerconfig.ConfigFile{}
 		// unmarshal it
 		if err := json.Unmarshal(secretData, &auths); err != nil {
 			return nil, fmt.Errorf("could not unmarshal Harbor RobotAccount credential")
@@ -161,32 +163,10 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 		// if the defined regional harbor key exists using the hostname then set the flag to false
 		// if the account is set to expire, the loop below will catch it for us
 		// just the hostname, as this is what all new robot accounts are created with
-		if _, ok := auths.Registries[h.Hostname]; ok {
+		if _, ok := auths.AuthConfigs[h.Hostname]; ok {
 			forceRecreate = false
 		}
 	}
-	tempRobots := robots[:0]
-	for _, robot := range robots {
-		if h.matchRobotAccount(robot.Name, environmentName) && !robot.Editable {
-			// this is an old (legacy) robot account, get rid of it
-			// if accounts are disabled, and deletion of disabled accounts is enabled
-			// then this will delete the account to get re-created
-			h.Log.Info(fmt.Sprintf("Harbor robot account %s is a legacy account, deleting it", robot.Name))
-			err := h.ClientV5.DeleteProjectRobotV1(
-				ctx,
-				project.Name,
-				int64(robot.ID),
-			)
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", project.Name, robot.Name))
-				return nil, err
-			}
-			continue
-		}
-		// only add non legacy robots into the slice
-		tempRobots = append(tempRobots, robot)
-	}
-	robots = tempRobots
 	for _, robot := range robots {
 		if h.matchRobotAccountV2(robot.Name, project.Name, environmentName) && robot.Editable {
 			h.Log.Info(fmt.Sprintf("Harbor robot account %s matched", robot.Name))
@@ -334,7 +314,7 @@ func (h *Harbor) ListRepositories(ctx context.Context, projectName string) []*ha
 	return listRepositories
 }
 
-func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, projectName string, expiryDays int64) (*helpers.RegistryCredentials, error) {
+func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, projectName string, expiryDays int64) (*RobotAccountCredential, error) {
 	robotf := harborclientv5model.RobotCreate{
 		Level:    "project",
 		Name:     robotName,
@@ -364,12 +344,10 @@ func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, projectNam
 		return nil, err
 	}
 	// then craft and return the harbor credential secret
-	harborRegistryCredentials := makeHarborSecret(
-		robotAccountCredential{
-			Token: token.Secret,
-			Name:  token.Name,
-		},
-	)
+	harborRegistryCredentials := RobotAccountCredential{
+		Token: token.Secret,
+		Name:  token.Name,
+	}
 	h.Log.Info(fmt.Sprintf("Created robot account %s", token.Name))
 	return &harborRegistryCredentials, nil
 }

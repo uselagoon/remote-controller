@@ -24,6 +24,8 @@ import (
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+
+	dockerconfig "github.com/docker/cli/cli/config/configfile"
 )
 
 var (
@@ -208,7 +210,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			return fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
 		// create the project in harbor
-		robotCreds := &helpers.RegistryCredentials{}
+		robotCreds := &harbor.RobotAccountCredential{}
 		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
 		if err != nil {
 			return fmt.Errorf("error getting harbor version, check your harbor configuration. Error was: %v", err)
@@ -593,19 +595,19 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			}, robotCredential); err != nil {
 				return fmt.Errorf("could not find Harbor RobotAccount credential")
 			}
-			auths := helpers.Auths{}
+			auths := dockerconfig.ConfigFile{}
 			if secretData, ok := robotCredential.Data[".dockerconfigjson"]; ok {
 				if err := json.Unmarshal(secretData, &auths); err != nil {
 					return fmt.Errorf("could not unmarshal Harbor RobotAccount credential")
 				}
 				// if the defined regional harbor key exists using the hostname
-				if creds, ok := auths.Registries[r.Harbor.URL]; ok {
+				if creds, ok := auths.AuthConfigs[r.Harbor.URL]; ok {
 					// use the regional harbor in the build
 					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.URL, "internal_container_registry")
 					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")
 					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_PASSWORD", creds.Password, "internal_container_registry")
 				}
-				if creds, ok := auths.Registries[r.Harbor.Hostname]; ok {
+				if creds, ok := auths.AuthConfigs[r.Harbor.Hostname]; ok {
 					// use the regional harbor in the build
 					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_URL", r.Harbor.Hostname, "internal_container_registry")
 					helpers.ReplaceOrAddVariable(lagoonProjectVariables, "INTERNAL_REGISTRY_USERNAME", creds.Username, "internal_container_registry")

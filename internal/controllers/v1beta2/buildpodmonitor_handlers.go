@@ -301,7 +301,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.Services = serviceNames
 			msg.Meta.EnvironmentServices = services
 		}
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, namespace.Name)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if err == nil {
 			msg.Meta.Route = route
@@ -389,7 +389,7 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		var addRoute, addRoutes string
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, namespace.Name)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if err == nil {
 			msg.Meta.Route = route
@@ -508,11 +508,45 @@ Build %s
 			allContainerLogs = logs
 		}
 
+		published := false
+		if helpers.ContainsString(
+			lagooncrd.BuildCompletedCancelledFailedStatus,
+			lagoonBuild.Labels["lagoon.sh/buildStatus"],
+		) {
+			// if the build has completed, failed, or been cancelled
+			published = true
+			// check if this build has already published data or not
+			if value, ok := lagoonBuild.Labels["build.lagoon.sh/published"]; ok {
+				published, _ = strconv.ParseBool(value)
+			}
+		}
+		// if it hasn't published after completion, do that now
+		if !published {
+			// do any message publishing here, and update any pending messages if needed
+			if err = r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
+				opLog.Error(err, "unable to publish build status logs")
+				published = false
+			}
+			if err = r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
+				opLog.Error(err, "unable to publish build update")
+				published = false
+			}
+			// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
+			// any previously received logs
+			if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
+				if err = r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs); err != nil {
+					opLog.Error(err, "unable to publish build logs")
+					published = false
+				}
+			}
+		}
+
 		mergeMap := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus":  buildCondition.String(),
-					"lagoon.sh/buildStarted": "true",
+					"lagoon.sh/buildStatus":     buildCondition.String(),
+					"lagoon.sh/buildStarted":    "true",
+					"build.lagoon.sh/published": fmt.Sprintf("%t", published),
 				},
 			},
 		}
@@ -524,20 +558,6 @@ Build %s
 			"phase":      buildCondition.String(),
 		}
 
-		// do any message publishing here, and update any pending messages if needed
-		if err = r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
-			opLog.Error(err, "unable to publish build status logs")
-		}
-		if err = r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
-			opLog.Error(err, "unable to publish build update")
-		}
-		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
-		// any previously received logs
-		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
-			if err = r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs); err != nil {
-				opLog.Error(err, "unable to publish build logs")
-			}
-		}
 		mergePatch, _ := json.Marshal(mergeMap)
 		// check if the build exists
 		if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err == nil {

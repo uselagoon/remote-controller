@@ -3,21 +3,33 @@
 This project is comprised of controllers responsible for handling Kubernetes and Openshift build deploy and removal of environments for Lagoon.
 It also handles Lagoon tasks that are triggered via the Lagoon UI, and also more advanced tasks that Lagoon can leverage.
 
-## Install
+## Table of Contents
+1. Project Description
+2. Usage
+3. Contribution
 
-See [lagoon-charts](https://github.com/uselagoon/lagoon-charts)
+## Project description
+- longer project description - 
 
 ## Usage
 
 The controllers have the ability to start with and without messaging queue support.
 
+### Installation
+
+See [lagoon-charts](https://github.com/uselagoon/lagoon-charts).
+
 ### With MQ
 
-This is the preferred way to be installed, it reads messages from dedicated queues that are sent from Lagoon. 
+This is the preferred way to install, it reads messages from dedicated queues that are sent from Lagoon. 
 The recieved message contains everything that the LagoonBuild or LagoonTask spec needs to start doing the work in the destination cluster.
 
 ### Without MQ
 
 This is handy for testing scenarios, a [K3D](https://github.com/rancher/k3d) or [KinD](https://github.com/kubernetes-sigs/kind) can be started locally and the controllers installed into it.
+
 A user can then define or craft a LagoonBuild or LagoonTask spec manually and apply it to the local cluster.
 There is currently no documentation for how to do this, we may release more information on how to do this after some more testing has been done.
+
+## Contribution
+- info here - 

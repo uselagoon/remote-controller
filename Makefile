@@ -322,7 +322,14 @@ install-registry: install-ingress
 		registry \
 		harbor/harbor
 
-# installs lagoon-remote mainly for the docker-host
+
+# specify how many docker hosts should be used in the test suite
+DOCKERHOST_REPLICAS=3
+
+# installs lagoon-remote mainly for the docker-host, deletes the network policy for test controller access
+# the controller would normally be installed in the lagoon namespace, not for this test-suite to aid in re-running capabilities
+# without having to reinstall everything
+# the loop at the end to patch the services is required until https://github.com/uselagoon/lagoon-charts/pull/769 is released
 .PHONY: install-lagoon-remote
 install-lagoon-remote: install-registry
 	$(HELM) upgrade \
@@ -334,9 +341,15 @@ install-lagoon-remote: install-registry
 		--set "lagoon-build-deploy.enabled=false" \
 		--set "dockerHost.registry=registry.$$($(KUBECTL) -n ingress-nginx get services ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}').nip.io" \
 		--set "dockerHost.storage.size=10Gi" \
+		--set "dockerHost.replicaCount=$(DOCKERHOST_REPLICAS)" \
 		--set "dbaas-operator.enabled=false" \
 		lagoon \
 		lagoon/lagoon-remote
+	$(KUBECTL) -n lagoon delete networkpolicy lagoon-lagoon-remote-docker-host
+	number=0; while [[ $$number -lt $(DOCKERHOST_REPLICAS) ]]; do \
+		$(KUBECTL) -n lagoon patch service docker-host-$$number -p '{"metadata": {"labels": {"dockerhost.lagoon.sh/dedicated": "true"}}}' ;\
+		((number=number+1)); \
+	done
 
 .PHONY: create-kind-cluster
 create-kind-cluster: local-dev/tools helm/repos

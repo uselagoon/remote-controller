@@ -17,6 +17,7 @@ COPY internal/utilities internal/utilities
 COPY internal/harbor internal/harbor
 COPY internal/helpers internal/helpers
 COPY internal/messenger internal/messenger
+COPY internal/dockerhost internal/dockerhost
 COPY internal/controllers internal/controllers
 
 # Build

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	"github.com/uselagoon/remote-controller/internal/dockerhost"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/messenger"
@@ -79,6 +80,7 @@ type LagoonBuildReconciler struct {
 	ProxyConfig                      ProxyConfig
 	UnauthenticatedRegistry          string
 	ImagePullPolicy                  corev1.PullPolicy
+	DockerHost                       *dockerhost.DockerHost
 }
 
 // BackupConfig holds all the backup configuration settings

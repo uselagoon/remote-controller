@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	"github.com/uselagoon/remote-controller/internal/dockerhost"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	corev1 "k8s.io/api/core/v1"
@@ -47,6 +48,7 @@ type BuildMonitorReconciler struct {
 	LFFQoSEnabled         bool
 	BuildQoS              BuildQoS
 	Cache                 *expirable.LRU[string, string]
+	DockerHost            *dockerhost.DockerHost
 }
 
 // @TODO: all the things for now, review later
@@ -69,6 +71,9 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
 	}
+
+	// remove from the cache when a pod is deleted, this is just a fallback/redundancy removal, most cases will be no-op
+	_ = r.DockerHost.BuildCache.Remove(jobPod.ObjectMeta.Name)
 
 	// a pod deletion request came through
 	// first try and clean up the pod and capture the logs and update

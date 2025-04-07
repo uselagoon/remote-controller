@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -16,15 +17,16 @@ import (
 
 type DockerHost struct {
 	Client              client.Client
+	Log                 logr.Logger
 	DockerHostNamespace string
 	ReuseType           string
 	ReuseCache          *lru.Cache[string, string]
 	BuildCache          *lru.Cache[string, string]
 }
 
-func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos bool, qosMax int) (string, error) {
+func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos bool, qosMax int) string {
 	ctx := context.TODO()
-	dockerHost := fmt.Sprintf("docker-host.%s.svc", d.DockerHostNamespace) // default dockerhost
+	dockerHost := d.defaultHost()
 	dockerHosts := &corev1.ServiceList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.InNamespace(d.DockerHostNamespace),
@@ -33,7 +35,8 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos boo
 	// list all dockerhost ports
 	if err := d.Client.List(ctx, dockerHosts, listOption); err != nil {
 		// return the default dockerhost
-		return dockerHost, fmt.Errorf("unable to list dockerhosts in the lagoon namespace, there may be none or something went wrong: %v", err)
+		d.Log.Error(err, "unable to determine dockerhost, falling back to default dockerhost")
+		return dockerHost
 	}
 
 	// check available dockerhosts
@@ -62,10 +65,11 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos boo
 	// finally assign in the cache
 	_ = d.BuildCache.Add(buildName, dockerHost)
 	_ = d.ReuseCache.Add(reuseIdentifier, dockerHost)
-	return dockerHost, nil
+	return dockerHost
 }
 
 func New(client client.Client,
+	log logr.Logger,
 	dockerHostNamespace,
 	reuseType string,
 	reuseCache,
@@ -73,6 +77,7 @@ func New(client client.Client,
 ) *DockerHost {
 	return &DockerHost{
 		Client:              client,
+		Log:                 log,
 		DockerHostNamespace: dockerHostNamespace,
 		ReuseType:           reuseType,
 		ReuseCache:          reuseCache,
@@ -80,11 +85,14 @@ func New(client client.Client,
 	}
 }
 
+func (d *DockerHost) defaultHost() string {
+	return fmt.Sprintf("docker-host.%s.svc", d.DockerHostNamespace) // default dockerhost
+}
+
 func tcpCheck(host string, port string) bool {
 	timeout := 5 * time.Second
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), timeout)
 	if err != nil {
-		fmt.Println(err)
 		return false
 	}
 	if conn != nil {
@@ -114,7 +122,7 @@ func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsI
 	numAvailableHosts := len(availableHosts)
 	if numAvailableHosts == 0 {
 		// return the default docker-host if no available hosts
-		return fmt.Sprintf("docker-host.%s.svc", d.DockerHostNamespace) // default dockerhost
+		return d.defaultHost()
 	}
 	if qos {
 		// if qos enabled, work out how many builds per host can be used

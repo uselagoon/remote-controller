@@ -836,23 +836,20 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				reuseType = lagoonBuild.Spec.Project.Name
 			}
 		}
-		dockerHost, err := r.DockerHost.AssignDockerHost(
+		dockerHost := r.DockerHost.AssignDockerHost(
 			lagoonBuild.ObjectMeta.Name,
 			reuseType,
 			r.LFFQoSEnabled,
 			r.BuildQoS.MaxBuilds,
 		)
-		if err != nil {
-			opLog.Error(err, "Unable to determine dockerhost, using default host")
-		}
-		podEnvs = append(podEnvs, corev1.EnvVar{
+		dockerHostEnvVar := corev1.EnvVar{
 			Name:  "DOCKER_HOST",
 			Value: dockerHost,
-		})
+		}
 		newPod.ObjectMeta.Annotations = map[string]string{
 			"dockerhost.lagoon.sh/name": dockerHost,
 		}
-		newPod.Spec.Containers[0].Env = append(newPod.Spec.Containers[0].Env, podEnvs...)
+		newPod.Spec.Containers[0].Env = append(newPod.Spec.Containers[0].Env, dockerHostEnvVar)
 		opLog.Info(fmt.Sprintf("Assigning build %s to dockerhost %s", lagoonBuild.ObjectMeta.Name, dockerHost))
 
 		// if it doesn't exist, then create the build pod

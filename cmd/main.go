@@ -752,15 +752,18 @@ func main() {
 
 	reuseCache, _ := lru.New[string, string](1000)
 	buildCache, _ := lru.New[string, string](1000)
-	switch dockerHostReuseType {
-	case "namespace", "project", "organization":
-		// nothing to do here
-	default:
+	dockerhostResuseTypes := map[string]bool{
+		"namespace":    true,
+		"project":      true,
+		"organization": true,
+	}
+	if !dockerhostResuseTypes[dockerHostReuseType] {
 		setupLog.Error(fmt.Errorf("unsupported docker-host reuse type"), "problem configuring docker-host handler")
 		os.Exit(1)
 	}
 	dockerhosts := dockerhost.New(
 		mgr.GetClient(),
+		ctrl.Log.WithName("dockerhost"),
 		dockerHostNamespace,
 		dockerHostReuseType,
 		reuseCache,

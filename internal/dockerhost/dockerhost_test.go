@@ -5,6 +5,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -141,7 +142,8 @@ func Test_pickHost(t *testing.T) {
 			clientBuilder = clientBuilder.WithScheme(k8sScheme)
 
 			fakeClient := clientBuilder.Build()
-			d := New(fakeClient, "lagoon", tt.args.reuseType, &lru.Cache[string, string]{}, &lru.Cache[string, string]{})
+			logs := ctrl.Log.WithName("dockerhost")
+			d := New(fakeClient, logs, "lagoon", tt.args.reuseType, &lru.Cache[string, string]{}, &lru.Cache[string, string]{})
 			if got := d.pickHost(tt.args.chosen, tt.args.available, tt.args.inUse, tt.args.qosMax, tt.args.qos); got != tt.want {
 				t.Errorf("pickHost() = %v, want %v", got, tt.want)
 			}

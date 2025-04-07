@@ -128,3 +128,13 @@ jobs:
     - name: Run github/test-e2e
       run: |
         make github/test-e2e HARBOR_VERSION=${{matrix.harbor}} OVERRIDE_BUILD_DEPLOY_DIND_IMAGE="${{matrix.lagoon_build_image}}" KIND_NETWORK=kind
+
+  rerun-failed-jobs:
+      runs-on: ubuntu-latest
+      needs: [ test-suite ]
+      if: failure()
+      steps:
+        - name: Rerun failed jobs in the current workflow
+          env:
+            GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          run: gh run rerun ${{ github.run_id }} --failed

@@ -234,11 +234,19 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				metrics.BuildRunningStatus.Delete(prometheus.Labels{
-					"build_namespace": lagoonBuild.ObjectMeta.Namespace,
-					"build_name":      lagoonBuild.ObjectMeta.Name,
+					"build_namespace": jobPod.ObjectMeta.Namespace,
+					"build_name":      jobPod.ObjectMeta.Name,
 				})
 			})
+			// remove the build from the buildcache
+			_ = r.DockerHost.BuildCache.Remove(jobPod.ObjectMeta.Name)
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
+		}
+		if condition == "running" {
+			if dockerHost, ok := jobPod.Labels["dockerhost.lagoon.sh/name"]; ok {
+				// always ensure that a running pod populates the buildcache
+				_ = r.DockerHost.BuildCache.Add(jobPod.ObjectMeta.Name, dockerHost)
+			}
 		}
 		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
 		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])

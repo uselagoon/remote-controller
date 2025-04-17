@@ -301,7 +301,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.Services = serviceNames
 			msg.Meta.EnvironmentServices = services
 		}
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, namespace.Name)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if err == nil {
 			msg.Meta.Route = route
@@ -389,7 +389,7 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 		}
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		var addRoute, addRoutes string
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, namespace.Name)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if err == nil {
 			msg.Meta.Route = route
@@ -538,6 +538,7 @@ Build %s
 				opLog.Error(err, "unable to publish build logs")
 			}
 		}
+
 		mergePatch, _ := json.Marshal(mergeMap)
 		// check if the build exists
 		if err := r.Get(ctx, req.NamespacedName, &lagoonBuild); err == nil {

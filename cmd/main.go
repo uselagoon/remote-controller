@@ -354,7 +354,7 @@ func main() {
 		"Tells harbor to delete any disabled robot accounts and re-create them if required.")
 	flag.StringVar(&harborExpiryInterval, "harbor-expiry-interval", "2d",
 		"The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh.")
-	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "1d",
+	flag.StringVar(&harborRotateInterval, "harbor-rotate-interval", "25d",
 		"The number of days or hours (eg 24h or 30d) to force refresh if required.")
 	flag.StringVar(&harborRobotAccountExpiry, "harbor-robot-account-expiry", "30d",
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
@@ -475,26 +475,21 @@ func main() {
 	harborExpiryInterval = helpers.GetEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
 	harborRotateInterval = helpers.GetEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
 	harborRobotAccountExpiry = helpers.GetEnv("HARBOR_ROTATE_ACCOUNT_EXPIRY", harborRobotAccountExpiry)
-	harborExpiryIntervalDuration := 2 * 24 * time.Hour
-	harborRotateIntervalDuration := 30 * 24 * time.Hour
-	harborRobotAccountExpiryDuration := 30 * 24 * time.Hour
-	if lffHarborEnabled {
-		var err error
-		harborExpiryIntervalDuration, err = str2duration.ParseDuration(harborExpiryInterval)
-		if err != nil {
-			setupLog.Error(fmt.Errorf("harbor-expiry-interval unable to convert to duration"), "unable to start manager")
-			os.Exit(1)
-		}
-		harborRotateIntervalDuration, err = str2duration.ParseDuration(harborRotateInterval)
-		if err != nil {
-			setupLog.Error(fmt.Errorf("harbor-rotate-interval unable to convert to duration"), "unable to start manager")
-			os.Exit(1)
-		}
-		harborRobotAccountExpiryDuration, err = str2duration.ParseDuration(harborRobotAccountExpiry)
-		if err != nil {
-			setupLog.Error(fmt.Errorf("harbor-robot-account-expiry unable to convert to duration"), "unable to start manager")
-			os.Exit(1)
-		}
+
+	harborExpiryIntervalDuration, err := str2duration.ParseDuration(harborExpiryInterval)
+	if err != nil {
+		setupLog.Error(fmt.Errorf("harbor-expiry-interval unable to convert to duration"), "unable to start manager")
+		os.Exit(1)
+	}
+	harborRotateIntervalDuration, err := str2duration.ParseDuration(harborRotateInterval)
+	if err != nil {
+		setupLog.Error(fmt.Errorf("harbor-rotate-interval unable to convert to duration"), "unable to start manager")
+		os.Exit(1)
+	}
+	harborRobotAccountExpiryDuration, err := str2duration.ParseDuration(harborRobotAccountExpiry)
+	if err != nil {
+		setupLog.Error(fmt.Errorf("harbor-robot-account-expiry unable to convert to duration"), "unable to start manager")
+		os.Exit(1)
 	}
 
 	// Fastly configuration options

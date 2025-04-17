@@ -18,9 +18,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/coreos/go-semver/semver"
+
+	dockerconfig "github.com/docker/cli/cli/config/configfile"
+	dockertypes "github.com/docker/cli/cli/config/types"
 )
 
-type robotAccountCredential struct {
+type RobotAccountCredential struct {
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at"`
 	Token     string `json:"token"`
@@ -44,19 +47,6 @@ func (h *Harbor) UseV2Functions(version string) bool {
 	harborV2 := semver.New("2.2.0")
 	// invert the result
 	return !currentVersion.LessThan(*harborV2)
-}
-
-// generateRobotWithPrefix adds the robot account prefix to robot accounts
-func (h *Harbor) generateRobotWithPrefix(str string) string {
-	return h.RobotPrefix + str
-}
-
-// matchRobotAccount will check if the robotaccount exists or not
-func (h *Harbor) matchRobotAccount(robotName string,
-	environmentName string,
-) bool {
-	// pre global-robot-accounts (2.2.0+)
-	return robotName == h.generateRobotWithPrefix(fmt.Sprintf("%s-%s", environmentName, helpers.HashString(h.LagoonTargetName)[0:8]))
 }
 
 // https://github.com/goharbor/harbor/pull/13685
@@ -106,20 +96,8 @@ func (h *Harbor) expiresSoon(expiresAt int64, duration time.Duration) bool {
 	return expiry.Before(now)
 }
 
-// makeHarborSecret creates the secret definition.
-func makeHarborSecret(credentials robotAccountCredential) helpers.RegistryCredentials {
-	return helpers.RegistryCredentials{
-		Username: credentials.Name,
-		Password: credentials.Token,
-		Auth: base64.StdEncoding.EncodeToString(
-			[]byte(
-				fmt.Sprintf("%s:%s", credentials.Name, credentials.Token),
-			),
-		)}
-}
-
 // UpsertHarborSecret will create or update the secret in kubernetes.
-func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name string, registryCreds *helpers.RegistryCredentials) (bool, error) {
+func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, name string, credentials *RobotAccountCredential) (bool, error) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
@@ -127,73 +105,52 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
-	dcj := &helpers.Auths{
-		Registries: make(map[string]helpers.RegistryCredentials),
+	auths := dockerconfig.ConfigFile{
+		AuthConfigs: map[string]dockertypes.AuthConfig{
+			h.Hostname: {
+				Username: credentials.Name,
+				Password: credentials.Token,
+				Auth:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", credentials.Name, credentials.Token))),
+			},
+		},
 	}
 	err := cl.Get(ctx, types.NamespacedName{
 		Namespace: ns,
 		Name:      name,
 	}, secret)
 	if err != nil {
-		// if registryCreds are provided, and the secret doesn't exist
-		// then create the secret
-		if registryCreds != nil {
-			dcj.Registries[h.Hostname] = *registryCreds
-			dcjBytes, _ := json.Marshal(dcj)
-			secret.Data = map[string][]byte{
-				corev1.DockerConfigJsonKey: []byte(dcjBytes),
-			}
-			secret.ObjectMeta.Labels = map[string]string{
-				"lagoon.sh/controller":        h.ControllerNamespace,
-				"lagoon.sh/harbor-credential": "true",
-			}
-			err := cl.Create(ctx, secret)
-			if err != nil {
-				return false, fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
-			}
-			// return true that the credential was created
-			return true, nil
-		}
-		return false, nil
-	}
-	// if registryCreds are provided, and the secret exists, then update the secret
-	// with the provided credentials
-	if registryCreds != nil {
-		json.Unmarshal([]byte(secret.Data[corev1.DockerConfigJsonKey]), &dcj)
-		// add or update the credential
-		dcj.Registries[h.Hostname] = *registryCreds
-		dcjBytes, _ := json.Marshal(dcj)
+		// if the secret doesn't exist then create the secret
+		authsBytes, _ := json.Marshal(auths)
 		secret.Data = map[string][]byte{
-			corev1.DockerConfigJsonKey: []byte(dcjBytes),
+			corev1.DockerConfigJsonKey: authsBytes,
 		}
-		// add the controller label if it doesn't exist
-		if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
-			if secret.ObjectMeta.Labels == nil {
-				secret.ObjectMeta.Labels = map[string]string{}
-			}
-			secret.ObjectMeta.Labels["lagoon.sh/controller"] = h.ControllerNamespace
-			secret.ObjectMeta.Labels["lagoon.sh/harbor-credential"] = "true"
+		secret.ObjectMeta.Labels = map[string]string{
+			"lagoon.sh/controller":        h.ControllerNamespace,
+			"lagoon.sh/harbor-credential": "true",
 		}
-		err = cl.Update(ctx, secret)
+		err := cl.Create(ctx, secret)
 		if err != nil {
-			return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+			return false, fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
 		}
+		// return true that the credential was created
 		return true, nil
-	} else {
-		// if the secret doesn't have the controller label, patch it it
-		if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"labels": map[string]interface{}{
-						"lagoon.sh/controller":        h.ControllerNamespace,
-						"lagoon.sh/harbor-credential": "true",
-					},
-				},
-			})
-			if err := cl.Patch(ctx, secret, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
-			}
-		}
 	}
-	return false, nil
+	// else update the secret with the newly provided credentials
+	authsBytes, _ := json.Marshal(auths)
+	secret.Data = map[string][]byte{
+		corev1.DockerConfigJsonKey: authsBytes,
+	}
+	// add the controller label if it doesn't exist
+	if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
+		if secret.ObjectMeta.Labels == nil {
+			secret.ObjectMeta.Labels = map[string]string{}
+		}
+		secret.ObjectMeta.Labels["lagoon.sh/controller"] = h.ControllerNamespace
+		secret.ObjectMeta.Labels["lagoon.sh/harbor-credential"] = "true"
+	}
+	err = cl.Update(ctx, secret)
+	if err != nil {
+		return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+	}
+	return true, nil
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/helpers"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -63,7 +62,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 // rotate a specific namespaces robot credential
 func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns corev1.Namespace, force bool) (bool, error) {
 	// only continue if there isn't any running builds
-	robotCreds := &helpers.RegistryCredentials{}
+	robotCreds := &RobotAccountCredential{}
 	curVer, err := h.GetHarborVersion(ctx)
 	if err != nil {
 		return false, fmt.Errorf("error checking harbor version: %v", err)
@@ -89,10 +88,14 @@ func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns
 	}
 	time.Sleep(1 * time.Second) // wait 1 seconds
 
-	// if we have robotcredentials to create, do that here
-	return h.UpsertHarborSecret(ctx,
-		cl,
-		ns.ObjectMeta.Name,
-		"lagoon-internal-registry-secret", //secret name in kubernetes
-		robotCreds)
+	if robotCreds != nil {
+		// if we have robotcredentials to create or update do that here
+		return h.UpsertHarborSecret(ctx,
+			cl,
+			ns.ObjectMeta.Name,
+			"lagoon-internal-registry-secret", //secret name in kubernetes
+			robotCreds)
+	}
+	// else do nothing
+	return false, nil
 }

@@ -4,42 +4,6 @@ import (
 	"testing"
 )
 
-func TestHarbor_matchRobotAccount(t *testing.T) {
-	type args struct {
-		harbor          Harbor
-		robotName       string
-		projectName     string
-		environmentName string
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{
-			name: "test1",
-			args: args{
-				robotName:       "robot$main-954f2d24",
-				projectName:     "example-com",
-				environmentName: "main",
-				harbor: Harbor{
-					RobotPrefix:      "robot$",
-					LagoonTargetName: "ci-local-controller-kubernetes",
-				},
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &tt.args.harbor
-			if got := h.matchRobotAccount(tt.args.robotName, tt.args.environmentName); got != tt.want {
-				t.Errorf("Harbor.matchRobotAccount() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestHarbor_matchRobotAccountV2(t *testing.T) {
 	type args struct {
 		harbor          Harbor

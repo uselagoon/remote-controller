@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -267,18 +268,33 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 		r.RandomNamespacePrefix,
 	)
 	if r.EnableMQ {
+		ns := &corev1.Namespace{}
+		if err := r.Get(ctx, types.NamespacedName{Name: namespace}, ns); err != nil {
+			if helpers.IgnoreNotFound(err) != nil {
+				opLog.Error(err, "namespace %s not found", namespace)
+				return
+			}
+		}
+		envName := ns.ObjectMeta.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(ns.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envID := helpers.UintPtr(uint(eID))
+		projectName := ns.ObjectMeta.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(ns.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectID := helpers.UintPtr(uint(pID))
 		msg := schema.LagoonMessage{
 			Type:      "build",
 			Namespace: namespace,
 			Meta: &schema.LagoonLogMeta{
-				Environment: lagoonBuild.Spec.Project.Environment,
-				Project:     lagoonBuild.Spec.Project.Name,
-				BuildStatus: buildCondition.ToLower(),
-				BuildStep:   buildStep,
-				BuildName:   lagoonBuild.ObjectMeta.Name,
-				LogLink:     lagoonBuild.Spec.Project.UILink,
-				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
-				Cluster:     r.LagoonTargetName,
+				Environment:   envName,
+				Project:       projectName,
+				EnvironmentID: envID,
+				ProjectID:     projectID,
+				BuildStatus:   buildCondition.ToLower(),
+				BuildStep:     buildStep,
+				BuildName:     lagoonBuild.ObjectMeta.Name,
+				LogLink:       lagoonBuild.Spec.Project.UILink,
+				RemoteID:      string(lagoonBuild.ObjectMeta.UID),
+				Cluster:       r.LagoonTargetName,
 			},
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})

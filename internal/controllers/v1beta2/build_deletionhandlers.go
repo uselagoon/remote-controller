@@ -6,15 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	"gopkg.in/matryer/try.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -31,127 +30,18 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 	req ctrl.Request,
 ) error {
 	// get any running pods that this build may have already created
-	lagoonBuildPod := corev1.Pod{}
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonBuild.ObjectMeta.Namespace,
-		Name:      lagoonBuild.ObjectMeta.Name,
-	}, &lagoonBuildPod)
+	err := lagooncrd.DeleteBuildPod(ctx, r.Client, opLog, lagoonBuild, req.NamespacedName, r.ControllerNamespace)
 	if err != nil {
-		opLog.Info(fmt.Sprintf("Unable to find a build pod for %s, continuing to process build deletion", lagoonBuild.ObjectMeta.Name))
-		// handle updating lagoon for a deleted build with no running pod
-		// only do it if the build status is Pending or Running though
-		err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
-		if err != nil {
-			opLog.Error(err, "unable to update the lagoon with LagoonBuild result")
-		}
-	} else {
-		opLog.Info(fmt.Sprintf("Found build pod for %s, deleting it", lagoonBuild.ObjectMeta.Name))
-		// handle updating lagoon for a deleted build with a running pod
-		// only do it if the build status is Pending or Running though
-		// delete the pod, let the pod deletion handler deal with the cleanup there
-		if err := r.Delete(ctx, &lagoonBuildPod); err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to delete the the LagoonBuild pod %s", lagoonBuild.ObjectMeta.Name))
-		}
-		// check that the pod is deleted before continuing, this allows the pod deletion to happen
-		// and the pod deletion process in the LagoonMonitor controller to be able to send what it needs back to lagoon
-		// this 1 minute timeout will just hold up the deletion of `LagoonBuild` resources only if a build pod exists
-		// if the 1 minute timeout is reached the worst that happens is a deployment will show as running
-		// but cancelling the deployment in lagoon will force it to go to a cancelling state in the lagoon api
-		// @TODO: we could use finalizers on the build pods, but to avoid holding up other processes we can just give up after waiting for a minute
-		try.MaxRetries = 12
-		err = try.Do(func(attempt int) (bool, error) {
-			var podErr error
-			err := r.Get(ctx, types.NamespacedName{
-				Namespace: lagoonBuild.ObjectMeta.Namespace,
-				Name:      lagoonBuild.ObjectMeta.Name,
-			}, &lagoonBuildPod)
+		if strings.Contains(err.Error(), "unable to find a build pod for") {
+			err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
 			if err != nil {
-				// the pod doesn't exist anymore, so exit the retry
-				podErr = nil
-				opLog.Info(fmt.Sprintf("Pod %s deleted", lagoonBuild.ObjectMeta.Name))
-			} else {
-				// if the pod still exists wait 5 seconds before trying again
-				time.Sleep(5 * time.Second)
-				podErr = fmt.Errorf("pod %s still exists", lagoonBuild.ObjectMeta.Name)
-				opLog.Info(fmt.Sprintf("Pod %s still exists", lagoonBuild.ObjectMeta.Name))
+				opLog.Error(err, "unable to update the lagoon with LagoonBuild result")
 			}
-			return attempt < 12, podErr
-		})
-		if err != nil {
+		} else {
 			return err
 		}
 	}
-
-	// if the LagoonBuild is deleted, then check if the only running build is the one being deleted
-	// or if there are any pending builds that can be started
-	runningBuilds := &lagooncrd.LagoonBuildList{}
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
-		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
-			"lagoon.sh/controller":  r.ControllerNamespace,
-		}),
-	})
-	// list any builds that are running
-	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		opLog.Error(err, "unable to list builds in the namespace, there may be none or something went wrong")
-		// just return nil so the deletion of the resource isn't held up
-		return nil
-	}
-	newRunningBuilds := runningBuilds.Items
-	for _, runningBuild := range runningBuilds.Items {
-		// if there are any running builds, check if it is the one currently being deleted
-		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
-			// if the one being deleted is a running one, remove it from the list of running builds
-			newRunningBuilds = lagooncrd.RemoveBuild(newRunningBuilds, runningBuild)
-		}
-	}
-	// if the number of runningBuilds is 0 (excluding the one being deleted)
-	if len(newRunningBuilds) == 0 {
-		pendingBuilds := &lagooncrd.LagoonBuildList{}
-		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
-			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": lagooncrd.BuildStatusPending.String(),
-				"lagoon.sh/controller":  r.ControllerNamespace,
-			}),
-		})
-		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-			opLog.Error(err, "unable to list builds in the namespace, there may be none or something went wrong")
-			// just return nil so the deletion of the resource isn't held up
-			return nil
-		}
-		newPendingBuilds := pendingBuilds.Items
-		for _, pendingBuild := range pendingBuilds.Items {
-			// if there are any pending builds, check if it is the one currently being deleted
-			if lagoonBuild.ObjectMeta.Name == pendingBuild.ObjectMeta.Name {
-				// if the one being deleted a the pending one, remove it from the list of pending builds
-				newPendingBuilds = lagooncrd.RemoveBuild(newPendingBuilds, pendingBuild)
-			}
-		}
-		// sort the pending builds by creation timestamp
-		sort.Slice(newPendingBuilds, func(i, j int) bool {
-			return newPendingBuilds[i].ObjectMeta.CreationTimestamp.Before(&newPendingBuilds[j].ObjectMeta.CreationTimestamp)
-		})
-		// if there are more than 1 pending builds (excluding the one being deleted), update the oldest one to running
-		if len(newPendingBuilds) > 0 {
-			pendingBuild := pendingBuilds.Items[0].DeepCopy()
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"labels": map[string]interface{}{
-						"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
-					},
-				},
-			})
-			if err := r.Patch(ctx, pendingBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				opLog.Error(err, "unable to update pending build to running status")
-				return nil
-			}
-		} else {
-			opLog.Info("No pending builds")
-		}
-	}
-	return nil
+	return lagooncrd.DeleteBuildResources(ctx, r.Client, opLog, lagoonBuild, req.NamespacedName, r.ControllerNamespace)
 }
 
 func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(

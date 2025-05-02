@@ -47,7 +47,7 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 		if !runningBuildsv1beta2 {
 			rotated, err := h.RotateRobotCredential(ctx, cl, ns, false)
 			if err != nil {
-				opLog.Error(err, "error")
+				opLog.Error(err, "error rotating robot credential")
 				continue
 			}
 			if rotated {

@@ -209,39 +209,12 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		if err != nil {
 			return fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
-		// create the project in harbor
-		robotCreds := &harbor.RobotAccountCredential{}
-		curVer, err := lagoonHarbor.GetHarborVersion(ctx)
+		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, *namespace, false)
 		if err != nil {
-			return fmt.Errorf("error getting harbor version, check your harbor configuration. Error was: %v", err)
+			opLog.Error(err, "error rotating robot credential")
 		}
-		if lagoonHarbor.UseV2Functions(curVer) {
-			hProject, err := lagoonHarbor.CreateProjectV2(ctx, lagoonBuild.Spec.Project.Name)
-			if err != nil {
-				return fmt.Errorf("error creating harbor project: %v", err)
-			}
-			// create or refresh the robot credentials
-			robotCreds, err = lagoonHarbor.CreateOrRefreshRobotV2(ctx,
-				r.Client,
-				hProject,
-				lagoonBuild.Spec.Project.Environment,
-				ns,
-				lagoonHarbor.RobotAccountExpiry,
-				false)
-			if err != nil {
-				return fmt.Errorf("error creating harbor robot account: %v", err)
-			}
-		} else {
-			return fmt.Errorf("harbor versions below v2.2.0 are not supported: %v", err)
-		}
-		// if we have robotcredentials to create, do that here
-		_, err = lagoonHarbor.UpsertHarborSecret(ctx,
-			r.Client,
-			ns,
-			"lagoon-internal-registry-secret",
-			robotCreds)
-		if err != nil {
-			return fmt.Errorf("error upserting harbor robot account secret: %v", err)
+		if rotated {
+			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns))
 		}
 	}
 	return nil

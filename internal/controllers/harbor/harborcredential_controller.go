@@ -52,7 +52,7 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, ns, true)
 		if err != nil {
 			// @TODO: resource unknown
-			return ctrl.Result{}, fmt.Errorf("error was: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error rotating robot credential was: %v", err)
 		}
 		if rotated {
 			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))

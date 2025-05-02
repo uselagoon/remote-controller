@@ -319,6 +319,8 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, la
 			"crd.lagoon.sh/version": crdVersion,
 		},
 	)
+	// add the finalizer to the new build
+	newBuild.Finalizers = append(newBuild.Finalizers, buildFinalizer)
 	// all new builds start as "queued" but will transition to pending or running fairly quickly
 	// unless they are actually queued :D
 	newBuild.Status.Phase = "Queued"

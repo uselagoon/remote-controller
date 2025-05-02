@@ -2,13 +2,10 @@ package v1beta2
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/helpers"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,21 +50,6 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	// if there are no running builds, check if there are any pending builds that can be started
 	if len(runningBuilds.Items) == 0 {
 		return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
-	}
-	// The object is not being deleted, so if it does not have our finalizer,
-	// then lets add the finalizer and update the object. This is equivalent
-	// registering our finalizer.
-	if !helpers.ContainsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
-		lagoonBuild.ObjectMeta.Finalizers = append(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
-		// use patches to avoid update errors
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"finalizers": lagoonBuild.ObjectMeta.Finalizers,
-			},
-		})
-		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 	return ctrl.Result{}, nil
 }

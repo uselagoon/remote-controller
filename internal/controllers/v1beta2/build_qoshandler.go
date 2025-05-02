@@ -2,14 +2,11 @@ package v1beta2
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -145,22 +142,6 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 						}
 						// don't handle the queued process for this build, continue to next in the list
 						continue
-					}
-					// The object is not being deleted, so if it does not have our finalizer,
-					// then lets add the finalizer and update the object. This is equivalent
-					// registering our finalizer.
-					if !helpers.ContainsString(pBuild.ObjectMeta.Finalizers, buildFinalizer) {
-						pBuild.ObjectMeta.Finalizers = append(pBuild.ObjectMeta.Finalizers, buildFinalizer)
-						// use patches to avoid update errors
-						mergePatch, _ := json.Marshal(map[string]interface{}{
-							"metadata": map[string]interface{}{
-								"finalizers": pBuild.ObjectMeta.Finalizers,
-							},
-						})
-						if err := r.Patch(ctx, &pBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-							runningProcessQueue = false
-							return err
-						}
 					}
 				}
 				// update the build to be queued, and add a log message with the build log with the current position in the queue

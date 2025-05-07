@@ -100,6 +100,7 @@ var (
 		[]string{
 			"build_name",
 			"build_namespace",
+			"build_dockerhost",
 		},
 	)
 	TaskRunningStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{

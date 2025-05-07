@@ -823,6 +823,35 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		Name:      newPod.ObjectMeta.Name,
 	}, newPod)
 	if err != nil {
+		// check the dockerhosts and assign as required
+		reuseType := lagoonBuild.ObjectMeta.Namespace
+		switch r.DockerHost.ReuseType {
+		case "project":
+			reuseType = lagoonBuild.Spec.Project.Name
+		case "organization":
+			if lagoonBuild.Spec.Project.Organization != nil {
+				reuseType = lagoonBuild.Spec.Project.Organization.Name
+			} else {
+				// fall back to project name if organization not found
+				reuseType = lagoonBuild.Spec.Project.Name
+			}
+		}
+		dockerHost := r.DockerHost.AssignDockerHost(
+			lagoonBuild.ObjectMeta.Name,
+			reuseType,
+			r.LFFQoSEnabled,
+			r.BuildQoS.MaxBuilds,
+		)
+		dockerHostEnvVar := corev1.EnvVar{
+			Name:  "DOCKER_HOST",
+			Value: dockerHost,
+		}
+		newPod.ObjectMeta.Annotations = map[string]string{
+			"dockerhost.lagoon.sh/name": dockerHost,
+		}
+		newPod.Spec.Containers[0].Env = append(newPod.Spec.Containers[0].Env, dockerHostEnvVar)
+		opLog.Info(fmt.Sprintf("Assigning build %s to dockerhost %s", lagoonBuild.ObjectMeta.Name, dockerHost))
+
 		// if it doesn't exist, then create the build pod
 		opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
 		if err := r.Create(ctx, newPod); err != nil {
@@ -832,8 +861,9 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			return nil
 		}
 		metrics.BuildRunningStatus.With(prometheus.Labels{
-			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
-			"build_name":      lagoonBuild.ObjectMeta.Name,
+			"build_namespace":  lagoonBuild.ObjectMeta.Namespace,
+			"build_name":       lagoonBuild.ObjectMeta.Name,
+			"build_dockerhost": dockerHost,
 		}).Set(1)
 		metrics.BuildStatus.With(prometheus.Labels{
 			"build_namespace": lagoonBuild.ObjectMeta.Namespace,

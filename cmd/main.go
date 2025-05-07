@@ -34,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/uselagoon/remote-controller/internal/dockerhost"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
@@ -44,6 +45,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
@@ -193,6 +195,8 @@ func main() {
 	var podsUseDifferentProxy bool
 
 	var unauthenticatedRegistry string
+	var dockerHostNamespace string
+	var dockerHostReuseType string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -417,6 +421,11 @@ func main() {
 	flag.IntVar(&pvcRetryAttempts, "delete-pvc-retry-attempts", 30, "How many attempts to check that PVCs have been removed (default 30).")
 	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
 
+	flag.StringVar(&dockerHostNamespace, "docker-host-namespace", "lagoon", "The name of the docker-host namespace")
+	flag.StringVar(&dockerHostReuseType, "docker-host-reuse-type", "namespace",
+		`The resource type (namespace, project, organization) to use when assigning a docker-host to a build to preference an already used dockerhost
+		eg. If project is defined, all builds from a project will prefer to build on the same docker-host where possible`)
+
 	flag.Parse()
 
 	// get overrides from environment variables
@@ -497,6 +506,9 @@ func main() {
 	fastlyServiceID = helpers.GetEnv("FASTLY_SERVICE_ID", fastlyServiceID)
 	// this is used to control setting the service id into build pods
 	fastlyWatchStatus = helpers.GetEnvBool("FASTLY_WATCH_STATUS", fastlyWatchStatus)
+
+	dockerHostNamespace = helpers.GetEnv("DOCKERHOST_NAMESPACE", dockerHostNamespace)
+	dockerHostReuseType = helpers.GetEnv("DOCKERHOST_REUSE_TYPE", dockerHostReuseType)
 
 	if enablePodProxy {
 		httpProxy = helpers.GetEnv("HTTP_PROXY", httpProxy)
@@ -738,6 +750,25 @@ func main() {
 		cache,
 	)
 
+	reuseCache, _ := lru.New[string, string](1000)
+	buildCache, _ := lru.New[string, string](1000)
+	dockerhostResuseTypes := map[string]bool{
+		"namespace":    true,
+		"project":      true,
+		"organization": true,
+	}
+	if !dockerhostResuseTypes[dockerHostReuseType] {
+		setupLog.Error(fmt.Errorf("unsupported docker-host reuse type"), "problem configuring docker-host handler")
+		os.Exit(1)
+	}
+	dockerhosts := dockerhost.New(
+		mgr.GetClient(),
+		ctrl.Log.WithName("dockerhost"),
+		dockerHostNamespace,
+		dockerHostReuseType,
+		reuseCache,
+		buildCache,
+	)
 	c := cron.New()
 	// if we are running with MQ support, then start the consumer handler
 
@@ -907,6 +938,7 @@ func main() {
 		},
 		UnauthenticatedRegistry: unauthenticatedRegistry,
 		ImagePullPolicy:         bipp,
+		DockerHost:              dockerhosts,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -957,6 +989,7 @@ func main() {
 		LFFQoSEnabled:         lffQoSEnabled,
 		BuildQoS:              buildQoSConfigv1beta2,
 		Cache:                 cache,
+		DockerHost:            dockerhosts,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuildPodMonitor")
 		os.Exit(1)

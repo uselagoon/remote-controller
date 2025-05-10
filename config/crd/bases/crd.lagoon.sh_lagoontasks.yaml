@@ -181,9 +181,6 @@ spec:
                 - project
                 type: object
               key:
-                description: |-
-                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
                 type: string
               misc:
                 description: LagoonMiscInfo defines the resource or backup information

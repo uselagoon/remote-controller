@@ -1,11 +1,12 @@
 package pruner
 
 import (
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
 	"time"
+
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_calculateRemoveBeforeTimes(t *testing.T) {
@@ -30,10 +31,7 @@ func Test_calculateRemoveBeforeTimes(t *testing.T) {
 				},
 				ns: v1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							//"lagoon.sh/buildPodTimeout": "1"
-						},
-						//Annotations: nil,
+						Labels: map[string]string{},
 					},
 				},
 				startTime: time.Date(2000, 1, 1, 1, 1, 1, 1, time.Local),
@@ -50,10 +48,7 @@ func Test_calculateRemoveBeforeTimes(t *testing.T) {
 				},
 				ns: v1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							//"lagoon.sh/buildPodTimeout": "1"
-						},
-						//Annotations: nil,
+						Labels: map[string]string{},
 					},
 				},
 				startTime: time.Date(2000, 1, 1, 7, 1, 1, 1, time.Local),
@@ -74,7 +69,6 @@ func Test_calculateRemoveBeforeTimes(t *testing.T) {
 							"lagoon.sh/buildPodTimeout": "2",
 							"lagoon.sh/taskPodTimeout":  "1",
 						},
-						//Annotations: nil,
 					},
 				},
 				startTime: time.Date(2000, 1, 1, 3, 1, 1, 1, time.Local),

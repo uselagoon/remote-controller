@@ -67,21 +67,21 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		opLog.Error(err, "Unable to generate metrics.")
 	}
-	if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
+	if jobPod.DeletionTimestamp.IsZero() {
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
 	}
 
 	// remove from the cache when a pod is deleted, this is just a fallback/redundancy removal, most cases will be no-op
-	_ = r.DockerHost.BuildCache.Remove(jobPod.ObjectMeta.Name)
+	_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
 
 	// a pod deletion request came through
 	// first try and clean up the pod and capture the logs and update
 	// the lagoonbuild that owns it with the status
 	var lagoonBuild lagooncrd.LagoonBuild
 	err = r.Get(ctx, types.NamespacedName{
-		Namespace: jobPod.ObjectMeta.Namespace,
-		Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+		Namespace: jobPod.Namespace,
+		Name:      jobPod.Labels["lagoon.sh/buildName"],
 	}, &lagoonBuild)
 	if err != nil {
 		opLog.Info("The build that started this pod may have been deleted or not started yet, continuing with cancellation if required.")
@@ -89,18 +89,16 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
-	} else {
-		if helpers.ContainsString(
-			lagooncrd.BuildRunningPendingStatus,
-			lagoonBuild.Labels["lagoon.sh/buildStatus"],
-		) {
-			opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
-			// this will update the deployment back to lagoon if it can do so
-			// and should only update if the LagoonBuild is Pending or Running
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
-			if err != nil {
-				opLog.Error(err, "Unable to update the LagoonBuild.")
-			}
+	} else if helpers.ContainsString(
+		lagooncrd.BuildRunningPendingStatus,
+		lagoonBuild.Labels["lagoon.sh/buildStatus"],
+	) {
+		opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
+		// this will update the deployment back to lagoon if it can do so
+		// and should only update if the LagoonBuild is Pending or Running
+		err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
+		if err != nil {
+			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
 	}
 	// if the update is successful or not, it will just continue on to check for pending builds
@@ -130,11 +128,8 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if len(runningBuilds.Items) == 0 {
 			return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 		}
-	} else {
-		// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op
-		if r.EnableDebug {
-			opLog.Info("No pending build check in namespaces when QoS is enabled")
-		}
+	} else if r.EnableDebug {
+		opLog.Info("No pending build check in namespaces when QoS is enabled")
 	}
 	return ctrl.Result{}, nil
 }

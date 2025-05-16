@@ -28,28 +28,30 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 	// get the task associated to this pod, we wil need update it at some point
 	var lagoonTask lagooncrd.LagoonTask
 	err := r.Get(ctx, types.NamespacedName{
-		Namespace: jobPod.ObjectMeta.Namespace,
-		Name:      jobPod.ObjectMeta.Labels["lagoon.sh/taskName"],
+		Namespace: jobPod.Namespace,
+		Name:      jobPod.Labels["lagoon.sh/taskName"],
 	}, &lagoonTask)
 	if err != nil {
 		return err
 	}
 	cancel := false
-	if cancelTask, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"]; ok {
+	if cancelTask, ok := jobPod.Labels["lagoon.sh/cancelTask"]; ok {
 		cancel, _ = strconv.ParseBool(cancelTask)
 	}
-	_, ok := r.Cache.Get(lagoonTask.ObjectMeta.Name)
+	_, ok := r.Cache.Get(lagoonTask.Name)
 	if ok {
-		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonTask.Name))
 		// this object exists in the cache meaning the task has been cancelled, set cancel to true and remove from cache
-		r.Cache.Remove(lagoonTask.ObjectMeta.Name)
+		r.Cache.Remove(lagoonTask.Name)
 		cancel = true
 	}
 	if cancel {
-		opLog.Info(fmt.Sprintf("Attempting to cancel task %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Attempting to cancel task %s", lagoonTask.Name))
 		return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, cancel)
 	}
-	if jobPod.Status.Phase == corev1.PodPending {
+	switch jobPod.Status.Phase {
+	case corev1.PodPending:
+
 		for _, container := range jobPod.Status.ContainerStatuses {
 			if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the task and get the logs from the container
@@ -58,11 +60,11 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 				if err := r.Update(ctx, &lagoonTask); err != nil {
 					return err
 				}
-				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.ObjectMeta.Name, lagooncrd.TaskStatusFailed.String()))
+				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.Name, lagooncrd.TaskStatusFailed.String()))
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}
-				opLog.Info(fmt.Sprintf("Deleted failed task pod: %s", jobPod.ObjectMeta.Name))
+				opLog.Info(fmt.Sprintf("Deleted failed task pod: %s", jobPod.Name))
 				// update the status to failed on the deleted pod
 				// and set the terminate time to now, it is used when we update the deployment and environment
 				jobPod.Status.Phase = corev1.PodFailed
@@ -79,26 +81,25 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 			}
 		}
 		return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, false)
-	} else if jobPod.Status.Phase == corev1.PodRunning {
+	case corev1.PodRunning:
 		// if the pod is running and detects a change to the pod (eg, detecting an updated lagoon.sh/taskStep label)
 		// then ship or store the logs
 		// get the task associated to this pod, the information in the resource is used for shipping the logs
 		var lagoonTask lagooncrd.LagoonTask
 		err := r.Get(ctx,
 			types.NamespacedName{
-				Namespace: jobPod.ObjectMeta.Namespace,
-				Name:      jobPod.ObjectMeta.Labels["lagoon.sh/taskName"],
+				Namespace: jobPod.Namespace,
+				Name:      jobPod.Labels["lagoon.sh/taskName"],
 			}, &lagoonTask)
 		if err != nil {
 			return err
 		}
-	}
-	if jobPod.Status.Phase == corev1.PodFailed || jobPod.Status.Phase == corev1.PodSucceeded {
+	case corev1.PodFailed, corev1.PodSucceeded:
 		// get the task associated to this pod, we wil need update it at some point
 		var lagoonTask lagooncrd.LagoonTask
 		err := r.Get(ctx, types.NamespacedName{
-			Namespace: jobPod.ObjectMeta.Namespace,
-			Name:      jobPod.ObjectMeta.Labels["lagoon.sh/taskName"],
+			Namespace: jobPod.Namespace,
+			Name:      jobPod.Labels["lagoon.sh/taskName"],
 		}, &lagoonTask)
 		if err != nil {
 			return err
@@ -120,13 +121,13 @@ func (r *TaskMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
+			Event:    "task-logs:job-kubernetes:" + lagoonTask.Name,
 			Meta: &schema.LagoonLogMeta{
 				Task:        &lagoonTask.Spec.Task,
 				Environment: lagoonTask.Spec.Environment.Name,
-				JobName:     lagoonTask.ObjectMeta.Name,
+				JobName:     lagoonTask.Name,
 				JobStatus:   condition,
-				RemoteID:    string(lagoonTask.ObjectMeta.UID),
+				RemoteID:    string(lagoonTask.UID),
 				Key:         lagoonTask.Spec.Key,
 				Cluster:     r.LagoonTargetName,
 			},
@@ -135,12 +136,12 @@ func (r *TaskMonitorReconciler) taskLogsToLagoonLogs(opLog logr.Logger,
 			msg.Message = fmt.Sprintf(`================================================================================
 Logs on pod %s, assigned to node %s on cluster %s
 ================================================================================
-%s`, jobPod.ObjectMeta.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
+%s`, jobPod.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
 		} else {
 			msg.Message = fmt.Sprintf(`================================================================================
 Logs on pod %s, assigned to cluster %s
 ================================================================================
-%s`, jobPod.ObjectMeta.Name, r.LagoonTargetName, logs)
+%s`, jobPod.Name, r.LagoonTargetName, logs)
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
@@ -156,8 +157,8 @@ Logs on pod %s, assigned to cluster %s
 			opLog.Info(
 				fmt.Sprintf(
 					"Published event %s for %s to lagoon-logs exchange",
-					fmt.Sprintf("task-logs:job-kubernetes:%s", jobPod.ObjectMeta.Name),
-					jobPod.ObjectMeta.Name,
+					fmt.Sprintf("task-logs:job-kubernetes:%s", jobPod.Name),
+					jobPod.Name,
 				),
 			)
 		}
@@ -178,33 +179,33 @@ func (r *TaskMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				metrics.TaskRunningStatus.Delete(prometheus.Labels{
-					"task_namespace": lagoonTask.ObjectMeta.Namespace,
-					"task_name":      lagoonTask.ObjectMeta.Name,
+					"task_namespace": lagoonTask.Namespace,
+					"task_name":      lagoonTask.Name,
 				})
 			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := schema.LagoonMessage{
 			Type:      "task",
-			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Namespace: lagoonTask.Namespace,
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				Project:       lagoonTask.Spec.Project.Name,
 				EnvironmentID: lagoonTask.Spec.Environment.ID,
 				ProjectID:     lagoonTask.Spec.Project.ID,
-				JobName:       lagoonTask.ObjectMeta.Name,
+				JobName:       lagoonTask.Name,
 				JobStatus:     condition,
-				RemoteID:      string(lagoonTask.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
 		}
-		if _, ok := jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]; ok {
+		if _, ok := jobPod.Annotations["lagoon.sh/taskData"]; ok {
 			// if the task contains `taskData` annotation, this is used to send data back to lagoon
 			// lagoon will use the data to perform an action against the api or something else
 			// the data in taskData should be base64 encoded
-			msg.Meta.AdvancedData = jobPod.ObjectMeta.Annotations["lagoon.sh/taskData"]
+			msg.Meta.AdvancedData = jobPod.Annotations["lagoon.sh/taskData"]
 		}
 		// we can add the task start time here
 		if jobPod.Status.StartTime != nil {
@@ -230,7 +231,7 @@ func (r *TaskMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 			opLog.Info(
 				fmt.Sprintf(
 					"Published task update message for %s to lagoon-tasks:controller queue",
-					jobPod.ObjectMeta.Name,
+					jobPod.Name,
 				),
 			)
 		}
@@ -249,16 +250,16 @@ func (r *TaskMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:job-kubernetes:" + condition, // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				EnvironmentID: lagoonTask.Spec.Environment.ID,
 				ProjectID:     lagoonTask.Spec.Project.ID,
-				JobName:       lagoonTask.ObjectMeta.Name,
+				JobName:       lagoonTask.Name,
 				JobStatus:     condition,
-				RemoteID:      string(lagoonTask.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
@@ -284,7 +285,7 @@ func (r *TaskMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 				fmt.Sprintf(
 					"Published event %s for %s to lagoon-logs exchange",
 					fmt.Sprintf("task:job-kubernetes:%s", condition),
-					lagoonTask.ObjectMeta.Name,
+					lagoonTask.Name,
 				),
 			)
 		}
@@ -320,7 +321,7 @@ func (r *TaskMonitorReconciler) updateTaskWithLogs(
 		opLog.Info(
 			fmt.Sprintf(
 				"Updating task status for %s to %v",
-				jobPod.ObjectMeta.Name,
+				jobPod.Name,
 				taskCondition,
 			),
 		)
@@ -397,7 +398,7 @@ Task %s
 		if cancel {
 			if err := r.Get(ctx, req.NamespacedName, &jobPod); err == nil {
 				if r.EnableDebug {
-					opLog.Info(fmt.Sprintf("Task pod exists %s", jobPod.ObjectMeta.Name))
+					opLog.Info(fmt.Sprintf("Task pod exists %s", jobPod.Name))
 				}
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err

@@ -24,9 +24,9 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	// this means it was created by the message queue handler
 	// so we should do the steps required for a lagoon build and then copy the build
 	// into the created namespace
-	if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; !ok {
+	if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; !ok {
 		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("Creating new build %s from message queue", lagoonBuild.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Creating new build %s from message queue", lagoonBuild.Name))
 		}
 		return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
 	}
@@ -35,7 +35,7 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	}
 	// handle the QoS build process here
 	// if the build is already running, then there is no need to check which build can be started next
-	if lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] == lagooncrd.BuildStatusRunning.String() {
+	if lagoonBuild.Labels["lagoon.sh/buildStatus"] == lagooncrd.BuildStatusRunning.String() {
 		// this is done so that all running state updates don't try to force the queue processor to run unnecessarily
 		// downside is that this can lead to queue/state changes being less frequent for queued builds in the api
 		// any new builds, or complete/failed/cancelled builds will still force the whichbuildnext processor to run though
@@ -62,12 +62,14 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		if r.EnableDebug {
 			opLog.Info(fmt.Sprintf("Currently %v running builds, no room for new builds to be started", len(runningBuilds.Items)))
 		}
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, buildsToStart, true)
 		return nil
 	}
 	if buildsToStart > 0 {
 		opLog.Info(fmt.Sprintf("Currently %v running builds, room for %v builds to be started", len(runningBuilds.Items), buildsToStart))
 		// if there are any free slots to start a build, do that here
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, buildsToStart, false)
 	}
 	return nil
@@ -116,12 +118,12 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 				// need to +1 to index because 0
 				if idx+1 <= buildsToStart && !limitHit {
 					if r.EnableDebug {
-						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
 					}
 					// if we do have a `lagoon.sh/buildStatus` set, then process as normal
 					runningNSBuilds := &lagooncrd.LagoonBuildList{}
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-						client.InNamespace(pBuild.ObjectMeta.Namespace),
+						client.InNamespace(pBuild.Namespace),
 						client.MatchingLabels(map[string]string{
 							"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
 							"lagoon.sh/controller":  r.ControllerNamespace,
@@ -134,7 +136,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					}
 					// if there are no running builds, check if there are any pending builds that can be started
 					if len(runningNSBuilds.Items) == 0 {
-						if err := lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.ObjectMeta.Namespace, "Running"); err != nil {
+						if err := lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.Namespace, "Running"); err != nil {
 							// only return if there is an error doing this operation
 							// continue on otherwise to allow the queued status updater to run
 							runningProcessQueue = false

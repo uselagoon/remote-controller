@@ -202,16 +202,14 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 	environmentName = ShortenEnvironment(projectname, MakeSafe(environmentName))
 	// lowercase and dnsify the namespace against the namespace pattern
 	ns := MakeSafe(
-		strings.Replace(
-			strings.Replace(
+		strings.ReplaceAll(
+			strings.ReplaceAll(
 				nsPattern,
 				"${environment}",
 				environmentName,
-				-1,
 			),
 			"${project}",
 			projectname,
-			-1,
 		),
 	)
 	// If there is a namespaceprefix defined, and random prefix is disabled

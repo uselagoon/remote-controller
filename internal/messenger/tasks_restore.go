@@ -39,7 +39,7 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta2.Lagoo
 			return err
 		}
 	}
-	if crdv1alpha1.ObjectMeta.Name == "restores.backup.appuio.ch" {
+	if crdv1alpha1.Name == "restores.backup.appuio.ch" {
 		k8upv1alpha1Exists = true
 	}
 	crdv1 := &apiextensionsv1.CustomResourceDefinition{}
@@ -48,7 +48,7 @@ func (m *Messenger) ResticRestore(namespace string, jobSpec *lagoonv1beta2.Lagoo
 			return err
 		}
 	}
-	if crdv1.ObjectMeta.Name == "restores.k8up.io" {
+	if crdv1.Name == "restores.k8up.io" {
 		k8upv1Exists = true
 	}
 	// check the version, if there is no version in the payload, assume it is k8up v2
@@ -102,7 +102,7 @@ func (m *Messenger) createv1alpha1Restore(opLog logr.Logger, namespace string, j
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Unable to unmarshal the json into a job %s.",
-				restorev1alpha1.ObjectMeta.Name,
+				restorev1alpha1.Name,
 			),
 		)
 		return err
@@ -127,7 +127,7 @@ func (m *Messenger) createv1Restore(opLog logr.Logger, namespace string, jobSpec
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Unable to unmarshal the json into a job %s.",
-				restorev1.ObjectMeta.Name,
+				restorev1.Name,
 			),
 		)
 		return err

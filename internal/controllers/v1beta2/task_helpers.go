@@ -56,7 +56,7 @@ func (r *LagoonTaskReconciler) updateQueuedTask(
 	opLog logr.Logger,
 ) error {
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Updating task %s to queued: %s", lagoonTask.ObjectMeta.Name, fmt.Sprintf("This task is currently queued in position %v/%v", queuePosition, queueLength)))
+		opLog.Info(fmt.Sprintf("Updating task %s to queued: %s", lagoonTask.Name, fmt.Sprintf("This task is currently queued in position %v/%v", queuePosition, queueLength)))
 	}
 	// if we get this handler, then it is likely that the task was in a pending or running state with no actual running pod
 	// so just set the logs to be cancellation message
@@ -67,15 +67,15 @@ func (r *LagoonTaskReconciler) updateQueuedTask(
 	// send any messages to lagoon message queues
 	opLog.Info(fmt.Sprintf("task %v", len(allContainerLogs)))
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
-	r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, lagooncrd.TaskStatusQueued) //, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-	r.updateLagoonTask(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)           //, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+	r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)
+	r.updateLagoonTask(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)
 	r.taskLogsToLagoonLogs(opLog, &lagoonTask, allContainerLogs, lagooncrd.TaskStatusQueued)
 	return nil
 }
 
 func sortTasks(pendingTasks *lagooncrd.LagoonTaskList) {
 	sort.Slice(pendingTasks.Items, func(i, j int) bool {
-		return pendingTasks.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingTasks.Items[j].ObjectMeta.CreationTimestamp)
+		return pendingTasks.Items[i].CreationTimestamp.Before(&pendingTasks.Items[j].CreationTimestamp)
 	})
 }
 
@@ -89,23 +89,23 @@ func (r *LagoonTaskReconciler) taskStatusLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + taskCondition.ToLower(), //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:job-kubernetes:" + taskCondition.ToLower(), // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				EnvironmentID: lagoonTask.Spec.Environment.ID,
 				ProjectID:     lagoonTask.Spec.Project.ID,
-				JobName:       lagoonTask.ObjectMeta.Name,
+				JobName:       lagoonTask.Name,
 				JobStatus:     taskCondition.ToLower(),
-				RemoteID:      string(lagoonTask.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
 			Message: fmt.Sprintf("*[%s]* %s Task `%s` %s",
 				lagoonTask.Spec.Project.Name,
 				lagoonTask.Spec.Environment.Name,
-				lagoonTask.ObjectMeta.Name,
+				lagoonTask.Name,
 				taskCondition.ToLower(),
 			),
 		}
@@ -139,24 +139,24 @@ func (r *LagoonTaskReconciler) updateLagoonTask(opLog logr.Logger,
 		if taskCondition.ToLower() == "failed" || taskCondition.ToLower() == "complete" || taskCondition.ToLower() == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				metrics.TaskRunningStatus.Delete(prometheus.Labels{
-					"task_namespace": lagoonTask.ObjectMeta.Namespace,
-					"task_name":      lagoonTask.ObjectMeta.Name,
+					"task_namespace": lagoonTask.Namespace,
+					"task_name":      lagoonTask.Name,
 				})
 			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := schema.LagoonMessage{
 			Type:      "task",
-			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Namespace: lagoonTask.Namespace,
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				Environment:   lagoonTask.Spec.Environment.Name,
 				Project:       lagoonTask.Spec.Project.Name,
 				EnvironmentID: lagoonTask.Spec.Environment.ID,
 				ProjectID:     lagoonTask.Spec.Project.ID,
-				JobName:       lagoonTask.ObjectMeta.Name,
+				JobName:       lagoonTask.Name,
 				JobStatus:     taskCondition.ToLower(),
-				RemoteID:      string(lagoonTask.ObjectMeta.UID),
+				RemoteID:      string(lagoonTask.UID),
 				Key:           lagoonTask.Spec.Key,
 				Cluster:       r.LagoonTargetName,
 			},
@@ -189,13 +189,13 @@ func (r *LagoonTaskReconciler) taskLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task-logs:job-kubernetes:" + lagoonTask.ObjectMeta.Name,
+			Event:    "task-logs:job-kubernetes:" + lagoonTask.Name,
 			Meta: &schema.LagoonLogMeta{
 				Task:        &lagoonTask.Spec.Task,
 				Environment: lagoonTask.Spec.Environment.Name,
-				JobName:     lagoonTask.ObjectMeta.Name,
+				JobName:     lagoonTask.Name,
 				JobStatus:   taskCondition.ToLower(),
-				RemoteID:    string(lagoonTask.ObjectMeta.UID),
+				RemoteID:    string(lagoonTask.UID),
 				Key:         lagoonTask.Spec.Key,
 				Cluster:     r.LagoonTargetName,
 			},

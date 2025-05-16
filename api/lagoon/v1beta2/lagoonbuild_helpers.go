@@ -59,7 +59,7 @@ func BuildContainsStatus(slice []metav1.Condition, s metav1.Condition) bool {
 func RemoveBuild(slice []LagoonBuild, s LagoonBuild) []LagoonBuild {
 	result := []LagoonBuild{}
 	for _, item := range slice {
-		if item.ObjectMeta.Name == s.ObjectMeta.Name {
+		if item.Name == s.Name {
 			continue
 		}
 		result = append(result, item)
@@ -70,7 +70,7 @@ func RemoveBuild(slice []LagoonBuild, s LagoonBuild) []LagoonBuild {
 // Check if the version of lagoon provided in the internal_system scope variable is greater than or equal to the checked version
 func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 	lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
-	json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
+	_ = json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
 	lagoonVersion, err := helpers.GetLagoonVariable("LAGOON_SYSTEM_CORE_VERSION", []string{"internal_system"}, *lagoonProjectVariables)
 	if err != nil {
 		return false
@@ -102,7 +102,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.After(pendingBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+			return pendingBuilds.Items[i].CreationTimestamp.After(pendingBuilds.Items[j].CreationTimestamp.Time)
 		})
 		for idx, pBuild := range pendingBuilds.Items {
 			pendingBuild := pBuild.DeepCopy()
@@ -110,7 +110,7 @@ func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, 
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
 			} else {
 				// cancel any other pending builds
-				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.ObjectMeta.Name))
+				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
 				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
 			}
@@ -155,7 +155,7 @@ func GetTaskConditionFromPod(phase corev1.PodPhase) TaskStatusType {
 func CheckRunningBuilds(ctx context.Context, cns string, opLog logr.Logger, cl client.Client, ns corev1.Namespace) bool {
 	lagoonBuilds := &LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(ns.ObjectMeta.Name),
+		client.InNamespace(ns.Name),
 		client.MatchingLabels(map[string]string{
 			"lagoon.sh/controller": cns, // created by this controller
 		}),
@@ -166,7 +166,7 @@ func CheckRunningBuilds(ctx context.Context, cns string, opLog logr.Logger, cl c
 	}
 	runningBuilds := false
 	sort.Slice(lagoonBuilds.Items, func(i, j int) bool {
-		return lagoonBuilds.Items[i].ObjectMeta.CreationTimestamp.After(lagoonBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+		return lagoonBuilds.Items[i].CreationTimestamp.After(lagoonBuilds.Items[j].CreationTimestamp.Time)
 	})
 	// if there are any builds pending or running, don't try and refresh the credentials as this
 	// could break the build
@@ -203,7 +203,7 @@ func DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, cl client.Client
 			opLog.Error(err,
 				fmt.Sprintf(
 					"unable to delete lagoon build %s in %s for project %s, environment %s",
-					lagoonBuild.ObjectMeta.Name,
+					lagoonBuild.Name,
 					ns,
 					project,
 					environment,
@@ -214,7 +214,7 @@ func DeleteLagoonBuilds(ctx context.Context, opLog logr.Logger, cl client.Client
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted lagoon build %s in  %s for project %s, environment %s",
-				lagoonBuild.ObjectMeta.Name,
+				lagoonBuild.Name,
 				ns,
 				project,
 				environment,
@@ -240,13 +240,13 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pruner", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pruner", ns.Name))
 			continue
 		}
-		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking LagoonBuilds in namespace %s", ns.Name))
 		lagoonBuilds := &LagoonBuildList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
+			client.InNamespace(ns.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/controller": cns, // created by this controller
 			}),
@@ -257,16 +257,16 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(lagoonBuilds.Items, func(i, j int) bool {
-			return lagoonBuilds.Items[i].ObjectMeta.CreationTimestamp.After(lagoonBuilds.Items[j].ObjectMeta.CreationTimestamp.Time)
+			return lagoonBuilds.Items[i].CreationTimestamp.After(lagoonBuilds.Items[j].CreationTimestamp.Time)
 		})
 		if len(lagoonBuilds.Items) > buildsToKeep {
 			for idx, lagoonBuild := range lagoonBuilds.Items {
 				if idx >= buildsToKeep {
 					if helpers.ContainsString(
 						BuildCompletedCancelledFailedStatus,
-						lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
+						lagoonBuild.Labels["lagoon.sh/buildStatus"],
 					) {
-						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.Name))
 						// attempt to clean up any build pods associated to this build
 						if err := DeleteBuildPod(ctx, cl, opLog, &lagoonBuild, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: lagoonBuild.Name}, cns); err != nil {
 							opLog.Error(err, "unable to delete build pod")
@@ -299,20 +299,20 @@ func DeleteBuildPod(
 	// get any running pods that this build may have already created
 	lagoonBuildPod := corev1.Pod{}
 	err := cl.Get(ctx, types.NamespacedName{
-		Namespace: lagoonBuild.ObjectMeta.Namespace,
-		Name:      lagoonBuild.ObjectMeta.Name,
+		Namespace: lagoonBuild.Namespace,
+		Name:      lagoonBuild.Name,
 	}, &lagoonBuildPod)
 	if err != nil {
 		// handle updating lagoon for a deleted build with no running pod
 		// only do it if the build status is Pending or Running though
-		return fmt.Errorf("unable to find a build pod for %s", lagoonBuild.ObjectMeta.Name)
+		return fmt.Errorf("unable to find a build pod for %s", lagoonBuild.Name)
 	}
-	opLog.Info(fmt.Sprintf("Found build pod for %s, deleting it", lagoonBuild.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Found build pod for %s, deleting it", lagoonBuild.Name))
 	// handle updating lagoon for a deleted build with a running pod
 	// only do it if the build status is Pending or Running though
 	// delete the pod, let the pod deletion handler deal with the cleanup there
 	if err := cl.Delete(ctx, &lagoonBuildPod); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to delete the the LagoonBuild pod %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Error(err, fmt.Sprintf("Unable to delete the the LagoonBuild pod %s", lagoonBuild.Name))
 	}
 	// check that the pod is deleted before continuing, this allows the pod deletion to happen
 	// and the pod deletion process in the LagoonMonitor controller to be able to send what it needs back to lagoon
@@ -324,18 +324,18 @@ func DeleteBuildPod(
 	err = try.Do(func(attempt int) (bool, error) {
 		var podErr error
 		err := cl.Get(ctx, types.NamespacedName{
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
-			Name:      lagoonBuild.ObjectMeta.Name,
+			Namespace: lagoonBuild.Namespace,
+			Name:      lagoonBuild.Name,
 		}, &lagoonBuildPod)
 		if err != nil {
 			// the pod doesn't exist anymore, so exit the retry
 			podErr = nil
-			opLog.Info(fmt.Sprintf("Pod %s deleted", lagoonBuild.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Pod %s deleted", lagoonBuild.Name))
 		} else {
 			// if the pod still exists wait 5 seconds before trying again
 			time.Sleep(5 * time.Second)
-			podErr = fmt.Errorf("pod %s still exists", lagoonBuild.ObjectMeta.Name)
-			opLog.Info(fmt.Sprintf("Pod %s still exists", lagoonBuild.ObjectMeta.Name))
+			podErr = fmt.Errorf("pod %s still exists", lagoonBuild.Name)
+			opLog.Info(fmt.Sprintf("Pod %s still exists", lagoonBuild.Name))
 		}
 		return attempt < 12, podErr
 	})
@@ -355,7 +355,7 @@ func DeleteBuildResources(
 	// or if there are any pending builds that can be started
 	runningBuilds := &LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
+		client.InNamespace(lagoonBuild.Namespace),
 		client.MatchingLabels(map[string]string{
 			"lagoon.sh/buildStatus": BuildStatusRunning.String(),
 			"lagoon.sh/controller":  cns,
@@ -370,7 +370,7 @@ func DeleteBuildResources(
 	newRunningBuilds := runningBuilds.Items
 	for _, runningBuild := range runningBuilds.Items {
 		// if there are any running builds, check if it is the one currently being deleted
-		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+		if lagoonBuild.Name == runningBuild.Name {
 			// if the one being deleted is a running one, remove it from the list of running builds
 			newRunningBuilds = RemoveBuild(newRunningBuilds, runningBuild)
 		}
@@ -379,7 +379,7 @@ func DeleteBuildResources(
 	if len(newRunningBuilds) == 0 {
 		pendingBuilds := &LagoonBuildList{}
 		listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
+			client.InNamespace(lagoonBuild.Namespace),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/buildStatus": BuildStatusPending.String(),
 				"lagoon.sh/controller":  cns,
@@ -393,14 +393,14 @@ func DeleteBuildResources(
 		newPendingBuilds := pendingBuilds.Items
 		for _, pendingBuild := range pendingBuilds.Items {
 			// if there are any pending builds, check if it is the one currently being deleted
-			if lagoonBuild.ObjectMeta.Name == pendingBuild.ObjectMeta.Name {
+			if lagoonBuild.Name == pendingBuild.Name {
 				// if the one being deleted a the pending one, remove it from the list of pending builds
 				newPendingBuilds = RemoveBuild(newPendingBuilds, pendingBuild)
 			}
 		}
 		// sort the pending builds by creation timestamp
 		sort.Slice(newPendingBuilds, func(i, j int) bool {
-			return newPendingBuilds[i].ObjectMeta.CreationTimestamp.Before(&newPendingBuilds[j].ObjectMeta.CreationTimestamp)
+			return newPendingBuilds[i].CreationTimestamp.Before(&newPendingBuilds[j].CreationTimestamp)
 		})
 		// if there are more than 1 pending builds (excluding the one being deleted), update the oldest one to running
 		if len(newPendingBuilds) > 0 {
@@ -440,13 +440,13 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pod pruner", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting build pod pruner", ns.Name))
 			return
 		}
-		opLog.Info(fmt.Sprintf("Checking Lagoon build pods in namespace %s", ns.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking Lagoon build pods in namespace %s", ns.Name))
 		buildPods := &corev1.PodList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
+			client.InNamespace(ns.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/jobType":    "build",
 				"lagoon.sh/controller": cns, // created by this controller
@@ -458,14 +458,14 @@ func BuildPodPruner(ctx context.Context, cl client.Client, cns string, buildPods
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(buildPods.Items, func(i, j int) bool {
-			return buildPods.Items[i].ObjectMeta.CreationTimestamp.After(buildPods.Items[j].ObjectMeta.CreationTimestamp.Time)
+			return buildPods.Items[i].CreationTimestamp.After(buildPods.Items[j].CreationTimestamp.Time)
 		})
 		if len(buildPods.Items) > buildPodsToKeep {
 			for idx, pod := range buildPods.Items {
 				if idx >= buildPodsToKeep {
 					if pod.Status.Phase == corev1.PodFailed ||
 						pod.Status.Phase == corev1.PodSucceeded {
-						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.Name))
 						if err := cl.Delete(ctx, &pod); err != nil {
 							opLog.Error(err, "unable to update status condition")
 							break
@@ -483,7 +483,7 @@ func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *La
 	// this allows us to update builds in the API that may have gone stale or not updated from `New`, `Pending`, or `Running` status
 	buildCondition := "cancelled"
 	if lagoonBuild != nil {
-		if val, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+		if val, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
 			// if the build isnt running,pending,queued, then set the buildcondition to the value failed/complete/cancelled
 			if !helpers.ContainsString(BuildRunningPendingStatus, val) {
 				buildCondition = strings.ToLower(val)
@@ -532,7 +532,7 @@ func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *La
 func CancelBuild(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	jobSpec := &LagoonTaskSpec{}
-	json.Unmarshal(body, jobSpec)
+	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
 	if err := cl.Get(ctx, types.NamespacedName{
 		Name:      jobSpec.Misc.Name,
@@ -562,11 +562,11 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 		// check if the build has existing status or not though to consume it
 		if helpers.ContainsString(
 			BuildRunningPendingStatus,
-			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"],
+			lagoonBuild.Labels["lagoon.sh/buildStatus"],
 		) {
-			lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
+			lagoonBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
 		}
-		lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
+		lagoonBuild.Labels["lagoon.sh/cancelBuildNoPod"] = "true"
 		if err := cl.Update(ctx, &lagoonBuild); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
@@ -580,7 +580,7 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 		b, err := updateLagoonBuild(namespace, *jobSpec, &lagoonBuild)
 		return true, b, err
 	}
-	jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"] = "true"
+	jobPod.Labels["lagoon.sh/cancelBuild"] = "true"
 	if err := cl.Update(ctx, &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(

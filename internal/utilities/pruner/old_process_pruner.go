@@ -33,7 +33,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 		return
 	}
 
-	//now we iterate through each namespace, and look for build/task pods
+	// now we iterate through each namespace, and look for build/task pods
 	for _, ns := range namespaces.Items {
 
 		if ns.Status.Phase == corev1.NamespaceTerminating {
@@ -55,7 +55,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 
 		jobTypeLabelRequirements, _ := labels.NewRequirement("lagoon.sh/jobType", selection.Exists, nil)
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
+			client.InNamespace(ns.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/controller": p.ControllerNamespace, // created by this controller
 			}),

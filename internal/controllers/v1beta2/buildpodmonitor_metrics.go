@@ -23,7 +23,7 @@ func (r *BuildMonitorReconciler) calculateBuildMetrics(ctx context.Context) erro
 	runningBuilds := float64(0)
 	for _, buildPod := range buildPods.Items {
 		if buildPod.Status.Phase == corev1.PodRunning {
-			runningBuilds = runningBuilds + 1
+			runningBuilds += 1
 		}
 	}
 	metrics.BuildsRunningGauge.Set(runningBuilds)

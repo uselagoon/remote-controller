@@ -125,18 +125,18 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
-	if lagoonBuild.ObjectMeta.DeletionTimestamp.IsZero() {
+	if lagoonBuild.DeletionTimestamp.IsZero() {
 		// if the build isn't being deleted, but the status is cancelled
 		// then clean up the undeployable build
-		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; ok {
+		if value, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok {
 			// if cancelled, handle the cancellation process
 			if value == lagooncrd.BuildStatusCancelled.String() {
-				if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
-					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.ObjectMeta.Name))
-					r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
+				if value, ok := lagoonBuild.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
+					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled by new build", lagoonBuild.Name))
+					_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "This build was cancelled as a newer build was triggered.", opLog, true)
 				} else {
-					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.ObjectMeta.Name))
-					r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
+					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.Name))
+					_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
 				}
 			}
 		}
@@ -157,9 +157,9 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 			for _, runningBuild := range runningNSBuilds.Items {
 				// if the running build is the one from this request then process it
-				if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+				if lagoonBuild.Name == runningBuild.Name {
 					// actually process the build here
-					if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStarted"]; !ok {
+					if _, ok := lagoonBuild.Labels["lagoon.sh/buildStarted"]; !ok {
 						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
 							return ctrl.Result{}, err
 						}
@@ -173,7 +173,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
 	}
 	// The object is being deleted
-	if helpers.ContainsString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer) {
+	if helpers.ContainsString(lagoonBuild.Finalizers, buildFinalizer) {
 		// our finalizer is present, so lets handle any external dependency
 		// first deleteExternalResources will try and check for any pending builds that it can
 		// can change to running to kick off the next pending build
@@ -188,11 +188,11 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 		// remove our finalizer from the list and update it.
-		lagoonBuild.ObjectMeta.Finalizers = helpers.RemoveString(lagoonBuild.ObjectMeta.Finalizers, buildFinalizer)
+		lagoonBuild.Finalizers = helpers.RemoveString(lagoonBuild.Finalizers, buildFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
-				"finalizers": lagoonBuild.ObjectMeta.Finalizers,
+				"finalizers": lagoonBuild.Finalizers,
 			},
 		})
 		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
@@ -219,7 +219,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	namespace := &corev1.Namespace{}
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking Namespace exists for: %s", lagoonBuild.Name))
 	}
 	err := r.getOrCreateNamespace(ctx, namespace, lagoonBuild, opLog)
 	if err != nil {
@@ -227,34 +227,34 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	}
 	// create the `lagoon-deployer` ServiceAccount
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.Name))
 	}
 	serviceAccount := &corev1.ServiceAccount{}
-	err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.ObjectMeta.Name)
+	err = r.getOrCreateServiceAccount(ctx, serviceAccount, namespace.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// ServiceAccount RoleBinding creation
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.Name))
 	}
 	saRoleBinding := &rbacv1.RoleBinding{}
-	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.ObjectMeta.Name)
+	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, namespace.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// copy the build resource into a new resource and set the status to pending
 	// create the new resource and the controller will handle it via queue
-	opLog.Info(fmt.Sprintf("Creating LagoonBuild in Pending status: %s", lagoonBuild.ObjectMeta.Name))
-	err = r.getOrCreateBuildResource(ctx, &lagoonBuild, namespace.ObjectMeta.Name)
+	opLog.Info(fmt.Sprintf("Creating LagoonBuild in Pending status: %s", lagoonBuild.Name))
+	err = r.getOrCreateBuildResource(ctx, &lagoonBuild, namespace.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, namespace.ObjectMeta.Name, lagooncrd.BuildStatusPending.String())
+	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, namespace.Name, lagooncrd.BuildStatusPending.String())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -264,7 +264,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 	// if the pod exists, attempt to get the status of it (only if its complete or failed) and ship the status
 	runningBuilds := &lagooncrd.LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(namespace.ObjectMeta.Name),
+		client.InNamespace(namespace.Name),
 		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String()}),
 	})
 	// list all builds in the namespace that have the running buildstatus
@@ -276,19 +276,19 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 		runningBuild := rBuild.DeepCopy()
 		lagoonBuildPod := corev1.Pod{}
 		err := r.Get(ctx, types.NamespacedName{
-			Namespace: rBuild.ObjectMeta.Namespace,
-			Name:      rBuild.ObjectMeta.Name,
+			Namespace: rBuild.Namespace,
+			Name:      rBuild.Name,
 		}, &lagoonBuildPod)
 		buildCondition := lagooncrd.BuildStatusCancelled
 		if err != nil {
 			// cancel the build as there is no pod available
-			opLog.Info(fmt.Sprintf("Setting build %s as cancelled", runningBuild.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Setting build %s as cancelled", runningBuild.Name))
 			runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 		} else {
 			// get the status from the pod and update the build
 			if lagoonBuildPod.Status.Phase == corev1.PodFailed || lagoonBuildPod.Status.Phase == corev1.PodSucceeded {
 				buildCondition = lagooncrd.GetBuildConditionFromPod(lagoonBuildPod.Status.Phase)
-				opLog.Info(fmt.Sprintf("Setting build %s as %s", runningBuild.ObjectMeta.Name, buildCondition.String()))
+				opLog.Info(fmt.Sprintf("Setting build %s as %s", runningBuild.Name, buildCondition.String()))
 				runningBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
 			} else {
 				// drop out, don't do anything else
@@ -297,7 +297,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 		}
 		if err := r.Update(ctx, runningBuild); err != nil {
 			// log the error and drop out
-			opLog.Error(err, fmt.Sprintf("Error setting build %s as cancelled", runningBuild.ObjectMeta.Name))
+			opLog.Error(err, fmt.Sprintf("Error setting build %s as cancelled", runningBuild.Name))
 			continue
 		}
 		// send the status change to lagoon
@@ -339,7 +339,7 @@ func (r *LagoonBuildReconciler) getOrCreateBuildResource(ctx context.Context, la
 	}
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: ns,
-		Name:      newBuild.ObjectMeta.Name,
+		Name:      newBuild.Name,
 	}, newBuild)
 	if err != nil {
 		if err := r.Create(ctx, newBuild); err != nil {

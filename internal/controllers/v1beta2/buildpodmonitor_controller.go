@@ -89,18 +89,16 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
-	} else {
-		if helpers.ContainsString(
-			lagooncrd.BuildRunningPendingStatus,
-			lagoonBuild.Labels["lagoon.sh/buildStatus"],
-		) {
-			opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
-			// this will update the deployment back to lagoon if it can do so
-			// and should only update if the LagoonBuild is Pending or Running
-			err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
-			if err != nil {
-				opLog.Error(err, "Unable to update the LagoonBuild.")
-			}
+	} else if helpers.ContainsString(
+		lagooncrd.BuildRunningPendingStatus,
+		lagoonBuild.Labels["lagoon.sh/buildStatus"],
+	) {
+		opLog.Info("Attempting to update the LagoonBuild with cancellation if required.")
+		// this will update the deployment back to lagoon if it can do so
+		// and should only update if the LagoonBuild is Pending or Running
+		err = r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, true)
+		if err != nil {
+			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
 	}
 	// if the update is successful or not, it will just continue on to check for pending builds
@@ -130,11 +128,8 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if len(runningBuilds.Items) == 0 {
 			return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
 		}
-	} else {
-		// since qos handles pending build checks as part of its own operations, we can skip the running pod check step with no-op
-		if r.EnableDebug {
-			opLog.Info("No pending build check in namespaces when QoS is enabled")
-		}
+	} else if r.EnableDebug {
+		opLog.Info("No pending build check in namespaces when QoS is enabled")
 	}
 	return ctrl.Result{}, nil
 }

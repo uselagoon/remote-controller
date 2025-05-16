@@ -249,7 +249,7 @@ func (r *TaskMonitorReconciler) taskStatusLogsToLagoonLogs(opLog logr.Logger,
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:job-kubernetes:" + condition, // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,

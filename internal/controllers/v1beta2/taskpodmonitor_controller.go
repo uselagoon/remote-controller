@@ -120,7 +120,7 @@ func (r *TaskMonitorReconciler) deleteActiveStandbyRole(ctx context.Context, des
 		Name:      "lagoon-deployer-activestandby",
 	}, activeStandbyRoleBinding)
 	if err != nil {
-		helpers.IgnoreNotFound(err)
+		_ = helpers.IgnoreNotFound(err)
 	}
 	err = r.Delete(ctx, activeStandbyRoleBinding)
 	if err != nil {

@@ -70,7 +70,7 @@ func RemoveBuild(slice []LagoonBuild, s LagoonBuild) []LagoonBuild {
 // Check if the version of lagoon provided in the internal_system scope variable is greater than or equal to the checked version
 func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 	lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
-	json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
+	_ = json.Unmarshal(build.Spec.Project.Variables.Project, lagoonProjectVariables)
 	lagoonVersion, err := helpers.GetLagoonVariable("LAGOON_SYSTEM_CORE_VERSION", []string{"internal_system"}, *lagoonProjectVariables)
 	if err != nil {
 		return false
@@ -532,7 +532,7 @@ func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *La
 func CancelBuild(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	jobSpec := &LagoonTaskSpec{}
-	json.Unmarshal(body, jobSpec)
+	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
 	if err := cl.Get(ctx, types.NamespacedName{
 		Name:      jobSpec.Misc.Name,

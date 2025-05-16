@@ -33,7 +33,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 		return
 	}
 
-	//now we iterate through each namespace, and look for build/task pods
+	// now we iterate through each namespace, and look for build/task pods
 	for _, ns := range namespaces.Items {
 
 		if ns.Status.Phase == corev1.NamespaceTerminating {

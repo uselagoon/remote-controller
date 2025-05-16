@@ -163,7 +163,7 @@ func init() {
 // this converts them from floats to bools
 func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
 	tmpMap := map[string]interface{}{}
-	json.Unmarshal(data, &tmpMap)
+	_ = json.Unmarshal(data, &tmpMap)
 	if value, ok := tmpMap["deployerToken"]; ok {
 		if reflect.TypeOf(value).Kind() == reflect.Float64 {
 			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))

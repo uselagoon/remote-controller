@@ -159,7 +159,7 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
 		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.ObjectMeta.Name))
-		r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
+		_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
 		return fmt.Errorf("%s is currently terminating, aborting build", ns)
 	}
 
@@ -169,13 +169,13 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 			if value != r.ControllerNamespace {
 				// if the namespace is deployed by a different controller, fail the build
 				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.ObjectMeta.Name))
-				r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
+				_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
 				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
 			}
 		} else {
 			// if the label doesn't exist at all, fail the build
 			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
+			_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
 			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
 		}
 	}
@@ -476,32 +476,28 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name: "ROUTER_URL",
 			Value: strings.ToLower(
-				strings.Replace(
-					strings.Replace(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
 						lagoonBuild.Spec.Project.RouterPattern,
 						"${environment}",
 						lagoonBuild.Spec.Project.Environment,
-						-1,
 					),
 					"${project}",
 					lagoonBuild.Spec.Project.Name,
-					-1,
 				),
 			),
 		})
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name: "SHORT_ROUTER_URL",
 			Value: strings.ToLower(
-				strings.Replace(
-					strings.Replace(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
 						lagoonBuild.Spec.Project.RouterPattern,
 						"${environment}",
 						helpers.ShortName(lagoonBuild.Spec.Project.Environment),
-						-1,
 					),
 					"${project}",
 					helpers.ShortName(lagoonBuild.Spec.Project.Name),
-					-1,
 				),
 			),
 		})
@@ -549,8 +545,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// unmarshal the project variables
 		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
-		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
-		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
+		_ = json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
+		_ = json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
 		// check if INTERNAL_REGISTRY_SOURCE_LAGOON is defined, and if it isn't true
 		// if this value is true, then we want to use what is provided by Lagoon
 		// if it is false, or not set, then we use what is provided by this controller

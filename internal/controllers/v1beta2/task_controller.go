@@ -110,26 +110,23 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		// if qos is not enabled, just process it as a standard task
 		return r.standardTaskProcessor(ctx, opLog, lagoonTask)
-	} else {
-		// The object is being deleted
-		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-			// remove our finalizer from the list and update it.
-			lagoonTask.ObjectMeta.Finalizers = helpers.RemoveString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
-			// use patches to avoid update errors
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"finalizers": lagoonTask.ObjectMeta.Finalizers,
-				},
-			})
-			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				return ctrl.Result{}, err
-			}
+	} else if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
+		// our finalizer is present, so lets handle any external dependency
+		if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried
+			return ctrl.Result{}, err
+		}
+		// remove our finalizer from the list and update it.
+		lagoonTask.ObjectMeta.Finalizers = helpers.RemoveString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
+		// use patches to avoid update errors
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"finalizers": lagoonTask.ObjectMeta.Finalizers,
+			},
+		})
+		if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -167,11 +164,9 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 		)
 	}
 	if len(deployments.Items) > 0 {
-		hasService := false
 		for _, dep := range deployments.Items {
 			// grab the deployment that contains the task service we want to use
 			if dep.ObjectMeta.Name == lagoonTask.Spec.Task.Service {
-				hasService = true
 				// grab the container
 				for idx, depCon := range dep.Spec.Template.Spec.Containers {
 					// --- deprecate these at some point in favor of the `LAGOON_CONFIG_X` variants
@@ -324,15 +319,13 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				return taskPod, nil
 			}
 		}
-		if !hasService {
-			return nil, fmt.Errorf(
-				"no matching service %s for project %s, environment %s: %v",
-				lagoonTask.Spec.Task.Service,
-				lagoonTask.Spec.Project.Name,
-				lagoonTask.Spec.Environment.Name,
-				err,
-			)
-		}
+		return nil, fmt.Errorf(
+			"no matching service %s for project %s, environment %s: %v",
+			lagoonTask.Spec.Task.Service,
+			lagoonTask.Spec.Project.Name,
+			lagoonTask.Spec.Environment.Name,
+			err,
+		)
 	}
 	// no deployments found return error
 	return nil, fmt.Errorf(
@@ -345,13 +338,11 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 }
 
 func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, opLog logr.Logger) error {
-	newTaskPod := &corev1.Pod{}
 	var err error
-
-	newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
+	newTaskPod, err := r.getTaskPodDeployment(ctx, lagoonTask)
 	if err != nil {
 		opLog.Info(fmt.Sprintf("%v", err))
-		//@TODO: send msg back and update task to failed?
+		// @TODO: send msg back and update task to failed?
 		return nil
 	}
 	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
@@ -373,7 +364,7 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 					err,
 				),
 			)
-			//@TODO: send msg back and update task to failed?
+			// @TODO: send msg back and update task to failed?
 			return nil
 		}
 		metrics.TaskRunningStatus.With(prometheus.Labels{
@@ -670,9 +661,9 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		}
 		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
 
-		//Decorate the pod spec with additional details
+		// Decorate the pod spec with additional details
 
-		//dynamic secrets
+		// dynamic secrets
 		secrets, err := getSecretsForNamespace(r.Client, lagoonTask.Namespace)
 		secrets = filterDynamicSecrets(secrets)
 		if err != nil {
@@ -693,7 +684,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			}
 			newPod.Spec.Volumes = append(newPod.Spec.Volumes, v)
 
-			//now add the volume mount
+			// now add the volume mount
 			vm := corev1.VolumeMount{
 				Name:      volumeMountName,
 				ReadOnly:  true,

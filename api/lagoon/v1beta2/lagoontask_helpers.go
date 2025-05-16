@@ -204,7 +204,7 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 }
 
 func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error) {
-	//@TODO: use `taskName` in the future only
+	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", taskSpec.Task.ID, helpers.HashString(taskSpec.Task.ID)[0:6])
 	if taskSpec.Task.TaskName != "" {
 		taskName = taskSpec.Task.TaskName
@@ -243,9 +243,9 @@ func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error)
 func CancelTask(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	jobSpec := &LagoonTaskSpec{}
-	json.Unmarshal(body, jobSpec)
+	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
-	//@TODO: use `taskName` in the future only
+	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
 	if jobSpec.Task.TaskName != "" {
 		taskName = jobSpec.Task.TaskName

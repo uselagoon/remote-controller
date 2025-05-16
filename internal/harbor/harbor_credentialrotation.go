@@ -62,7 +62,6 @@ func (h *Harbor) RotateRobotCredentials(ctx context.Context, cl client.Client) {
 // rotate a specific namespaces robot credential
 func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns corev1.Namespace, force bool) (bool, error) {
 	// only continue if there isn't any running builds
-	robotCreds := &RobotAccountCredential{}
 	curVer, err := h.GetHarborVersion(ctx)
 	if err != nil {
 		return false, fmt.Errorf("error checking harbor version: %v", err)
@@ -73,7 +72,7 @@ func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns
 			return false, fmt.Errorf("error getting or creating project: %v", err)
 		}
 		time.Sleep(1 * time.Second) // wait 1 seconds
-		robotCreds, err = h.CreateOrRefreshRobotV2(ctx,
+		robotCreds, err := h.CreateOrRefreshRobotV2(ctx,
 			cl,
 			hProject,
 			ns.Labels["lagoon.sh/environment"],
@@ -83,19 +82,19 @@ func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns
 		if err != nil {
 			return false, fmt.Errorf("error getting or creating robot account: %v", err)
 		}
+		if robotCreds != nil {
+			// if we have robotcredentials to create or update do that here
+			return h.UpsertHarborSecret(ctx,
+				cl,
+				ns.ObjectMeta.Name,
+				"lagoon-internal-registry-secret", // secret name in kubernetes
+				robotCreds)
+		}
 	} else {
 		return false, fmt.Errorf("harbor versions below v2.2.0 are not supported: %v", err)
 	}
 	time.Sleep(1 * time.Second) // wait 1 seconds
 
-	if robotCreds != nil {
-		// if we have robotcredentials to create or update do that here
-		return h.UpsertHarborSecret(ctx,
-			cl,
-			ns.ObjectMeta.Name,
-			"lagoon-internal-registry-secret", //secret name in kubernetes
-			robotCreds)
-	}
 	// else do nothing
 	return false, nil
 }

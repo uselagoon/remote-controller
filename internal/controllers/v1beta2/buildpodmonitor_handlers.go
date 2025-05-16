@@ -382,7 +382,7 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  projectName,
-			Event:    "task:builddeploy-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:builddeploy-kubernetes:" + condition, // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				EnvironmentID: envID,
 				ProjectID:     projectID,

@@ -67,8 +67,8 @@ func (r *LagoonTaskReconciler) updateQueuedTask(
 	// send any messages to lagoon message queues
 	opLog.Info(fmt.Sprintf("task %v", len(allContainerLogs)))
 	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
-	r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, lagooncrd.TaskStatusQueued) //, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-	r.updateLagoonTask(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)           //, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+	r.taskStatusLogsToLagoonLogs(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)
+	r.updateLagoonTask(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)
 	r.taskLogsToLagoonLogs(opLog, &lagoonTask, allContainerLogs, lagooncrd.TaskStatusQueued)
 	return nil
 }
@@ -89,7 +89,7 @@ func (r *LagoonTaskReconciler) taskStatusLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonTask.Spec.Project.Name,
-			Event:    "task:job-kubernetes:" + taskCondition.ToLower(), //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:job-kubernetes:" + taskCondition.ToLower(), // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				Task:          &lagoonTask.Spec.Task,
 				ProjectName:   lagoonTask.Spec.Project.Name,

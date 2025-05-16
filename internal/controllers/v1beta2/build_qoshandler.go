@@ -62,12 +62,14 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		if r.EnableDebug {
 			opLog.Info(fmt.Sprintf("Currently %v running builds, no room for new builds to be started", len(runningBuilds.Items)))
 		}
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, buildsToStart, true)
 		return nil
 	}
 	if buildsToStart > 0 {
 		opLog.Info(fmt.Sprintf("Currently %v running builds, room for %v builds to be started", len(runningBuilds.Items), buildsToStart))
 		// if there are any free slots to start a build, do that here
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, buildsToStart, false)
 	}
 	return nil

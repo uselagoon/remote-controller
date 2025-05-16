@@ -259,7 +259,7 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				ProjectName: lagoonBuild.Spec.Project.Name,
 				BranchName:  lagoonBuild.Spec.Project.Environment,

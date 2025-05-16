@@ -56,12 +56,14 @@ func (r *LagoonTaskReconciler) whichTaskNext(ctx context.Context, opLog logr.Log
 		if r.EnableDebug {
 			opLog.Info(fmt.Sprintf("Currently %v running tasks, no room for new tasks to be started", len(runningTasks.Items)))
 		}
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, tasksToStart, true)
 		return nil
 	}
 	if tasksToStart > 0 {
 		opLog.Info(fmt.Sprintf("Currently %v running tasks, room for %v tasks to be started", len(runningTasks.Items), tasksToStart))
 		// if there are any free slots to start a task, do that here
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, tasksToStart, false)
 	}
 	return nil

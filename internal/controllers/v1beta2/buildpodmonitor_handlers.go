@@ -35,29 +35,30 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	// get the build associated to this pod, we wil need update it at some point
 	var lagoonBuild lagooncrd.LagoonBuild
 	err := r.Get(ctx, types.NamespacedName{
-		Namespace: jobPod.ObjectMeta.Namespace,
-		Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+		Namespace: jobPod.Namespace,
+		Name:      jobPod.Labels["lagoon.sh/buildName"],
 	}, &lagoonBuild)
 	if err != nil {
 		return err
 	}
 	cancel := false
-	if cancelBuild, ok := jobPod.ObjectMeta.Labels["lagoon.sh/cancelBuild"]; ok {
+	if cancelBuild, ok := jobPod.Labels["lagoon.sh/cancelBuild"]; ok {
 		cancel, _ = strconv.ParseBool(cancelBuild)
 	}
-	_, ok := r.Cache.Get(lagoonBuild.ObjectMeta.Name)
+	_, ok := r.Cache.Get(lagoonBuild.Name)
 	if ok {
-		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Cached cancellation exists for: %s", lagoonBuild.Name))
 		// this object exists in the cache meaning the task has been cancelled, set cancel to true and remove from cache
-		r.Cache.Remove(lagoonBuild.ObjectMeta.Name)
+		r.Cache.Remove(lagoonBuild.Name)
 		cancel = true
 	}
 	if cancel {
-		opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.Name))
 		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
 	}
 	// check if the build pod is in pending, a container in the pod could be failed in this state
-	if jobPod.Status.Phase == corev1.PodPending {
+	switch jobPod.Status.Phase {
+	case corev1.PodPending:
 		// check each container in the pod
 		for _, container := range jobPod.Status.ContainerStatuses {
 			// if the container is a lagoon-build container
@@ -71,11 +72,11 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					if err := r.Update(ctx, &lagoonBuild); err != nil {
 						return err
 					}
-					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.ObjectMeta.Name, lagooncrd.BuildStatusFailed.String()))
+					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.Name, lagooncrd.BuildStatusFailed.String()))
 					if err := r.Delete(ctx, &jobPod); err != nil {
 						return err
 					}
-					opLog.Info(fmt.Sprintf("Deleted failed build pod: %s", jobPod.ObjectMeta.Name))
+					opLog.Info(fmt.Sprintf("Deleted failed build pod: %s", jobPod.Name))
 					// update the status to failed on the deleted pod
 					// and set the terminate time to now, it is used when we update the deployment and environment
 					jobPod.Status.Phase = corev1.PodFailed
@@ -95,34 +96,34 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 			}
 		}
 		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, false)
-	} else if jobPod.Status.Phase == corev1.PodRunning {
+	case corev1.PodRunning:
 		// if the pod is running and detects a change to the pod (eg, detecting an updated lagoon.sh/buildStep label)
 		// then ship or store the logs
 		// get the build associated to this pod, the information in the resource is used for shipping the logs
 		var lagoonBuild lagooncrd.LagoonBuild
 		err := r.Get(ctx,
 			types.NamespacedName{
-				Namespace: jobPod.ObjectMeta.Namespace,
-				Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+				Namespace: jobPod.Namespace,
+				Name:      jobPod.Labels["lagoon.sh/buildName"],
 			}, &lagoonBuild)
 		if err != nil {
 			return err
 		}
-	}
-	// if the buildpod status is failed or succeeded
-	// mark the build accordingly and ship the information back to lagoon
-	if jobPod.Status.Phase == corev1.PodFailed || jobPod.Status.Phase == corev1.PodSucceeded {
+		// if the buildpod status is failed or succeeded
+		// mark the build accordingly and ship the information back to lagoon
+	case corev1.PodFailed, corev1.PodSucceeded:
 		// get the build associated to this pod, we wil need update it at some point
 		var lagoonBuild lagooncrd.LagoonBuild
 		err := r.Get(ctx,
 			types.NamespacedName{
-				Namespace: jobPod.ObjectMeta.Namespace,
-				Name:      jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+				Namespace: jobPod.Namespace,
+				Name:      jobPod.Labels["lagoon.sh/buildName"],
 			}, &lagoonBuild)
 		if err != nil {
 			return err
 		}
 	}
+
 	// send any messages to lagoon message queues
 	return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, false)
 }
@@ -147,24 +148,24 @@ func (r *BuildMonitorReconciler) buildLogsToLagoonLogs(
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
-		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envName := namespace.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
-		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectName := namespace.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
-		remoteId := string(jobPod.ObjectMeta.UID)
+		remoteId := string(jobPod.UID)
 		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
 			remoteId = value
 		}
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  projectName,
-			Event:    "build-logs:builddeploy-kubernetes:" + jobPod.ObjectMeta.Name,
+			Event:    "build-logs:builddeploy-kubernetes:" + jobPod.Name,
 			Meta: &schema.LagoonLogMeta{
 				EnvironmentID: envID,
 				ProjectID:     projectID,
-				BuildName:     jobPod.ObjectMeta.Name,
+				BuildName:     jobPod.Name,
 				BranchName:    envName,
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
@@ -178,12 +179,12 @@ func (r *BuildMonitorReconciler) buildLogsToLagoonLogs(
 			msg.Message = fmt.Sprintf(`================================================================================
 Logs on pod %s, assigned to node %s on cluster %s
 ================================================================================
-%s`, jobPod.ObjectMeta.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
+%s`, jobPod.Name, jobPod.Spec.NodeName, r.LagoonTargetName, logs)
 		} else {
 			msg.Message = fmt.Sprintf(`========================================
 Logs on pod %s, assigned to cluster %s
 ========================================
-%s`, jobPod.ObjectMeta.Name, r.LagoonTargetName, logs)
+%s`, jobPod.Name, r.LagoonTargetName, logs)
 		}
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
@@ -200,8 +201,8 @@ Logs on pod %s, assigned to cluster %s
 			opLog.Info(
 				fmt.Sprintf(
 					"Published event %s for %s to lagoon-logs exchange",
-					fmt.Sprintf("build-logs:builddeploy-kubernetes:%s", jobPod.ObjectMeta.Name),
-					jobPod.ObjectMeta.Name,
+					fmt.Sprintf("build-logs:builddeploy-kubernetes:%s", jobPod.Name),
+					jobPod.Name,
 				),
 			)
 		}
@@ -234,39 +235,39 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
 			time.AfterFunc(31*time.Second, func() {
 				metrics.BuildRunningStatus.Delete(prometheus.Labels{
-					"build_namespace": jobPod.ObjectMeta.Namespace,
-					"build_name":      jobPod.ObjectMeta.Name,
+					"build_namespace": jobPod.Namespace,
+					"build_name":      jobPod.Name,
 				})
 			})
 			// remove the build from the buildcache
-			_ = r.DockerHost.BuildCache.Remove(jobPod.ObjectMeta.Name)
+			_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		if condition == "running" {
 			if dockerHost, ok := jobPod.Labels["dockerhost.lagoon.sh/name"]; ok {
 				// always ensure that a running pod populates the buildcache
-				_ = r.DockerHost.BuildCache.Add(jobPod.ObjectMeta.Name, dockerHost)
+				_ = r.DockerHost.BuildCache.Add(jobPod.Name, dockerHost)
 			}
 		}
-		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envName := namespace.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
-		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectName := namespace.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
-		remoteId := string(jobPod.ObjectMeta.UID)
+		remoteId := string(jobPod.UID)
 		if value, ok := jobPod.Labels["lagoon.sh/buildRemoteID"]; ok {
 			remoteId = value
 		}
 		msg := schema.LagoonMessage{
 			Type:      "build",
-			Namespace: namespace.ObjectMeta.Name,
+			Namespace: namespace.Name,
 			Meta: &schema.LagoonLogMeta{
 				Environment:   envName,
 				EnvironmentID: envID,
 				Project:       projectName,
 				ProjectID:     projectID,
-				BuildName:     jobPod.ObjectMeta.Name,
+				BuildName:     jobPod.Name,
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
@@ -276,7 +277,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(jobPod.ObjectMeta.Namespace),
+			client.InNamespace(jobPod.Namespace),
 			client.MatchingLabelsSelector{
 				Selector: labels.NewSelector().Add(*labelRequirements1),
 			},
@@ -289,14 +290,14 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			for _, deployment := range depList.Items {
 				var serviceName, serviceType string
 				containers := []schema.ServiceContainer{}
-				if name, ok := deployment.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+				if name, ok := deployment.Labels["lagoon.sh/service"]; ok {
 					serviceName = name
 					serviceNames = append(serviceNames, serviceName)
 					for _, container := range deployment.Spec.Template.Spec.Containers {
 						containers = append(containers, schema.ServiceContainer{Name: container.Name})
 					}
 				}
-				if sType, ok := deployment.ObjectMeta.Labels["lagoon.sh/service-type"]; ok {
+				if sType, ok := deployment.Labels["lagoon.sh/service-type"]; ok {
 					serviceType = sType
 				}
 				// probably need to collect dbaas consumers too at some stage
@@ -344,7 +345,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			opLog.Info(
 				fmt.Sprintf(
 					"Published build update message for %s to lagoon-tasks:controller queue",
-					jobPod.ObjectMeta.Name,
+					jobPod.Name,
 				),
 			)
 		}
@@ -373,22 +374,22 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 		if value, ok := jobPod.Labels["lagoon.sh/buildStep"]; ok {
 			buildStep = value
 		}
-		envName := namespace.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envName := namespace.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := namespace.ObjectMeta.Labels["lagoon.sh/project"]
-		pID, _ := strconv.Atoi(namespace.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectName := namespace.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  projectName,
-			Event:    "task:builddeploy-kubernetes:" + condition, //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:builddeploy-kubernetes:" + condition, // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				EnvironmentID: envID,
 				ProjectID:     projectID,
 				ProjectName:   projectName,
 				BranchName:    envName,
-				BuildName:     jobPod.ObjectMeta.Name,
+				BuildName:     jobPod.Name,
 				BuildStatus:   condition, // same as buildstatus label
 				BuildStep:     buildStep,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
@@ -408,7 +409,7 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 		msg.Message = fmt.Sprintf("*[%s]* `%s` Build `%s` %s <%s|Logs>%s%s",
 			projectName,
 			envName,
-			jobPod.ObjectMeta.Name,
+			jobPod.Name,
 			string(jobPod.Status.Phase),
 			lagoonBuild.Spec.Project.UILink,
 			addRoute,
@@ -429,7 +430,7 @@ func (r *BuildMonitorReconciler) buildStatusLogsToLagoonLogs(
 				fmt.Sprintf(
 					"Published event %s for %s to lagoon-logs exchange",
 					fmt.Sprintf("task:builddeploy-kubernetes:%s", condition),
-					jobPod.ObjectMeta.Name,
+					jobPod.Name,
 				),
 			)
 		}
@@ -460,7 +461,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 		) {
 			buildCondition = lagooncrd.BuildStatusCancelled
 		}
-		if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
+		if _, ok := lagoonBuild.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
 			collectLogs = false
 		}
 	}
@@ -470,7 +471,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 	}
 
 	namespace := &corev1.Namespace{}
-	if err := r.Get(ctx, types.NamespacedName{Name: jobPod.ObjectMeta.Namespace}, namespace); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: jobPod.Namespace}, namespace); err != nil {
 		if helpers.IgnoreNotFound(err) != nil {
 			return err
 		}
@@ -484,7 +485,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 		opLog.Info(
 			fmt.Sprintf(
 				"Updating build status for %s to %v/%v",
-				jobPod.ObjectMeta.Labels["lagoon.sh/buildName"],
+				jobPod.Labels["lagoon.sh/buildName"],
 				buildCondition,
 				buildStep,
 			),
@@ -560,7 +561,7 @@ Build %s
 		if cancel {
 			if err := r.Get(ctx, req.NamespacedName, &jobPod); err == nil {
 				if r.EnableDebug {
-					opLog.Info(fmt.Sprintf("Build pod exists %s", jobPod.ObjectMeta.Name))
+					opLog.Info(fmt.Sprintf("Build pod exists %s", jobPod.Name))
 				}
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err

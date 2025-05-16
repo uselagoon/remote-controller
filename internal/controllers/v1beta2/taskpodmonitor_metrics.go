@@ -23,7 +23,7 @@ func (r *TaskMonitorReconciler) calculateTaskMetrics(ctx context.Context) error 
 	runningTasks := float64(0)
 	for _, taskPod := range taskPods.Items {
 		if taskPod.Status.Phase == corev1.PodRunning {
-			runningTasks = runningTasks + 1
+			runningTasks += 1
 		}
 	}
 	metrics.TasksRunningGauge.Set(runningTasks)

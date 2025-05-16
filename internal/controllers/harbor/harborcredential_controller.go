@@ -38,15 +38,15 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	// check if the credentials need to be force rotated
-	value, ok := harborSecret.ObjectMeta.Labels["harbor.lagoon.sh/force-rotate"]
+	value, ok := harborSecret.Labels["harbor.lagoon.sh/force-rotate"]
 	if ok && value == "true" {
-		opLog.Info(fmt.Sprintf("Rotating harbor credentials for namespace %s", harborSecret.ObjectMeta.Namespace))
+		opLog.Info(fmt.Sprintf("Rotating harbor credentials for namespace %s", harborSecret.Namespace))
 		lagoonHarbor, err := harbor.New(r.Harbor)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
 		}
 		var ns corev1.Namespace
-		if err := r.Get(ctx, types.NamespacedName{Name: harborSecret.ObjectMeta.Namespace}, &ns); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: harborSecret.Namespace}, &ns); err != nil {
 			return ctrl.Result{}, helpers.IgnoreNotFound(err)
 		}
 		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, ns, true)
@@ -55,7 +55,7 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, fmt.Errorf("error rotating robot credential was: %v", err)
 		}
 		if rotated {
-			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns.Name))
 		}
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

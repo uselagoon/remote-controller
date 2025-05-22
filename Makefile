@@ -129,6 +129,26 @@ helm/repos: local-dev/helm
 	$(HELM) repo add metallb https://metallb.github.io/metallb
 	$(HELM) repo update
 
+ARCH := $(shell uname | tr '[:upper:]' '[:lower:]')
+
+KIND = $(realpath ./local-dev/kind)
+KIND_VERSION = v0.25.0
+
+.PHONY: local-dev/kind
+local-dev/kind:
+ifeq ($(KIND_VERSION), $(shell kind version 2>/dev/null | sed -nE 's/kind (v[0-9.]+).*/\1/p'))
+	$(info linking local kind version $(KIND_VERSION))
+	ln -sf $(shell command -v kind) ./local-dev/kind
+else
+ifneq ($(KIND_VERSION), $(shell ./local-dev/kind version 2>/dev/null | sed -nE 's/kind (v[0-9.]+).*/\1/p'))
+	$(info downloading kind version $(KIND_VERSION) for $(ARCH))
+	mkdir -p local-dev
+	rm local-dev/kind || true
+	curl -sSLo local-dev/kind https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-$(ARCH)-amd64
+	chmod a+x local-dev/kind
+endif
+endif
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -408,9 +428,6 @@ kind/clean:
 test-e2e: build-task-image generate-broker-certs
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	($(KUBECTL) create namespace remote-controller-system || echo "namespace exists") && \
-	($(KUBECTL) -n remote-controller-system delete secret lagoon-broker-tls || echo "lagoon-broker-tls doesn't exist, ignoring") && \
-	$(KUBECTL) -n remote-controller-system create secret generic lagoon-broker-tls --from-file=tls.crt=local-dev/certificates/clienttls.crt --from-file=tls.key=local-dev/certificates/clienttls.key --from-file=ca.crt=local-dev/certificates/ca.crt && \
 	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e

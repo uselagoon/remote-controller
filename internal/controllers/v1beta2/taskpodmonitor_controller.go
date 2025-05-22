@@ -64,16 +64,16 @@ func (r *TaskMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err != nil {
 		opLog.Error(err, "Unable to generate metrics.")
 	}
-	if jobPod.ObjectMeta.DeletionTimestamp.IsZero() {
+	if jobPod.DeletionTimestamp.IsZero() {
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
 	}
 	// pod deletion request came through, check if this is an activestandby task, if it is, delete the activestandby role
-	if value, ok := jobPod.ObjectMeta.Labels["lagoon.sh/activeStandby"]; ok {
+	if value, ok := jobPod.Labels["lagoon.sh/activeStandby"]; ok {
 		isActiveStandby, _ := strconv.ParseBool(value)
 		if isActiveStandby {
 			var destinationNamespace string
-			if value, ok := jobPod.ObjectMeta.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
+			if value, ok := jobPod.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
 				destinationNamespace = value
 			}
 			err := r.deleteActiveStandbyRole(ctx, destinationNamespace)
@@ -120,7 +120,7 @@ func (r *TaskMonitorReconciler) deleteActiveStandbyRole(ctx context.Context, des
 		Name:      "lagoon-deployer-activestandby",
 	}, activeStandbyRoleBinding)
 	if err != nil {
-		helpers.IgnoreNotFound(err)
+		_ = helpers.IgnoreNotFound(err)
 	}
 	err = r.Delete(ctx, activeStandbyRoleBinding)
 	if err != nil {

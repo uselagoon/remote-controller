@@ -29,7 +29,7 @@ func (r *LagoonTaskReconciler) qosTaskProcessor(ctx context.Context,
 	}
 	// handle the QoS task process here
 	// if the task is already running, then there is no need to check which task can be started next
-	if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusRunning.String() {
+	if lagoonTask.Labels["lagoon.sh/taskStatus"] == lagooncrd.TaskStatusRunning.String() {
 		// this is done so that all running state updates don't try to force the queue processor to run unnecessarily
 		// downside is that this can lead to queue/state changes being less frequent for queued tasks in the api
 		// any new tasks, or complete/failed/cancelled tasks will still force the whichtasknext processor to run though
@@ -56,12 +56,14 @@ func (r *LagoonTaskReconciler) whichTaskNext(ctx context.Context, opLog logr.Log
 		if r.EnableDebug {
 			opLog.Info(fmt.Sprintf("Currently %v running tasks, no room for new tasks to be started", len(runningTasks.Items)))
 		}
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, tasksToStart, true)
 		return nil
 	}
 	if tasksToStart > 0 {
 		opLog.Info(fmt.Sprintf("Currently %v running tasks, room for %v tasks to be started", len(runningTasks.Items), tasksToStart))
 		// if there are any free slots to start a task, do that here
+		//nolint:errcheck
 		go r.processQueue(ctx, opLog, tasksToStart, false)
 	}
 	return nil
@@ -110,12 +112,12 @@ func (r *LagoonTaskReconciler) processQueue(ctx context.Context, opLog logr.Logg
 				// if the `limitHit` is not set it means that task qos has reached the maximum that this remote has allowed to start
 				if idx+1 <= tasksToStart && !limitHit {
 					if r.EnableDebug {
-						opLog.Info(fmt.Sprintf("Checking if task %s can be started", pTask.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Checking if task %s can be started", pTask.Name))
 					}
 					// if we do have a `lagoon.sh/taskStatus` set, then process as normal
 					runningNSTasks := &lagooncrd.LagoonTaskList{}
 					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-						client.InNamespace(pTask.ObjectMeta.Namespace),
+						client.InNamespace(pTask.Namespace),
 						client.MatchingLabels(map[string]string{
 							"lagoon.sh/taskStatus": lagooncrd.TaskStatusRunning.String(),
 							"lagoon.sh/controller": r.ControllerNamespace,
@@ -131,7 +133,7 @@ func (r *LagoonTaskReconciler) processQueue(ctx context.Context, opLog logr.Logg
 					if len(runningNSTasks.Items) < r.TaskQoS.MaxNamespaceTasks {
 						pendingTasks := &lagooncrd.LagoonTaskList{}
 						listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-							client.InNamespace(pTask.ObjectMeta.Namespace),
+							client.InNamespace(pTask.Namespace),
 							client.MatchingLabels(map[string]string{"lagoon.sh/taskStatus": lagooncrd.TaskStatusPending.String()}),
 						})
 						if err := r.List(ctx, pendingTasks, listOption); err != nil {
@@ -163,12 +165,12 @@ func (r *LagoonTaskReconciler) processQueue(ctx context.Context, opLog logr.Logg
 					// The object is not being deleted, so if it does not have our finalizer,
 					// then lets add the finalizer and update the object. This is equivalent
 					// registering our finalizer.
-					if !helpers.ContainsString(pTask.ObjectMeta.Finalizers, taskFinalizer) {
-						pTask.ObjectMeta.Finalizers = append(pTask.ObjectMeta.Finalizers, taskFinalizer)
+					if !helpers.ContainsString(pTask.Finalizers, taskFinalizer) {
+						pTask.Finalizers = append(pTask.Finalizers, taskFinalizer)
 						// use patches to avoid update errors
 						mergePatch, _ := json.Marshal(map[string]interface{}{
 							"metadata": map[string]interface{}{
-								"finalizers": pTask.ObjectMeta.Finalizers,
+								"finalizers": pTask.Finalizers,
 							},
 						})
 						if err := r.Patch(ctx, &pTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {

@@ -2,6 +2,7 @@
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10582/badge)](https://www.bestpractices.dev/projects/10582)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/uselagoon/remote-controller/badge)](https://securityscorecards.dev/viewer/?uri=github.com/uselagoon/remote-controller)
+[![coverage](https://raw.githubusercontent.com/uselagoon/remote-controller/badges/.badges/main/coverage.svg)](https://github.com/uselagoon/remote-controller/actions/workflows/coverage.yaml)
 
 This project is comprised of controllers responsible for handling Kubernetes and Openshift build deploy and removal of environments for Lagoon.
 It also handles Lagoon tasks that are triggered via the Lagoon UI, and also more advanced tasks that Lagoon can leverage.

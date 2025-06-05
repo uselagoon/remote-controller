@@ -47,7 +47,7 @@ func (p *Pruner) NamespacePruner() {
 	}
 	for _, x := range nsList.Items {
 		ns := &corev1.Namespace{}
-		//client
+		// client
 		err = p.Client.Get(ctx, client.ObjectKey{Name: x.Name, Namespace: x.Namespace}, ns)
 		if err != nil {
 			opLog.Error(err, fmt.Sprintf("Not able to load namespace %s", x.Name))
@@ -62,7 +62,7 @@ func (p *Pruner) NamespacePruner() {
 				if ierr != nil {
 					opLog.Error(ierr, fmt.Sprintf("Unable to annotate namespace %s with %s", ns.Name, ExpirationPausedLabel))
 				}
-				continue //on to the next NS
+				continue // on to the next NS
 			}
 			expiryDate := time.Unix(i, 0)
 			if expiryDate.Before(time.Now()) {

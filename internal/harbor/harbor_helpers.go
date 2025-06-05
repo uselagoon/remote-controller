@@ -124,13 +124,13 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 		secret.Data = map[string][]byte{
 			corev1.DockerConfigJsonKey: authsBytes,
 		}
-		secret.ObjectMeta.Labels = map[string]string{
+		secret.Labels = map[string]string{
 			"lagoon.sh/controller":        h.ControllerNamespace,
 			"lagoon.sh/harbor-credential": "true",
 		}
 		err := cl.Create(ctx, secret)
 		if err != nil {
-			return false, fmt.Errorf("could not create secret %s/%s: %s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name, err.Error())
+			return false, fmt.Errorf("could not create secret %s/%s: %s", secret.Namespace, secret.Name, err.Error())
 		}
 		// return true that the credential was created
 		return true, nil
@@ -141,16 +141,16 @@ func (h *Harbor) UpsertHarborSecret(ctx context.Context, cl client.Client, ns, n
 		corev1.DockerConfigJsonKey: authsBytes,
 	}
 	// add the controller label if it doesn't exist
-	if _, ok := secret.ObjectMeta.Labels["lagoon.sh/controller"]; !ok {
-		if secret.ObjectMeta.Labels == nil {
-			secret.ObjectMeta.Labels = map[string]string{}
+	if _, ok := secret.Labels["lagoon.sh/controller"]; !ok {
+		if secret.Labels == nil {
+			secret.Labels = map[string]string{}
 		}
-		secret.ObjectMeta.Labels["lagoon.sh/controller"] = h.ControllerNamespace
-		secret.ObjectMeta.Labels["lagoon.sh/harbor-credential"] = "true"
+		secret.Labels["lagoon.sh/controller"] = h.ControllerNamespace
+		secret.Labels["lagoon.sh/harbor-credential"] = "true"
 	}
 	err = cl.Update(ctx, secret)
 	if err != nil {
-		return false, fmt.Errorf("could not update secret: %s/%s", secret.ObjectMeta.Namespace, secret.ObjectMeta.Name)
+		return false, fmt.Errorf("could not update secret: %s/%s", secret.Namespace, secret.Name)
 	}
 	return true, nil
 }

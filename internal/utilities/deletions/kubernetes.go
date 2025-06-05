@@ -39,7 +39,7 @@ func (d *Deletions) DeleteIngress(ctx context.Context, opLog logr.Logger, ns, pr
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete ingress %s in %s for project %s, environment %s",
-					ing.ObjectMeta.Name,
+					ing.Name,
 					ns,
 					project,
 					environment,
@@ -50,7 +50,7 @@ func (d *Deletions) DeleteIngress(ctx context.Context, opLog logr.Logger, ns, pr
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted ingress %s in  %s for project %s, environment %s",
-				ing.ObjectMeta.Name,
+				ing.Name,
 				ns,
 				project,
 				environment,
@@ -82,7 +82,7 @@ func (d *Deletions) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete deployment %s in %s for project %s, environment %s",
-					dep.ObjectMeta.Name,
+					dep.Name,
 					ns,
 					project,
 					environment,
@@ -93,7 +93,7 @@ func (d *Deletions) DeleteDeployments(ctx context.Context, opLog logr.Logger, ns
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted deployment %s in  %s for project %s, environment %s",
-				dep.ObjectMeta.Name,
+				dep.Name,
 				ns,
 				project,
 				environment,
@@ -125,7 +125,7 @@ func (d *Deletions) DeleteStatefulSets(ctx context.Context, opLog logr.Logger, n
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete statefulset %s in %s for project %s, environment %s",
-					ss.ObjectMeta.Name,
+					ss.Name,
 					ns,
 					project,
 					environment,
@@ -136,7 +136,7 @@ func (d *Deletions) DeleteStatefulSets(ctx context.Context, opLog logr.Logger, n
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted statefulset %s in  %s for project %s, environment %s",
-				ss.ObjectMeta.Name,
+				ss.Name,
 				ns,
 				project,
 				environment,
@@ -168,7 +168,7 @@ func (d *Deletions) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete daemonset %s in %s for project %s, environment %s",
-					ds.ObjectMeta.Name,
+					ds.Name,
 					ns,
 					project,
 					environment,
@@ -179,7 +179,7 @@ func (d *Deletions) DeleteDaemonSets(ctx context.Context, opLog logr.Logger, ns,
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted daemonset %s in  %s for project %s, environment %s",
-				ds.ObjectMeta.Name,
+				ds.Name,
 				ns,
 				project,
 				environment,
@@ -211,7 +211,7 @@ func (d *Deletions) DeleteJobs(ctx context.Context, opLog logr.Logger, ns, proje
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete jobs %s in %s for project %s, environment %s",
-					ds.ObjectMeta.Name,
+					ds.Name,
 					ns,
 					project,
 					environment,
@@ -222,7 +222,7 @@ func (d *Deletions) DeleteJobs(ctx context.Context, opLog logr.Logger, ns, proje
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted jobs %s in  %s for project %s, environment %s",
-				ds.ObjectMeta.Name,
+				ds.Name,
 				ns,
 				project,
 				environment,
@@ -254,7 +254,7 @@ func (d *Deletions) DeletePods(ctx context.Context, opLog logr.Logger, ns, proje
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete pods %s in %s for project %s, environment %s",
-					ds.ObjectMeta.Name,
+					ds.Name,
 					ns,
 					project,
 					environment,
@@ -265,7 +265,7 @@ func (d *Deletions) DeletePods(ctx context.Context, opLog logr.Logger, ns, proje
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted pods %s in  %s for project %s, environment %s",
-				ds.ObjectMeta.Name,
+				ds.Name,
 				ns,
 				project,
 				environment,
@@ -297,7 +297,7 @@ func (d *Deletions) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Unable to delete pvc %s in %s for project %s, environment %s",
-					pvc.ObjectMeta.Name,
+					pvc.Name,
 					ns,
 					project,
 					environment,
@@ -308,7 +308,7 @@ func (d *Deletions) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted pvc %s in  %s for project %s, environment %s",
-				pvc.ObjectMeta.Name,
+				pvc.Name,
 				ns,
 				project,
 				environment,
@@ -320,7 +320,7 @@ func (d *Deletions) DeletePVCs(ctx context.Context, opLog logr.Logger, ns, proje
 			opLog.Error(err,
 				fmt.Sprintf(
 					"Waited for pvc %s to delete in %s for project %s, environment %s, but it was not deleted in time",
-					pvc.ObjectMeta.Name,
+					pvc.Name,
 					ns,
 					project,
 					environment,
@@ -338,7 +338,7 @@ func (d *Deletions) DeleteNamespace(ctx context.Context, opLog logr.Logger, name
 		opLog.Error(err,
 			fmt.Sprintf(
 				"Unable to delete namespace %s for project %s, environment %s",
-				namespace.ObjectMeta.Name,
+				namespace.Name,
 				project,
 				environment,
 			),
@@ -354,16 +354,16 @@ func (d *Deletions) CheckPVCExists(ctx context.Context, opLog logr.Logger, pvc *
 	err := try.Do(func(attempt int) (bool, error) {
 		var pvcErr error
 		err := d.Client.Get(ctx, types.NamespacedName{
-			Namespace: pvc.ObjectMeta.Namespace,
-			Name:      pvc.ObjectMeta.Name,
+			Namespace: pvc.Namespace,
+			Name:      pvc.Name,
 		}, pvc)
 		if err != nil {
 			// the pvc doesn't exist anymore, so exit the retry
 			pvcErr = nil
-			opLog.Info(fmt.Sprintf("persistent volume claim %s in %s deleted", pvc.ObjectMeta.Name, pvc.ObjectMeta.Namespace))
+			opLog.Info(fmt.Sprintf("persistent volume claim %s in %s deleted", pvc.Name, pvc.Namespace))
 		} else {
 			// if the pvc still exists wait 10 seconds before trying again
-			msg := fmt.Sprintf("persistent volume claim %s in %s still exists", pvc.ObjectMeta.Name, pvc.ObjectMeta.Namespace)
+			msg := fmt.Sprintf("persistent volume claim %s in %s still exists", pvc.Name, pvc.Namespace)
 			pvcErr = fmt.Errorf("%s: %v", msg, err)
 			opLog.Info(msg)
 		}

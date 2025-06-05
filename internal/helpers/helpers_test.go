@@ -245,7 +245,7 @@ func TestGetLagoonFeatureFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for e, v := range tt.set {
-				os.Setenv(e, v)
+				_ = os.Setenv(e, v)
 			}
 			if got := GetLagoonFeatureFlags(); !reflect.DeepEqual(got, tt.want) {
 				for e := range tt.set {
@@ -254,7 +254,7 @@ func TestGetLagoonFeatureFlags(t *testing.T) {
 				t.Errorf("GetLagoonFeatureFlags() = %v, want %v", got, tt.want)
 			}
 			for e := range tt.set {
-				os.Unsetenv(e)
+				_ = os.Unsetenv(e)
 			}
 		})
 	}

@@ -75,7 +75,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
-	if lagoonTask.ObjectMeta.DeletionTimestamp.IsZero() {
+	if lagoonTask.DeletionTimestamp.IsZero() {
 		if r.LFFTaskQoSEnabled {
 			// handle QoS tasks here
 			// if we do have a `lagoon.sh/taskStatus` set as running, then process it
@@ -93,13 +93,13 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 			for _, runningTask := range runningNSTasks.Items {
 				// if the running task is the one from this request then process it
-				if lagoonTask.ObjectMeta.Name == runningTask.ObjectMeta.Name {
+				if lagoonTask.Name == runningTask.Name {
 					// actually process the task here
-					if _, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStarted"]; !ok {
-						if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
+					if _, ok := lagoonTask.Labels["lagoon.sh/taskStarted"]; !ok {
+						if lagoonTask.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
 							return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 						}
-						if lagoonTask.ObjectMeta.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeAdvanced.String() {
+						if lagoonTask.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeAdvanced.String() {
 							return ctrl.Result{}, r.createAdvancedTask(ctx, &lagoonTask, opLog)
 						}
 					}
@@ -110,26 +110,23 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		// if qos is not enabled, just process it as a standard task
 		return r.standardTaskProcessor(ctx, opLog, lagoonTask)
-	} else {
-		// The object is being deleted
-		if helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(ctx, &lagoonTask, req.NamespacedName.Namespace); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-			// remove our finalizer from the list and update it.
-			lagoonTask.ObjectMeta.Finalizers = helpers.RemoveString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
-			// use patches to avoid update errors
-			mergePatch, _ := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"finalizers": lagoonTask.ObjectMeta.Finalizers,
-				},
-			})
-			if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-				return ctrl.Result{}, err
-			}
+	} else if helpers.ContainsString(lagoonTask.Finalizers, taskFinalizer) {
+		// our finalizer is present, so lets handle any external dependency
+		if err := r.deleteExternalResources(ctx, &lagoonTask, req.Namespace); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried
+			return ctrl.Result{}, err
+		}
+		// remove our finalizer from the list and update it.
+		lagoonTask.Finalizers = helpers.RemoveString(lagoonTask.Finalizers, taskFinalizer)
+		// use patches to avoid update errors
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"finalizers": lagoonTask.Finalizers,
+			},
+		})
+		if err := r.Patch(ctx, &lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -155,7 +152,7 @@ func (r *LagoonTaskReconciler) deleteExternalResources(_ context.Context, _ *lag
 func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonTask *lagooncrd.LagoonTask) (*corev1.Pod, error) {
 	deployments := &appsv1.DeploymentList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(lagoonTask.ObjectMeta.Namespace),
+		client.InNamespace(lagoonTask.Namespace),
 	})
 	err := r.List(ctx, deployments, listOption)
 	if err != nil {
@@ -167,11 +164,9 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 		)
 	}
 	if len(deployments.Items) > 0 {
-		hasService := false
 		for _, dep := range deployments.Items {
 			// grab the deployment that contains the task service we want to use
-			if dep.ObjectMeta.Name == lagoonTask.Spec.Task.Service {
-				hasService = true
+			if dep.Name == lagoonTask.Spec.Task.Service {
 				// grab the container
 				for idx, depCon := range dep.Spec.Template.Spec.Containers {
 					// --- deprecate these at some point in favor of the `LAGOON_CONFIG_X` variants
@@ -297,11 +292,11 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				}
 				taskPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      lagoonTask.ObjectMeta.Name,
-						Namespace: lagoonTask.ObjectMeta.Namespace,
+						Name:      lagoonTask.Name,
+						Namespace: lagoonTask.Namespace,
 						Labels: map[string]string{
 							"lagoon.sh/jobType":     "task",
-							"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
+							"lagoon.sh/taskName":    lagoonTask.Name,
 							"crd.lagoon.sh/version": crdVersion,
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						},
@@ -309,7 +304,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							{
 								APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 								Kind:       "LagoonTask",
-								Name:       lagoonTask.ObjectMeta.Name,
+								Name:       lagoonTask.Name,
 								UID:        lagoonTask.UID,
 							},
 						},
@@ -318,26 +313,24 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				}
 				// set the organization labels on task pods
 				if lagoonTask.Spec.Project.Organization != nil {
-					taskPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
-					taskPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+					taskPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
+					taskPod.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
 				}
 				return taskPod, nil
 			}
 		}
-		if !hasService {
-			return nil, fmt.Errorf(
-				"no matching service %s for project %s, environment %s: %v",
-				lagoonTask.Spec.Task.Service,
-				lagoonTask.Spec.Project.Name,
-				lagoonTask.Spec.Environment.Name,
-				err,
-			)
-		}
+		return nil, fmt.Errorf(
+			"no matching service %s for project %s, environment %s: %v",
+			lagoonTask.Spec.Task.Service,
+			lagoonTask.Spec.Project.Name,
+			lagoonTask.Spec.Environment.Name,
+			err,
+		)
 	}
 	// no deployments found return error
 	return nil, fmt.Errorf(
 		"no deployments %s for project %s, environment %s: %v",
-		lagoonTask.ObjectMeta.Namespace,
+		lagoonTask.Namespace,
 		lagoonTask.Spec.Project.Name,
 		lagoonTask.Spec.Environment.Name,
 		err,
@@ -345,24 +338,22 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 }
 
 func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTask *lagooncrd.LagoonTask, opLog logr.Logger) error {
-	newTaskPod := &corev1.Pod{}
 	var err error
-
-	newTaskPod, err = r.getTaskPodDeployment(ctx, lagoonTask)
+	newTaskPod, err := r.getTaskPodDeployment(ctx, lagoonTask)
 	if err != nil {
 		opLog.Info(fmt.Sprintf("%v", err))
-		//@TODO: send msg back and update task to failed?
+		// @TODO: send msg back and update task to failed?
 		return nil
 	}
-	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Checking task pod for: %s", lagoonTask.Name))
 	// once the pod spec has been defined, check if it isn't already created
 	err = r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonTask.ObjectMeta.Namespace,
-		Name:      newTaskPod.ObjectMeta.Name,
+		Namespace: lagoonTask.Namespace,
+		Name:      newTaskPod.Name,
 	}, newTaskPod)
 	if err != nil {
 		// if it doesn't exist, then create the task pod
-		opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Creating task pod for: %s", lagoonTask.Name))
 		// create the task pod
 		if err := r.Create(ctx, newTaskPod); err != nil {
 			opLog.Info(
@@ -373,26 +364,26 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 					err,
 				),
 			)
-			//@TODO: send msg back and update task to failed?
+			// @TODO: send msg back and update task to failed?
 			return nil
 		}
 		metrics.TaskRunningStatus.With(prometheus.Labels{
-			"task_namespace": lagoonTask.ObjectMeta.Namespace,
-			"task_name":      lagoonTask.ObjectMeta.Name,
+			"task_namespace": lagoonTask.Namespace,
+			"task_name":      lagoonTask.Name,
 		}).Set(1)
 		metrics.TasksStartedCounter.Inc()
 	} else {
-		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.Name))
 	}
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !helpers.ContainsString(lagoonTask.ObjectMeta.Finalizers, taskFinalizer) {
-		lagoonTask.ObjectMeta.Finalizers = append(lagoonTask.ObjectMeta.Finalizers, taskFinalizer)
+	if !helpers.ContainsString(lagoonTask.Finalizers, taskFinalizer) {
+		lagoonTask.Finalizers = append(lagoonTask.Finalizers, taskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
-				"finalizers": lagoonTask.ObjectMeta.Finalizers,
+				"finalizers": lagoonTask.Finalizers,
 			},
 		})
 		if err := r.Patch(ctx, lagoonTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
@@ -408,14 +399,14 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	additionalLabels := map[string]string{}
 
 	// check if this is an activestandby task, if it is, create the activestandby role
-	if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandby"]; ok {
+	if value, ok := lagoonTask.Labels["lagoon.sh/activeStandby"]; ok {
 		isActiveStandby, _ := strconv.ParseBool(value)
 		if isActiveStandby {
 			var sourceNamespace, destinationNamespace string
-			if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandbySourceNamespace"]; ok {
+			if value, ok := lagoonTask.Labels["lagoon.sh/activeStandbySourceNamespace"]; ok {
 				sourceNamespace = value
 			}
-			if value, ok := lagoonTask.ObjectMeta.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
+			if value, ok := lagoonTask.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
 				destinationNamespace = value
 			}
 			// create the role + binding to allow the service account to interact with both namespaces
@@ -453,7 +444,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	if lagoonTask.Spec.AdvancedTask.DeployerToken {
 		// if this advanced task can access kubernetes, mount the token in
 		serviceAccount := &corev1.ServiceAccount{}
-		err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.ObjectMeta.Namespace)
+		err := r.getServiceAccount(ctx, serviceAccount, lagoonTask.Namespace)
 		if err != nil {
 			return err
 		}
@@ -486,7 +477,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			})
 		}
 	}
-	opLog.Info(fmt.Sprintf("Checking advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Checking advanced task pod for: %s", lagoonTask.Name))
 	// once the pod spec has been defined, check if it isn't already created
 	podEnvs := []corev1.EnvVar{
 		{
@@ -495,11 +486,11 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		},
 		{
 			Name:  "NAMESPACE",
-			Value: lagoonTask.ObjectMeta.Namespace,
+			Value: lagoonTask.Namespace,
 		},
 		{
 			Name:  "PODNAME",
-			Value: lagoonTask.ObjectMeta.Name,
+			Value: lagoonTask.Name,
 		},
 		{
 			Name:  "LAGOON_PROJECT",
@@ -568,17 +559,17 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 	}
 	newPod := &corev1.Pod{}
 	err := r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonTask.ObjectMeta.Namespace,
-		Name:      lagoonTask.ObjectMeta.Name,
+		Namespace: lagoonTask.Namespace,
+		Name:      lagoonTask.Name,
 	}, newPod)
 	if err != nil {
 		newPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      lagoonTask.ObjectMeta.Name,
-				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Name:      lagoonTask.Name,
+				Namespace: lagoonTask.Namespace,
 				Labels: map[string]string{
 					"lagoon.sh/jobType":     "task",
-					"lagoon.sh/taskName":    lagoonTask.ObjectMeta.Name,
+					"lagoon.sh/taskName":    lagoonTask.Name,
 					"crd.lagoon.sh/version": crdVersion,
 					"lagoon.sh/controller":  r.ControllerNamespace,
 				},
@@ -586,7 +577,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					{
 						APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 						Kind:       "LagoonTask",
-						Name:       lagoonTask.ObjectMeta.Name,
+						Name:       lagoonTask.Name,
 						UID:        lagoonTask.UID,
 					},
 				},
@@ -608,19 +599,19 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		// check if the lagoon-env secret(s) exist and mount them to the pod as required, or fall back to the configmap
 		lagoonEnvSecret := &corev1.Secret{}
 		err := r.Get(ctx, types.NamespacedName{
-			Namespace: lagoonTask.ObjectMeta.Namespace,
+			Namespace: lagoonTask.Namespace,
 			Name:      "lagoon-env",
 		}, lagoonEnvSecret)
 		if err != nil {
 			// fall back to check if the lagoon-env configmap exists
 			lagoonEnvConfigMap := &corev1.ConfigMap{}
 			err := r.Get(ctx, types.NamespacedName{
-				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Namespace: lagoonTask.Namespace,
 				Name:      "lagoon-env",
 			}, lagoonEnvConfigMap)
 			if err != nil {
 				// just log the warning
-				opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap %s", lagoonTask.ObjectMeta.Namespace))
+				opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap %s", lagoonTask.Namespace))
 			} else {
 				// add the lagoon-env configmap to the build-pod
 				newPod.Spec.Containers[0].EnvFrom = append(newPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
@@ -635,12 +626,12 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			// else check the platform env secret exists
 			lagoonPlatformEnvSecret := &corev1.Secret{}
 			err := r.Get(ctx, types.NamespacedName{
-				Namespace: lagoonTask.ObjectMeta.Namespace,
+				Namespace: lagoonTask.Namespace,
 				Name:      "lagoon-platform-env",
 			}, lagoonPlatformEnvSecret)
 			if err != nil {
 				// just log the warning
-				opLog.Info(fmt.Sprintf("no lagoon-platform-env secret %s", lagoonTask.ObjectMeta.Namespace))
+				opLog.Info(fmt.Sprintf("no lagoon-platform-env secret %s", lagoonTask.Namespace))
 			} else {
 				// add the lagoon-platform-env secret to the build-pod
 				newPod.Spec.Containers[0].EnvFrom = append(newPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
@@ -661,18 +652,18 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			})
 		}
 		if lagoonTask.Spec.Project.Organization != nil {
-			newPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
-			newPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+			newPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
+			newPod.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
 		}
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it
 			newPod.Spec.ServiceAccountName = "lagoon-deployer"
 		}
-		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.Name))
 
-		//Decorate the pod spec with additional details
+		// Decorate the pod spec with additional details
 
-		//dynamic secrets
+		// dynamic secrets
 		secrets, err := getSecretsForNamespace(r.Client, lagoonTask.Namespace)
 		secrets = filterDynamicSecrets(secrets)
 		if err != nil {
@@ -693,7 +684,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			}
 			newPod.Spec.Volumes = append(newPod.Spec.Volumes, v)
 
-			//now add the volume mount
+			// now add the volume mount
 			vm := corev1.VolumeMount{
 				Name:      volumeMountName,
 				ReadOnly:  true,
@@ -715,12 +706,12 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			return err
 		}
 		metrics.TaskRunningStatus.With(prometheus.Labels{
-			"task_namespace": lagoonTask.ObjectMeta.Namespace,
-			"task_name":      lagoonTask.ObjectMeta.Name,
+			"task_namespace": lagoonTask.Namespace,
+			"task_name":      lagoonTask.Name,
 		}).Set(1)
 		metrics.TasksStartedCounter.Inc()
 	} else {
-		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.Name))
 	}
 	return nil
 }

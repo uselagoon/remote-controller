@@ -73,7 +73,7 @@ func DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, cl client.Client,
 			opLog.Error(err,
 				fmt.Sprintf(
 					"unable to delete lagoon task %s in %s for project %s, environment %s",
-					lagoonTask.ObjectMeta.Name,
+					lagoonTask.Name,
 					ns,
 					project,
 					environment,
@@ -84,7 +84,7 @@ func DeleteLagoonTasks(ctx context.Context, opLog logr.Logger, cl client.Client,
 		opLog.Info(
 			fmt.Sprintf(
 				"Deleted lagoon task %s in  %s for project %s, environment %s",
-				lagoonTask.ObjectMeta.Name,
+				lagoonTask.Name,
 				ns,
 				project,
 				environment,
@@ -111,13 +111,13 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pruner", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pruner", ns.Name))
 			continue
 		}
-		opLog.Info(fmt.Sprintf("Checking LagoonTasks in namespace %s", ns.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking LagoonTasks in namespace %s", ns.Name))
 		lagoonTasks := &LagoonTaskList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
+			client.InNamespace(ns.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/controller": cns, // created by this controller
 			}),
@@ -128,16 +128,16 @@ func LagoonTaskPruner(ctx context.Context, cl client.Client, cns string, tasksTo
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(lagoonTasks.Items, func(i, j int) bool {
-			return lagoonTasks.Items[i].ObjectMeta.CreationTimestamp.After(lagoonTasks.Items[j].ObjectMeta.CreationTimestamp.Time)
+			return lagoonTasks.Items[i].CreationTimestamp.After(lagoonTasks.Items[j].CreationTimestamp.Time)
 		})
 		if len(lagoonTasks.Items) > tasksToKeep {
 			for idx, lagoonTask := range lagoonTasks.Items {
 				if idx >= tasksToKeep {
 					if helpers.ContainsString(
 						TaskCompletedCancelledFailedStatus,
-						lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"],
+						lagoonTask.Labels["lagoon.sh/taskStatus"],
 					) {
-						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Cleaning up LagoonTask %s", lagoonTask.Name))
 						if err := cl.Delete(ctx, &lagoonTask); err != nil {
 							opLog.Error(err, "unable to update status condition")
 							break
@@ -166,13 +166,13 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 	for _, ns := range namespaces.Items {
 		if ns.Status.Phase == corev1.NamespaceTerminating {
 			// if the namespace is terminating, don't try to renew the robot credentials
-			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod pruner", ns.ObjectMeta.Name))
+			opLog.Info(fmt.Sprintf("Namespace %s is being terminated, aborting task pod pruner", ns.Name))
 			return
 		}
-		opLog.Info(fmt.Sprintf("Checking Lagoon task pods in namespace %s", ns.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking Lagoon task pods in namespace %s", ns.Name))
 		taskPods := &corev1.PodList{}
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(ns.ObjectMeta.Name),
+			client.InNamespace(ns.Name),
 			client.MatchingLabels(map[string]string{
 				"lagoon.sh/jobType":    "task",
 				"lagoon.sh/controller": cns, // created by this controller
@@ -184,14 +184,14 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 		}
 		// sort the build pods by creation timestamp
 		sort.Slice(taskPods.Items, func(i, j int) bool {
-			return taskPods.Items[i].ObjectMeta.CreationTimestamp.After(taskPods.Items[j].ObjectMeta.CreationTimestamp.Time)
+			return taskPods.Items[i].CreationTimestamp.After(taskPods.Items[j].CreationTimestamp.Time)
 		})
 		if len(taskPods.Items) > taskPodsToKeep {
 			for idx, pod := range taskPods.Items {
 				if idx >= taskPodsToKeep {
 					if pod.Status.Phase == corev1.PodFailed ||
 						pod.Status.Phase == corev1.PodSucceeded {
-						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.ObjectMeta.Name))
+						opLog.Info(fmt.Sprintf("Cleaning up pod %s", pod.Name))
 						if err := cl.Delete(ctx, &pod); err != nil {
 							opLog.Error(err, "unable to delete pod")
 							break
@@ -204,7 +204,7 @@ func TaskPodPruner(ctx context.Context, cl client.Client, cns string, taskPodsTo
 }
 
 func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error) {
-	//@TODO: use `taskName` in the future only
+	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", taskSpec.Task.ID, helpers.HashString(taskSpec.Task.ID)[0:6])
 	if taskSpec.Task.TaskName != "" {
 		taskName = taskSpec.Task.TaskName
@@ -243,9 +243,9 @@ func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error)
 func CancelTask(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 	jobSpec := &LagoonTaskSpec{}
-	json.Unmarshal(body, jobSpec)
+	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
-	//@TODO: use `taskName` in the future only
+	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
 	if jobSpec.Task.TaskName != "" {
 		taskName = jobSpec.Task.TaskName
@@ -270,7 +270,7 @@ func CancelTask(ctx context.Context, cl client.Client, namespace string, body []
 		}
 		// as there is no task pod, but there is a lagoon task resource
 		// update it to cancelled so that the controller doesn't try to run it
-		lagoonTask.ObjectMeta.Labels["lagoon.sh/taskStatus"] = TaskStatusCancelled.String()
+		lagoonTask.Labels["lagoon.sh/taskStatus"] = TaskStatusCancelled.String()
 		if err := cl.Update(ctx, &lagoonTask); err != nil {
 			opLog.Error(err,
 				fmt.Sprintf(
@@ -284,7 +284,7 @@ func CancelTask(ctx context.Context, cl client.Client, namespace string, body []
 		b, err := updateLagoonTask(namespace, *jobSpec)
 		return true, b, err
 	}
-	jobPod.ObjectMeta.Labels["lagoon.sh/cancelTask"] = "true"
+	jobPod.Labels["lagoon.sh/cancelTask"] = "true"
 	if err := cl.Update(ctx, &jobPod); err != nil {
 		opLog.Error(err,
 			fmt.Sprintf(

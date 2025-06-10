@@ -18,7 +18,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	// this means it was created by the message queue handler
 	// so we should do the steps required for a lagoon build and then copy the build
 	// into the created namespace
-	if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStatus"]; !ok {
+	if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; !ok {
 		return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
 	}
 
@@ -37,9 +37,9 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	}
 	for _, runningBuild := range runningBuilds.Items {
 		// if the running build is the one from this request then process it
-		if lagoonBuild.ObjectMeta.Name == runningBuild.ObjectMeta.Name {
+		if lagoonBuild.Name == runningBuild.Name {
 			// actually process the build here
-			if _, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/buildStarted"]; !ok {
+			if _, ok := lagoonBuild.Labels["lagoon.sh/buildStarted"]; !ok {
 				if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
 					return ctrl.Result{}, err
 				}

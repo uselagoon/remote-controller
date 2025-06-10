@@ -62,7 +62,7 @@ func (r *LagoonBuildReconciler) updateCancelledDeploymentWithLogs(
 		opLog.Info(
 			fmt.Sprintf(
 				"Updating build status for %s to %v",
-				lagoonBuild.ObjectMeta.Name,
+				lagoonBuild.Name,
 				lagoonBuild.Labels["lagoon.sh/buildStatus"],
 			),
 		)
@@ -111,14 +111,14 @@ func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "build-logs:builddeploy-kubernetes:" + lagoonBuild.ObjectMeta.Name,
+			Event:    "build-logs:builddeploy-kubernetes:" + lagoonBuild.Name,
 			Meta: &schema.LagoonLogMeta{
-				JobName:     lagoonBuild.ObjectMeta.Name, // @TODO: remove once lagoon is corrected in controller-handler
-				BuildName:   lagoonBuild.ObjectMeta.Name,
+				JobName:     lagoonBuild.Name, // @TODO: remove once lagoon is corrected in controller-handler
+				BuildName:   lagoonBuild.Name,
 				BuildStatus: buildCondition.ToLower(), // same as buildstatus label
 				BuildStep:   buildStep,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
-				RemoteID:    string(lagoonBuild.ObjectMeta.UID),
+				RemoteID:    string(lagoonBuild.UID),
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				Cluster:     r.LagoonTargetName,
 			},
@@ -165,11 +165,11 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 				return
 			}
 		}
-		envName := ns.ObjectMeta.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(ns.ObjectMeta.Labels["lagoon.sh/environmentId"])
+		envName := ns.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(ns.Labels["lagoon.sh/environmentId"])
 		envID := helpers.UintPtr(uint(eID))
-		projectName := ns.ObjectMeta.Labels["lagoon.sh/project"]
-		pID, _ := strconv.Atoi(ns.ObjectMeta.Labels["lagoon.sh/projectId"])
+		projectName := ns.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(ns.Labels["lagoon.sh/projectId"])
 		projectID := helpers.UintPtr(uint(pID))
 		msg := schema.LagoonMessage{
 			Type:      "build",
@@ -181,15 +181,15 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 				ProjectID:     projectID,
 				BuildStatus:   buildCondition.ToLower(),
 				BuildStep:     buildStep,
-				BuildName:     lagoonBuild.ObjectMeta.Name,
+				BuildName:     lagoonBuild.Name,
 				LogLink:       lagoonBuild.Spec.Project.UILink,
-				RemoteID:      string(lagoonBuild.ObjectMeta.UID),
+				RemoteID:      string(lagoonBuild.UID),
 				Cluster:       r.LagoonTargetName,
 			},
 		}
 		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
 		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(lagoonBuild.ObjectMeta.Namespace),
+			client.InNamespace(lagoonBuild.Namespace),
 			client.MatchingLabelsSelector{
 				Selector: labels.NewSelector().Add(*labelRequirements1),
 			},
@@ -202,14 +202,14 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 			for _, pod := range podList.Items {
 				var serviceName, serviceType string
 				containers := []schema.ServiceContainer{}
-				if name, ok := pod.ObjectMeta.Labels["lagoon.sh/service"]; ok {
+				if name, ok := pod.Labels["lagoon.sh/service"]; ok {
 					serviceName = name
 					serviceNames = append(serviceNames, serviceName)
 					for _, container := range pod.Spec.Containers {
 						containers = append(containers, schema.ServiceContainer{Name: container.Name})
 					}
 				}
-				if sType, ok := pod.ObjectMeta.Labels["lagoon.sh/service-type"]; ok {
+				if sType, ok := pod.Labels["lagoon.sh/service-type"]; ok {
 					serviceType = sType
 				}
 				// probably need to collect dbaas consumers too at some stage
@@ -223,7 +223,7 @@ func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
 			msg.Meta.EnvironmentServices = services
 		}
 		if checkLagoonEnv {
-			route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+			route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.Namespace)
 			// if we aren't being provided the lagoon config, we can skip adding the routes etc
 			if err == nil {
 				msg.Meta.Route = route
@@ -259,12 +259,12 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 		msg := schema.LagoonLog{
 			Severity: "info",
 			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), //@TODO: this probably needs to be changed to a new task event for the controller
+			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), // @TODO: this probably needs to be changed to a new task event for the controller
 			Meta: &schema.LagoonLogMeta{
 				ProjectName: lagoonBuild.Spec.Project.Name,
 				BranchName:  lagoonBuild.Spec.Project.Environment,
 				BuildStatus: buildCondition.ToLower(), // same as buildstatus label
-				BuildName:   lagoonBuild.ObjectMeta.Name,
+				BuildName:   lagoonBuild.Name,
 				BuildStep:   buildStep,
 				LogLink:     lagoonBuild.Spec.Project.UILink,
 				Cluster:     r.LagoonTargetName,
@@ -272,11 +272,11 @@ func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
 			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
 				lagoonBuild.Spec.Project.Name,
 				lagoonBuild.Spec.Project.Environment,
-				lagoonBuild.ObjectMeta.Name,
+				lagoonBuild.Name,
 				buildCondition.ToLower(),
 			),
 		}
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.ObjectMeta.Namespace)
+		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.Namespace)
 		// if we aren't being provided the lagoon config, we can skip adding the routes etc
 		if err == nil {
 			msg.Meta.Route = route

@@ -79,7 +79,7 @@ func createAdvancedTask(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec,
 	}
 	// add additional labels if required
 	for key, value := range additionalLabels {
-		task.ObjectMeta.Labels[key] = value
+		task.Labels[key] = value
 	}
 	if err := m.Client.Create(context.Background(), &task); err != nil {
 		opLog.Error(err,

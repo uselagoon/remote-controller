@@ -158,24 +158,24 @@ func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namesp
 		}
 	}
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
-		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.ObjectMeta.Name))
-		r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
+		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.Name))
+		_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
 		return fmt.Errorf("%s is currently terminating, aborting build", ns)
 	}
 
 	// if the namespace exists, check that the controller label exists and matches this controllers namespace name
 	if namespace.Status.Phase == corev1.NamespaceActive {
-		if value, ok := namespace.ObjectMeta.Labels["lagoon.sh/controller"]; ok {
+		if value, ok := namespace.Labels["lagoon.sh/controller"]; ok {
 			if value != r.ControllerNamespace {
 				// if the namespace is deployed by a different controller, fail the build
-				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.ObjectMeta.Name))
-				r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
+				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.Name))
+				_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
 				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
 			}
 		} else {
 			// if the label doesn't exist at all, fail the build
-			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.ObjectMeta.Name))
-			r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
+			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.Name))
+			_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
 			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
 		}
 	}
@@ -257,39 +257,39 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 // processBuild will actually process the build.
 func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagooncrd.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
-	opLog.Info(fmt.Sprintf("Checking and preparing namespace and associated resources for build: %s", lagoonBuild.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Checking and preparing namespace and associated resources for build: %s", lagoonBuild.Name))
 	// create the lagoon-sshkey secret
 	sshKey := &corev1.Secret{}
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-sshkey` Secret exists: %s", lagoonBuild.Name))
 	}
-	err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.ObjectMeta.Namespace)
+	err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.Namespace)
 	if err != nil {
 		return err
 	}
 
 	// create the `lagoon-deployer` ServiceAccount
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` ServiceAccount exists: %s", lagoonBuild.Name))
 	}
 	serviceAccount := &corev1.ServiceAccount{}
-	err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.ObjectMeta.Namespace)
+	err = r.getOrCreateServiceAccount(ctx, serviceAccount, lagoonBuild.Namespace)
 	if err != nil {
 		return err
 	}
 
 	// ServiceAccount RoleBinding creation
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer-admin` RoleBinding exists: %s", lagoonBuild.Name))
 	}
 	saRoleBinding := &rbacv1.RoleBinding{}
-	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.ObjectMeta.Namespace)
+	err = r.getOrCreateSARoleBinding(ctx, saRoleBinding, lagoonBuild.Namespace)
 	if err != nil {
 		return err
 	}
 
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking `lagoon-deployer` Token exists: %s", lagoonBuild.Name))
 	}
 
 	var serviceaccountTokenSecret string
@@ -476,32 +476,28 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name: "ROUTER_URL",
 			Value: strings.ToLower(
-				strings.Replace(
-					strings.Replace(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
 						lagoonBuild.Spec.Project.RouterPattern,
 						"${environment}",
 						lagoonBuild.Spec.Project.Environment,
-						-1,
 					),
 					"${project}",
 					lagoonBuild.Spec.Project.Name,
-					-1,
 				),
 			),
 		})
 		podEnvs = append(podEnvs, corev1.EnvVar{
 			Name: "SHORT_ROUTER_URL",
 			Value: strings.ToLower(
-				strings.Replace(
-					strings.Replace(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
 						lagoonBuild.Spec.Project.RouterPattern,
 						"${environment}",
 						helpers.ShortName(lagoonBuild.Spec.Project.Environment),
-						-1,
 					),
 					"${project}",
 					helpers.ShortName(lagoonBuild.Spec.Project.Name),
-					-1,
 				),
 			),
 		})
@@ -549,8 +545,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		// unmarshal the project variables
 		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
-		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
-		json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
+		_ = json.Unmarshal(lagoonBuild.Spec.Project.Variables.Project, lagoonProjectVariables)
+		_ = json.Unmarshal(lagoonBuild.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
 		// check if INTERNAL_REGISTRY_SOURCE_LAGOON is defined, and if it isn't true
 		// if this value is true, then we want to use what is provided by Lagoon
 		// if it is false, or not set, then we use what is provided by this controller
@@ -563,7 +559,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// or it will add them.
 			robotCredential := &corev1.Secret{}
 			if err = r.Get(ctx, types.NamespacedName{
-				Namespace: lagoonBuild.ObjectMeta.Namespace,
+				Namespace: lagoonBuild.Namespace,
 				Name:      "lagoon-internal-registry-secret",
 			}, robotCredential); err != nil {
 				return fmt.Errorf("could not find Harbor RobotAccount credential")
@@ -742,20 +738,20 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 	newPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      lagoonBuild.ObjectMeta.Name,
-			Namespace: lagoonBuild.ObjectMeta.Namespace,
+			Name:      lagoonBuild.Name,
+			Namespace: lagoonBuild.Namespace,
 			Labels: map[string]string{
 				"lagoon.sh/jobType":       "build",
-				"lagoon.sh/buildName":     lagoonBuild.ObjectMeta.Name,
+				"lagoon.sh/buildName":     lagoonBuild.Name,
 				"lagoon.sh/controller":    r.ControllerNamespace,
 				"crd.lagoon.sh/version":   crdVersion,
-				"lagoon.sh/buildRemoteID": string(lagoonBuild.ObjectMeta.UID),
+				"lagoon.sh/buildRemoteID": string(lagoonBuild.UID),
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
 					Kind:       "LagoonBuild",
-					Name:       lagoonBuild.ObjectMeta.Name,
+					Name:       lagoonBuild.Name,
 					UID:        lagoonBuild.UID,
 				},
 			},
@@ -800,8 +796,8 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 
 	// set the organization labels on build pods
 	if lagoonBuild.Spec.Project.Organization != nil {
-		newPod.ObjectMeta.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
-		newPod.ObjectMeta.Labels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
+		newPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
+		newPod.Labels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
 	}
 
 	// set the pod security context, if defined to a non-default value
@@ -815,16 +811,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Checking build pod for: %s", lagoonBuild.Name))
 	}
 	// once the pod spec has been defined, check if it isn't already created
 	err = r.Get(ctx, types.NamespacedName{
-		Namespace: lagoonBuild.ObjectMeta.Namespace,
-		Name:      newPod.ObjectMeta.Name,
+		Namespace: lagoonBuild.Namespace,
+		Name:      newPod.Name,
 	}, newPod)
 	if err != nil {
 		// check the dockerhosts and assign as required
-		reuseType := lagoonBuild.ObjectMeta.Namespace
+		reuseType := lagoonBuild.Namespace
 		switch r.DockerHost.ReuseType {
 		case "project":
 			reuseType = lagoonBuild.Spec.Project.Name
@@ -837,7 +833,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			}
 		}
 		dockerHost := r.DockerHost.AssignDockerHost(
-			lagoonBuild.ObjectMeta.Name,
+			lagoonBuild.Name,
 			reuseType,
 			r.LFFQoSEnabled,
 			r.BuildQoS.MaxBuilds,
@@ -846,14 +842,14 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:  "DOCKER_HOST",
 			Value: dockerHost,
 		}
-		newPod.ObjectMeta.Annotations = map[string]string{
+		newPod.Annotations = map[string]string{
 			"dockerhost.lagoon.sh/name": dockerHost,
 		}
 		newPod.Spec.Containers[0].Env = append(newPod.Spec.Containers[0].Env, dockerHostEnvVar)
-		opLog.Info(fmt.Sprintf("Assigning build %s to dockerhost %s", lagoonBuild.ObjectMeta.Name, dockerHost))
+		opLog.Info(fmt.Sprintf("Assigning build %s to dockerhost %s", lagoonBuild.Name, dockerHost))
 
 		// if it doesn't exist, then create the build pod
-		opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.ObjectMeta.Name))
+		opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.Name))
 		if err := r.Create(ctx, newPod); err != nil {
 			opLog.Error(err, "Unable to create build pod")
 			// log the error and just exit, don't continue to try and do anything
@@ -861,19 +857,19 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			return nil
 		}
 		metrics.BuildRunningStatus.With(prometheus.Labels{
-			"build_namespace":  lagoonBuild.ObjectMeta.Namespace,
-			"build_name":       lagoonBuild.ObjectMeta.Name,
+			"build_namespace":  lagoonBuild.Namespace,
+			"build_name":       lagoonBuild.Name,
 			"build_dockerhost": dockerHost,
 		}).Set(1)
 		metrics.BuildStatus.With(prometheus.Labels{
-			"build_namespace": lagoonBuild.ObjectMeta.Namespace,
-			"build_name":      lagoonBuild.ObjectMeta.Name,
+			"build_namespace": lagoonBuild.Namespace,
+			"build_name":      lagoonBuild.Name,
 			"build_step":      "running",
 		}).Set(1)
 		metrics.BuildsStartedCounter.Inc()
 		// then break out of the build
 	}
-	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.ObjectMeta.Name))
+	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.Name))
 	return nil
 }
 
@@ -885,7 +881,7 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 	opLog logr.Logger,
 ) error {
 	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.ObjectMeta.Name, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
+		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.Name, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
 	}
 	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
 	// so just set the logs to be cancellation message
@@ -950,7 +946,7 @@ Build cancelled
 	if buildStep != nil && buildStep.Reason == "Queued" {
 		// if the build was cancelled at the queued phase of a build, then it is likely it was cancelled by a new build
 		// update the buildstep to be cancelled by new build for clearer visibility in the resource status
-		if value, ok := lagoonBuild.ObjectMeta.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
+		if value, ok := lagoonBuild.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
 			condition, _ := helpers.BuildStepToStatusConditions("CancelledByNewBuild", "", time.Now().UTC())
 			_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
 		}
@@ -989,7 +985,7 @@ func sortBuilds(defaultPriority int, pendingBuilds *lagooncrd.LagoonBuildList) {
 		case iPriority != jPriority:
 			return iPriority > jPriority
 		default:
-			return pendingBuilds.Items[i].ObjectMeta.CreationTimestamp.Before(&pendingBuilds.Items[j].ObjectMeta.CreationTimestamp)
+			return pendingBuilds.Items[i].CreationTimestamp.Before(&pendingBuilds.Items[j].CreationTimestamp)
 		}
 	})
 }

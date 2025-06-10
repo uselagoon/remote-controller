@@ -188,9 +188,9 @@ func main() {
 
 	var enableDeprecatedAPIs bool
 
-	var httpProxy string = ""
-	var httpsProxy string = ""
-	var noProxy string = ""
+	var httpProxy string
+	var httpsProxy string
+	var noProxy string
 	var enablePodProxy bool
 	var podsUseDifferentProxy bool
 
@@ -818,61 +818,89 @@ func main() {
 		setupLog.Info("starting LagoonBuild CRD cleanup handler")
 		// use cron to run a lagoonbuild cleanup task
 		// this will check any Lagoon builds and attempt to delete them
-		c.AddFunc(buildsCleanUpCron, func() {
+		_, err := c.AddFunc(buildsCleanUpCron, func() {
 			lagoonv1beta2.LagoonBuildPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildsToKeep)
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create LagoonBuild CRD cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 	// if the build pod cleanup is enabled, add the cronjob for it
 	if buildPodCleanUpEnable {
 		setupLog.Info("starting build pod cleanup handler")
 		// use cron to run a build pod cleanup task
 		// this will check any Lagoon build pods and attempt to delete them
-		c.AddFunc(buildPodCleanUpCron, func() {
+		_, err := c.AddFunc(buildPodCleanUpCron, func() {
 			lagoonv1beta2.BuildPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, buildPodsToKeep)
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create build pod cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 	// if the lagoontask cleanup is enabled, add the cronjob for it
 	if taskCleanUpEnable {
 		setupLog.Info("starting LagoonTask CRD cleanup handler")
 		// use cron to run a lagoontask cleanup task
 		// this will check any Lagoon tasks and attempt to delete them
-		c.AddFunc(taskCleanUpCron, func() {
+		_, err := c.AddFunc(taskCleanUpCron, func() {
 			lagoonv1beta2.LagoonTaskPruner(context.Background(), mgr.GetClient(), controllerNamespace, tasksToKeep)
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create LagoonTask CRD cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 	// if the task pod cleanup is enabled, add the cronjob for it
 	if taskPodCleanUpEnable {
 		setupLog.Info("starting task pod cleanup handler")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
-		c.AddFunc(taskPodCleanUpCron, func() {
+		_, err := c.AddFunc(taskPodCleanUpCron, func() {
 			lagoonv1beta2.TaskPodPruner(context.Background(), mgr.GetClient(), controllerNamespace, taskPodsToKeep)
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create task pod cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 	// if harbor is enabled, add the cronjob for credential rotation
 	if lffHarborEnabled {
 		setupLog.Info("starting harbor robot credential rotation task")
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
-		c.AddFunc(harborCredentialCron, func() {
+		_, err := c.AddFunc(harborCredentialCron, func() {
 			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create harbor robot credential cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 
 	// if we've set namespaces to be cleaned up, we run the job periodically
 	if cleanNamespacesEnabled {
 		setupLog.Info("starting namespace cleanup task")
-		c.AddFunc(taskPodCleanUpCron, func() {
+		_, err := c.AddFunc(taskPodCleanUpCron, func() {
 			resourceCleanup.NamespacePruner()
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create namespace cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 
 	if pruneLongRunningTaskPods || pruneLongRunningBuildPods {
 		setupLog.Info("starting long running task cleanup task")
-		c.AddFunc(pruneLongRunningPodsCron, func() {
+		_, err := c.AddFunc(pruneLongRunningPodsCron, func() {
 			resourceCleanup.LagoonOldProcPruner(pruneLongRunningBuildPods, pruneLongRunningTaskPods)
 		})
+		if err != nil {
+			setupLog.Error(err, "unable to create long running pod cleanup cronjob", "controller", "LagoonTask")
+			os.Exit(1)
+		}
 	}
 
 	c.Start()

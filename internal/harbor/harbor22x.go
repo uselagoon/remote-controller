@@ -249,7 +249,6 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch string) {
 	environmentName := helpers.ShortenEnvironment(projectName, helpers.MakeSafe(branch))
 	h.Config.PageSize = 100
-	pageCount := int64(1)
 	listRepositories := h.ListRepositories(ctx, projectName)
 	for _, repo := range listRepositories {
 		if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
@@ -262,7 +261,7 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 	}
 	if len(listRepositories) > 100 {
 		// h.Log.Info(fmt.Sprintf("more than pagesize repositories returned"))
-		pageCount = int64(len(listRepositories) / 100)
+		pageCount := int64(len(listRepositories) / 100)
 		var page int64
 		for page = 2; page <= pageCount; page++ {
 			listRepositories := h.ListRepositories(ctx, projectName)

@@ -131,13 +131,13 @@ func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsI
 			// add one so that if the number of builds is odd
 			// it will favor building on the host it may have already run on
 			// to try leverage cache where possible
-			buildsPerHost = buildsPerHost + 1
+			buildsPerHost += 1
 		}
 	} else {
 		// work out how many builds per host based on distribution
 		totBuilds := 0
 		for _, boh := range hostsInUse {
-			totBuilds = totBuilds + boh
+			totBuilds += boh
 		}
 		if totBuilds > 0 {
 			buildsPerHost = totBuilds / numAvailableHosts
@@ -145,7 +145,7 @@ func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsI
 				// add one so that if the number of builds is odd
 				// it will favor building on the host it may have already run on
 				// to try leverage cache where possible
-				buildsPerHost = buildsPerHost + 1
+				buildsPerHost += 1
 			}
 		} else {
 			// default to 2, as builds increase this will be ignored
@@ -182,12 +182,14 @@ func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsI
 		if host == chosenHost && buildsOnHost >= buildsPerHost {
 			// chosen host is too busy
 			continue
-		} else if buildsOnHost >= buildsPerHost {
-			// host is too busy
-			continue
 		} else {
-			// next lowest host in use
-			return host
+			if buildsOnHost >= buildsPerHost {
+				// host is too busy
+				continue
+			} else {
+				// next lowest host in use
+				return host
+			}
 		}
 	}
 	// just use the chosen host as the fall back

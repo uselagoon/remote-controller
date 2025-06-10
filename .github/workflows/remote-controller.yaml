@@ -44,35 +44,15 @@ jobs:
       timeout-minutes: 1
       continue-on-error: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         fetch-depth: "0"
     - name: Set up testing dependencies
       run: sudo apt-get update && sudo apt-get -y install build-essential && sudo apt-get clean
     - name: Setup correct Go version
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
         go-version: '1.23'
-    - name: Install kubebuilder
-      run: |
-        #kubebuilder
-        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
-        sudo mkdir -p /usr/local/kubebuilder/bin
-        sudo mv /tmp/kubebuilder_2.3.2_linux_amd64/bin/* /usr/local/kubebuilder/bin
-        chmod +x /usr/local/kubebuilder/bin/*
-        echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
-        curl -sL https://github.com/itaysk/kubectl-neat/releases/download/v2.0.3/kubectl-neat_linux_amd64.tar.gz | tar -xz -C /tmp/
-        sudo mkdir -p /usr/local/kubectl-neat/bin
-        sudo mv /tmp/kubectl-neat /usr/local/kubectl-neat/bin
-        chmod +x /usr/local/kubectl-neat/bin/*
-        echo "/usr/local/kubectl-neat/bin" >> $GITHUB_PATH
-    - name: Check go, kustomize, kubebuilder, helm, kind versions
-      run: |
-        go version
-        kustomize version
-        helm version
-        kubebuilder version
-        kind version
 
     - name: Add dependency chart repos
       run: |
@@ -84,7 +64,6 @@ jobs:
 
     - name: Install gojq
       if: |
-        (steps.list-changed.outputs.changed == 'true') ||
         (contains(github.event.pull_request.labels.*.name, 'needs-testing'))
       run: |
         cd /tmp
@@ -95,8 +74,9 @@ jobs:
     - name: Configure node IP in kind-config.yaml
       run: |
         docker network create kind
-        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"') 
-        export KIND_NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
+        KIND_NODE_IP=$(echo "${LAGOON_KIND_CIDR_BLOCK%???}" | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
+        export KIND_NODE_IP
         envsubst < test-resources/test-suite.kind-config.yaml.tpl > test-resources/test-suite.kind-config.yaml
 
     - name: Create kind cluster
@@ -111,15 +91,15 @@ jobs:
     - name: Check node IP matches kind configuration
       run: |
         LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
-        NODE_IP=$(echo ${LAGOON_KIND_CIDR_BLOCK%???} | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
+        NODE_IP=$(echo "${LAGOON_KIND_CIDR_BLOCK%???}" | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
         echo Checking for NODE_IP "$NODE_IP"
-        grep $NODE_IP test-resources/test-suite.kind-config.yaml
+        grep "$NODE_IP" test-resources/test-suite.kind-config.yaml
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v3
 
     - name: Build
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v5
       with:
         context: .
         load: true

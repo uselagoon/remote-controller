@@ -435,7 +435,7 @@ func (m *Messenger) Consumer(targetName string) {
 							jobSpec.Project.Name,
 						),
 					)
-					message.Ack(false) // ack to remove from queue
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 			default:

@@ -67,7 +67,7 @@ func (h *Harbor) RotateRobotCredential(ctx context.Context, cl client.Client, ns
 		return false, fmt.Errorf("error checking harbor version: %v", err)
 	}
 	if h.UseV2Functions(curVer) {
-		hProject, err := h.CreateProjectV2(ctx, ns.Labels["lagoon.sh/project"])
+		hProject, err := h.CreateProjectV2(ctx, ns)
 		if err != nil {
 			return false, fmt.Errorf("error getting or creating project: %v", err)
 		}

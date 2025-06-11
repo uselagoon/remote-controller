@@ -296,14 +296,6 @@ func (m *Messenger) Consumer(targetName string) {
 			jobSpec := &lagoonv1beta2.LagoonTaskSpec{}
 			_ = json.Unmarshal(message.Body(), jobSpec)
 			// check which key has been received
-			namespace := helpers.GenerateNamespaceName(
-				jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-				jobSpec.Environment.Name,
-				jobSpec.Project.Name,
-				m.NamespacePrefix,
-				m.ControllerNamespace,
-				m.RandomNamespacePrefix,
-			)
 			switch jobSpec.Key {
 			case "deploytarget:build:cancel", "kubernetes:build:cancel":
 				opLog.Info(
@@ -311,12 +303,12 @@ func (m *Messenger) Consumer(targetName string) {
 						"Received build cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						namespace,
+						m.genNamespace(jobSpec),
 					),
 				)
 				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
 				if err != nil {
 					// @TODO: send msg back to lagoon and update task to failed?
 					_ = message.Ack(false) // ack to remove from queue
@@ -335,12 +327,12 @@ func (m *Messenger) Consumer(targetName string) {
 						"Received task cancellation for project %s, environment %s - %s",
 						jobSpec.Project.Name,
 						jobSpec.Environment.Name,
-						namespace,
+						m.genNamespace(jobSpec),
 					),
 				)
 				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, namespace, message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
 				if err != nil {
 					// @TODO: send msg back to lagoon and update task to failed?
 					_ = message.Ack(false) // ack to remove from queue
@@ -361,7 +353,7 @@ func (m *Messenger) Consumer(targetName string) {
 						jobSpec.Environment.Name,
 					),
 				)
-				err := m.ResticRestore(namespace, jobSpec)
+				err := m.ResticRestore(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -381,7 +373,7 @@ func (m *Messenger) Consumer(targetName string) {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.IngressRouteMigration(namespace, jobSpec)
+				err := m.IngressRouteMigration(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -401,7 +393,7 @@ func (m *Messenger) Consumer(targetName string) {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.AdvancedTask(namespace, jobSpec)
+				err := m.AdvancedTask(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -421,7 +413,7 @@ func (m *Messenger) Consumer(targetName string) {
 						jobSpec.Project.Name,
 					),
 				)
-				err := m.ActiveStandbySwitch(namespace, jobSpec)
+				err := m.ActiveStandbySwitch(m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
@@ -431,6 +423,18 @@ func (m *Messenger) Consumer(targetName string) {
 						),
 					)
 					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "deploytarget:harborpolicy:update":
+				err := m.HarborPolicy(ctx, jobSpec)
+				if err != nil {
+					opLog.Error(err,
+						fmt.Sprintf(
+							"Harbor policy update for project %s failed",
+							jobSpec.Project.Name,
+						),
+					)
 					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
@@ -450,4 +454,15 @@ func (m *Messenger) Consumer(targetName string) {
 		log.Panicf("Failed to set handler to consumer `%s`: %v", "misc-queue", err)
 	}
 	<-forever
+}
+
+func (m *Messenger) genNamespace(jobSpec *lagoonv1beta2.LagoonTaskSpec) string {
+	return helpers.GenerateNamespaceName(
+		jobSpec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		jobSpec.Environment.Name,
+		jobSpec.Project.Name,
+		m.NamespacePrefix,
+		m.ControllerNamespace,
+		m.RandomNamespacePrefix,
+	)
 }

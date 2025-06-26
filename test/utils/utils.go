@@ -17,11 +17,18 @@ limitations under the License.
 package utils
 
 import (
+	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
+	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
 
 	"github.com/onsi/ginkgo/v2"
 )
@@ -189,6 +196,85 @@ func UninstallK8upCRDs() {
 func RunCommonsCommand(ns, runCmd string) ([]byte, error) {
 	cmd := exec.Command(kubectlPath, "-n", ns, "exec", "metrics-consumer", "--", "sh", "-c", runCmd)
 	return Run(cmd)
+}
+
+func GetIngressLB() (string, error) {
+	cmd := exec.Command("kubectl", "-n", "ingress-nginx",
+		"get", "services", "ingress-nginx-controller",
+		"-o", "jsonpath={.status.loadBalancer.ingress[0].ip}",
+	)
+	status, err := Run(cmd)
+	if err != nil {
+		return "", err
+	}
+	return string(status), nil
+}
+
+// Removes a CRD file but doesn't cause a failure if already deleted
+func PublishMessage(file string) error {
+	cmd := exec.Command(
+		"curl",
+		"-s",
+		"-u",
+		"guest:guest",
+		"-H",
+		"'Accept: application/json'",
+		"-H",
+		"'Content-Type:application/json'",
+		"-X",
+		"POST",
+		"-d",
+		file,
+		"http://172.17.0.1:15672/api/exchanges/%2f/lagoon-tasks/publish",
+	)
+	_, err := Run(cmd)
+	return err
+}
+
+func harborClient(ip string) (*harborclientv5.RESTClient, error) {
+	harborConfig := &config.Options{
+		Page:     1,
+		PageSize: 100,
+	}
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	return harborclientv5.NewRESTClientForHost(fmt.Sprintf("https://registry.%s.nip.io/api/", ip), "admin", "Harbor12345", harborConfig)
+}
+
+func QueryHarborRepositories(ip, projectName string) (string, error) {
+	c2, err := harborClient(ip)
+	if err != nil {
+		return "", fmt.Errorf("here1 %v", err)
+	}
+	ctx := context.Background()
+	listRepositories, err := c2.ListRepositories(ctx, projectName)
+	if err != nil {
+		return "", fmt.Errorf("here2 %v", err)
+	}
+	r1, _ := json.Marshal(listRepositories)
+	return string(r1), nil
+}
+
+func QueryHarborProjectPolicies(ip, projectName string) (string, error) {
+	c2, err := harborClient(ip)
+	if err != nil {
+		return "", err
+	}
+	ctx := context.Background()
+	existingPolicy, err := c2.GetRetentionPolicyByProject(ctx, projectName)
+	if err != nil {
+		return "", err
+	}
+	r1, _ := json.Marshal(existingPolicy)
+	return string(r1), nil
+}
+
+func DeleteHarborProject(ip, projectName string) error {
+	c2, err := harborClient(ip)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	return c2.DeleteProject(ctx, projectName)
 }
 
 // Run executes the provided command within this context

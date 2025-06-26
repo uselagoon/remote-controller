@@ -14,6 +14,7 @@ spec:
     project:
         name: nginx-example
         environment: main
+        id: 1
         organization:
             id: 123
             name: test-org

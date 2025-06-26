@@ -1,0 +1,20 @@
+{"properties":{"delivery_mode":2},"routing_key":"ci-local-controller-kubernetes:misc",
+    "payload":"{
+        \"misc\":{
+            \"miscResource\":\"eyJ0eXBlIjoiaGFyYm9yUmV0ZW50aW9uUG9saWN5IiwiZXZlbnRUeXBlIjoidXBkYXRlUG9saWN5IiwiZGF0YSI6eyJwcm9qZWN0Ijp7ImlkIjoxLCJuYW1lIjoibmdpbngtZXhhbXBsZSJ9LCJwb2xpY3kiOnsicnVsZXMiOlt7Im5hbWUiOiJhbGwgYnJhbmNoZXMsIGV4Y2x1ZGluZyBwdWxscmVxdWVzdHMiLCJwYXR0ZXJuIjoiW15wclxcLV0qLyoiLCJsYXRlc3RQdWxsZWQiOjN9LHsibmFtZSI6InB1bGxyZXF1ZXN0cyIsInBhdHRlcm4iOiJwci0qIiwibGF0ZXN0UHVsbGVkIjoxfV0sInNjaGVkdWxlIjoiMyAzICogKiAzIn19fQ==\"
+        },
+        \"key\":\"deploytarget:harborpolicy:update\",
+        \"environment\":{
+            \"name\":\"main\",
+            \"openshiftProjectName\":\"nginx-example-main\"
+        },
+        \"project\":{
+            \"name\":\"nginx-example\"
+        },
+        \"advancedTask\":{}
+    }",
+"payload_encoding":"string"
+}
+
+
+

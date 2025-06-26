@@ -3,6 +3,7 @@ package messenger
 import (
 	"github.com/cheshir/go-mq/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,6 +33,7 @@ type Messenger struct {
 	EnableDebug                      bool
 	SupportK8upV2                    bool
 	Cache                            *expirable.LRU[string, string]
+	Harbor                           harbor.Harbor
 }
 
 // New returns a messaging with config and controller-runtime client.
@@ -48,6 +50,7 @@ func New(config mq.Config,
 	enableDebug bool,
 	supportK8upV2 bool,
 	cache *expirable.LRU[string, string],
+	harbor harbor.Harbor,
 ) *Messenger {
 	return &Messenger{
 		Config:                           config,
@@ -63,5 +66,6 @@ func New(config mq.Config,
 		EnableDebug:                      enableDebug,
 		SupportK8upV2:                    supportK8upV2,
 		Cache:                            cache,
+		Harbor:                           harbor,
 	}
 }

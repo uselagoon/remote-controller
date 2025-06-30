@@ -62,7 +62,7 @@ var (
 
 	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
 	deletePolicyWant        = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
-	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
+	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev8/nginx"},{"artifact_count":1,"name":"nginx-example/dev7/nginx"},{"artifact_count":1,"name":"nginx-example/dev6/nginx"},{"artifact_count":1,"name":"nginx-example/dev5/nginx"},{"artifact_count":1,"name":"nginx-example/dev4/nginx"},{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
 )
 
 func init() {
@@ -627,7 +627,7 @@ func compareRepositories(want, got string) error {
 	hpgb, _ := json.Marshal(hpg)
 	hpwb, _ := json.Marshal(hpw)
 	if string(hpwb) != string(hpgb) {
-		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", string(hpwb), string(hpgb))
+		return fmt.Errorf("resulting project respostories don't match:\nwant: %s\ngot: %s", string(hpwb), string(hpgb))
 	}
 	return nil
 }

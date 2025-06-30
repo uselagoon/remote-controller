@@ -340,8 +340,6 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 			Name:      "lagoon-env",
 		}, lagoonEnvConfigMap)
 		if err != nil {
-			// just log the warning
-			opLog.Info(fmt.Sprintf("no lagoon-env secret or configmap in namespace %s", namespace))
 			return "", nil, fmt.Errorf("no lagoon-env secret or configmap in namespace %s", namespace)
 		} else {
 			if r, ok := lagoonEnvConfigMap.Data["LAGOON_ROUTE"]; ok {

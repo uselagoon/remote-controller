@@ -16,6 +16,7 @@ limitations under the License.
 package v1beta2
 
 import (
+	"encoding/json"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -172,4 +173,66 @@ type Promote struct {
 type Monitoring struct {
 	Contact      string `json:"contact,omitempty"`
 	StatuspageID string `json:"statuspageID,omitempty"`
+}
+
+type BuildCache struct {
+	Name              string `json:"name"`
+	Namespace         string `json:"namespace"`
+	Status            string `json:"status"`
+	Step              string `json:"step"`
+	DockerBuild       bool   `json:"dockerBuild"`
+	CreationTimestamp int64  `json:"creationTimestamp"`
+}
+
+func (q *BuildCache) String() string {
+	b, _ := json.Marshal(q)
+	return string(b)
+}
+
+func StrToBuildCache(bcs string) BuildCache {
+	bc := BuildCache{}
+	_ = json.Unmarshal([]byte(bcs), &bc)
+	return bc
+}
+
+func NewBuildCache(lagoonBuild LagoonBuild, status string, dockerBuild bool) BuildCache {
+	return BuildCache{
+		Name:              lagoonBuild.Name,
+		Namespace:         lagoonBuild.Namespace,
+		Status:            status,
+		Step:              lagoonBuild.Labels["lagoon.sh/buildStep"],
+		DockerBuild:       dockerBuild,
+		CreationTimestamp: lagoonBuild.CreationTimestamp.Unix(),
+	}
+}
+
+type QueueCache struct {
+	Name              string `json:"name"`
+	Namespace         string `json:"namespace"`
+	Priority          int    `json:"priority"`
+	Position          int    `json:"position"`
+	Length            int    `json:"length"`
+	CreationTimestamp int64  `json:"creationTimestamp"`
+}
+
+func (q *QueueCache) String() string {
+	b, _ := json.Marshal(q)
+	return string(b)
+}
+
+func StrToQueueCache(qcs string) QueueCache {
+	qc := QueueCache{}
+	_ = json.Unmarshal([]byte(qcs), &qc)
+	return qc
+}
+
+func NewQueueCache(lagoonBuild LagoonBuild, priority, position, length int) QueueCache {
+	return QueueCache{
+		Name:              lagoonBuild.Name,
+		Namespace:         lagoonBuild.Namespace,
+		Priority:          priority,
+		Position:          position,
+		Length:            length,
+		CreationTimestamp: lagoonBuild.CreationTimestamp.Unix(),
+	}
 }

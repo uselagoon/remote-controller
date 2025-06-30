@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -51,10 +51,15 @@ func (r *LagoonTaskReconciler) createActiveStandbyRole(ctx context.Context, sour
 
 // updateQueuedTask will update a task if it is queued
 func (r *LagoonTaskReconciler) updateQueuedTask(
-	lagoonTask lagooncrd.LagoonTask,
+	ctx context.Context,
+	taskReq types.NamespacedName,
 	queuePosition, queueLength int,
 	opLog logr.Logger,
 ) error {
+	var lagoonTask lagooncrd.LagoonTask
+	if err := r.Get(ctx, taskReq, &lagoonTask); err != nil {
+		return helpers.IgnoreNotFound(err)
+	}
 	if r.EnableDebug {
 		opLog.Info(fmt.Sprintf("Updating task %s to queued: %s", lagoonTask.Name, fmt.Sprintf("This task is currently queued in position %v/%v", queuePosition, queueLength)))
 	}
@@ -71,12 +76,6 @@ func (r *LagoonTaskReconciler) updateQueuedTask(
 	r.updateLagoonTask(opLog, &lagoonTask, lagooncrd.TaskStatusQueued)
 	r.taskLogsToLagoonLogs(opLog, &lagoonTask, allContainerLogs, lagooncrd.TaskStatusQueued)
 	return nil
-}
-
-func sortTasks(pendingTasks *lagooncrd.LagoonTaskList) {
-	sort.Slice(pendingTasks.Items, func(i, j int) bool {
-		return pendingTasks.Items[i].CreationTimestamp.Before(&pendingTasks.Items[j].CreationTimestamp)
-	})
 }
 
 // taskStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging

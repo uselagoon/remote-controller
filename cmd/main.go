@@ -562,9 +562,13 @@ func main() {
 	// create the cancellation cache
 	cache := expirable.NewLRU[string, string](1000, nil, time.Minute*60)
 	// create queue cache
-	queueCache, _ := lru.New[string, string](1000)
+	buildsQueueCache, _ := lru.New[string, string](1000)
 	// create builds cache
 	buildsCache, _ := lru.New[string, string](1000)
+	// create tasks queue cache
+	tasksQueueCache, _ := lru.New[string, string](1000)
+	// create tasks cache
+	tasksCache, _ := lru.New[string, string](1000)
 
 	// @TODO: maybe do the same cache for tasks
 
@@ -985,7 +989,7 @@ func main() {
 		UnauthenticatedRegistry: unauthenticatedRegistry,
 		ImagePullPolicy:         bipp,
 		DockerHost:              dockerhosts,
-		QueueCache:              queueCache,
+		QueueCache:              buildsQueueCache,
 		BuildCache:              buildsCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
@@ -1018,6 +1022,8 @@ func main() {
 		LFFTaskQoSEnabled: lffTaskQoSEnabled,
 		TaskQoS:           taskQoSConfigv1beta2,
 		ImagePullPolicy:   tipp,
+		QueueCache:        tasksQueueCache,
+		TasksCache:        tasksCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
@@ -1038,7 +1044,7 @@ func main() {
 		BuildQoS:              buildQoSConfigv1beta2,
 		Cache:                 cache,
 		DockerHost:            dockerhosts,
-		QueueCache:            queueCache,
+		QueueCache:            buildsQueueCache,
 		BuildCache:            buildsCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuildPodMonitor")
@@ -1057,6 +1063,8 @@ func main() {
 		EnableDebug:           enableDebug,
 		LagoonTargetName:      lagoonTargetName,
 		Cache:                 cache,
+		QueueCache:            tasksQueueCache,
+		TasksCache:            tasksCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTaskPodMonitor")
 		os.Exit(1)

@@ -34,6 +34,8 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 	if err != nil {
 		return err
 	}
+	// ensure the task is not in the queue
+	r.QueueCache.Remove(jobPod.Name)
 	cancel := false
 	if cancelTask, ok := jobPod.Labels["lagoon.sh/cancelTask"]; ok {
 		cancel, _ = strconv.ParseBool(cancelTask)
@@ -49,6 +51,8 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 		opLog.Info(fmt.Sprintf("Attempting to cancel task %s", lagoonTask.Name))
 		return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, cancel)
 	}
+	bc := lagooncrd.NewTaskCache(lagoonTask, string(jobPod.Status.Phase))
+	r.TasksCache.Add(lagoonTask.Name, bc.String())
 	switch jobPod.Status.Phase {
 	case corev1.PodPending:
 
@@ -104,6 +108,8 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 		if err != nil {
 			return err
 		}
+		// remove the task from the task cache
+		r.TasksCache.Remove(jobPod.Name)
 	}
 	// if it isn't pending, failed, or complete, it will be running, we should tell lagoon
 	return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, false)

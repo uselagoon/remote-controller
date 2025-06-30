@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -55,6 +56,8 @@ type LagoonTaskReconciler struct {
 	LFFTaskQoSEnabled      bool
 	TaskQoS                TaskQoS
 	ImagePullPolicy        corev1.PullPolicy
+	QueueCache             *lru.Cache[string, string]
+	TasksCache             *lru.Cache[string, string]
 }
 
 var (
@@ -76,26 +79,28 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if lagoonTask.DeletionTimestamp.IsZero() {
+		if status, ok := lagoonTask.Labels["lagoon.sh/taskStatus"]; ok && status == lagooncrd.TaskStatusPending.String() {
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("Adding task %s to queue (%s)", lagoonTask.Name, status))
+			}
+			// add the build to the cache when it is received
+			qc := lagooncrd.NewTaskQueueCache(lagoonTask, 5, 0, 0)
+			r.QueueCache.Add(lagoonTask.Name, qc.String())
+		}
 		if r.LFFTaskQoSEnabled {
 			// handle QoS tasks here
-			// if we do have a `lagoon.sh/taskStatus` set as running, then process it
-			runningNSTasks := &lagooncrd.LagoonTaskList{}
-			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-				client.InNamespace(req.Namespace),
-				client.MatchingLabels(map[string]string{
-					"lagoon.sh/taskStatus": lagooncrd.TaskStatusRunning.String(),
-					"lagoon.sh/controller": r.ControllerNamespace,
-				}),
-			})
-			// // list any tasks that are running
-			if err := r.List(ctx, runningNSTasks, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to list tasks in the namespace, there may be none or something went wrong: %v", err)
-			}
-			for _, runningTask := range runningNSTasks.Items {
+			runningNSTasks, _ := lagooncrd.NamespaceRunningTasks(req.Namespace, r.TasksCache.Values())
+			for _, runningTask := range runningNSTasks {
+				opLog.Info(fmt.Sprintf("Running task %v", runningTask))
 				// if the running task is the one from this request then process it
 				if lagoonTask.Name == runningTask.Name {
 					// actually process the task here
 					if _, ok := lagoonTask.Labels["lagoon.sh/taskStarted"]; !ok {
+						// add the build to the cache first
+						bc := lagooncrd.NewTaskCache(lagoonTask, "Pending")
+						r.TasksCache.Add(lagoonTask.Name, bc.String())
+						// remove the build from the queue after creating the pod
+						r.QueueCache.Remove(lagoonTask.Name)
 						if lagoonTask.Labels["lagoon.sh/taskType"] == lagooncrd.TaskTypeStandard.String() {
 							return ctrl.Result{}, r.createStandardTask(ctx, &lagoonTask, opLog)
 						}
@@ -129,6 +134,8 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 	}
+	// remove the build from the cache when the build itself is removed
+	r.TasksCache.Remove(lagoonTask.Name)
 
 	return ctrl.Result{}, nil
 }

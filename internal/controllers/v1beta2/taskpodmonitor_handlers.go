@@ -51,7 +51,7 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 		opLog.Info(fmt.Sprintf("Attempting to cancel task %s", lagoonTask.Name))
 		return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, cancel)
 	}
-	bc := lagooncrd.NewTaskCache(lagoonTask, string(jobPod.Status.Phase))
+	bc := lagooncrd.NewCachedTaskItem(lagoonTask, string(jobPod.Status.Phase))
 	r.TasksCache.Add(lagoonTask.Name, bc.String())
 	switch jobPod.Status.Phase {
 	case corev1.PodPending:

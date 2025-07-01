@@ -84,7 +84,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				opLog.Info(fmt.Sprintf("Adding task %s to queue (%s)", lagoonTask.Name, status))
 			}
 			// add the build to the cache when it is received
-			qc := lagooncrd.NewTaskQueueCache(lagoonTask, 5, 0, 0)
+			qc := lagooncrd.NewCachedTaskQueueItem(lagoonTask, 0, 0)
 			r.QueueCache.Add(lagoonTask.Name, qc.String())
 		}
 		if r.LFFTaskQoSEnabled {
@@ -97,7 +97,7 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					// actually process the task here
 					if _, ok := lagoonTask.Labels["lagoon.sh/taskStarted"]; !ok {
 						// add the build to the cache first
-						bc := lagooncrd.NewTaskCache(lagoonTask, "Pending")
+						bc := lagooncrd.NewCachedTaskItem(lagoonTask, "Pending")
 						r.TasksCache.Add(lagoonTask.Name, bc.String())
 						// remove the build from the queue after creating the pod
 						r.QueueCache.Remove(lagoonTask.Name)

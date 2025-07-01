@@ -298,10 +298,10 @@ func CancelTask(ctx context.Context, cl client.Client, namespace string, body []
 }
 
 // returns all tasks that are running in a given namespace
-func NamespaceRunningTasks(namespace string, runningTasks []string) ([]TaskCache, error) {
-	var tasks []TaskCache
+func NamespaceRunningTasks(namespace string, runningTasks []string) ([]CachedTaskItem, error) {
+	var tasks []CachedTaskItem
 	for _, str := range runningTasks {
-		var b TaskCache
+		var b CachedTaskItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}
@@ -313,10 +313,10 @@ func NamespaceRunningTasks(namespace string, runningTasks []string) ([]TaskCache
 }
 
 // returns all tasks that are currently in the queue
-func SortQueuedTasks(pendingTasks []string) ([]TaskQueueCache, error) {
-	var tasks []TaskQueueCache
+func SortQueuedTasks(pendingTasks []string) ([]CachedTaskQueueItem, error) {
+	var tasks []CachedTaskQueueItem
 	for _, str := range pendingTasks {
-		var b TaskQueueCache
+		var b CachedTaskQueueItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}
@@ -329,10 +329,10 @@ func SortQueuedTasks(pendingTasks []string) ([]TaskQueueCache, error) {
 }
 
 // returns all tasks that are currently in the queue in a given namespace
-func SortQueuedNamespaceTasks(namespace string, pendingTasks []string) ([]TaskQueueCache, error) {
-	var tasks []TaskQueueCache
+func SortQueuedNamespaceTasks(namespace string, pendingTasks []string) ([]CachedTaskQueueItem, error) {
+	var tasks []CachedTaskQueueItem
 	for _, str := range pendingTasks {
-		var b TaskQueueCache
+		var b CachedTaskQueueItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}

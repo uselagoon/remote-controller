@@ -98,7 +98,7 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	if jobPod.Labels["lagoon.sh/buildStep"] == "" {
 		dockerBuild = true
 	}
-	bc := lagooncrd.NewBuildCache(lagoonBuild, string(jobPod.Status.Phase), dockerBuild)
+	bc := lagooncrd.NewCachedBuildItem(lagoonBuild, string(jobPod.Status.Phase), dockerBuild)
 	r.BuildCache.Add(lagoonBuild.Name, bc.String())
 	// check if the build pod is in pending, a container in the pod could be failed in this state
 	switch jobPod.Status.Phase {

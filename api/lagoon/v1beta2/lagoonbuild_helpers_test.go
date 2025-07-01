@@ -21,7 +21,7 @@ func TestSortQueuedBuilds(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []QueueCache
+		want    []CachedBuildQueueItem
 		wantErr bool
 	}{
 		{
@@ -32,7 +32,7 @@ func TestSortQueuedBuilds(t *testing.T) {
 					fmt.Sprintf(`{"name":"lagoon-build-1234567","namespace":"namespace2","priority":6,"creationTimestamp":%d}`, v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")).Unix()),
 				},
 			},
-			want: []QueueCache{
+			want: []CachedBuildQueueItem{
 				{
 					Name:              "lagoon-build-1234567",
 					Priority:          6,
@@ -55,7 +55,7 @@ func TestSortQueuedBuilds(t *testing.T) {
 					fmt.Sprintf(`{"name":"lagoon-build-1234567","namespace":"namespace2","priority":5,"creationTimestamp":%d}`, v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")).Unix()),
 				},
 			},
-			want: []QueueCache{
+			want: []CachedBuildQueueItem{
 				{
 					Name:              "lagoon-build-1234567",
 					Priority:          5,
@@ -79,7 +79,7 @@ func TestSortQueuedBuilds(t *testing.T) {
 					fmt.Sprintf(`{"name":"lagoon-build-1234567","namespace":"namespace2","priority":5,"creationTimestamp":%d}`, v1.NewTime(timeFromString("2023-09-18T11:45:00.000Z")).Unix()),
 				},
 			},
-			want: []QueueCache{
+			want: []CachedBuildQueueItem{
 				{
 					Name:              "lagoon-build-abc1234",
 					Priority:          6,
@@ -123,7 +123,7 @@ func TestSortQueuedNamespaceBuilds(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []QueueCache
+		want    []CachedBuildQueueItem
 		wantErr bool
 	}{
 		{
@@ -136,7 +136,7 @@ func TestSortQueuedNamespaceBuilds(t *testing.T) {
 					fmt.Sprintf(`{"name":"lagoon-build-abc1234","namespace":"namespace1","priority":6,"creationTimestamp":%d}`, v1.NewTime(timeFromString("2023-09-18T11:46:00.000Z")).Unix()),
 				},
 			},
-			want: []QueueCache{
+			want: []CachedBuildQueueItem{
 				{
 					Name:              "lagoon-build-abc1234",
 					Priority:          6,

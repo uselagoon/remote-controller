@@ -152,7 +152,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				opLog.Info(fmt.Sprintf("Adding build %s to queue (%s)", lagoonBuild.Name, status))
 			}
 			// add the build to the cache when it is received
-			qc := lagooncrd.NewQueueCache(lagoonBuild, priority, 0, 0)
+			qc := lagooncrd.NewCachedBuildQueueItem(lagoonBuild, priority, 0, 0)
 			r.QueueCache.Add(lagoonBuild.Name, qc.String())
 		}
 		if r.LFFQoSEnabled {
@@ -166,7 +166,7 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					if _, ok := lagoonBuild.Labels["lagoon.sh/buildStarted"]; !ok {
 						// create the build pod
 						// add the build to the cache first
-						bc := lagooncrd.NewBuildCache(lagoonBuild, "Pending", true)
+						bc := lagooncrd.NewCachedBuildItem(lagoonBuild, "Pending", true)
 						r.BuildCache.Add(lagoonBuild.Name, bc.String())
 						// remove the build from the queue after creating the pod
 						r.QueueCache.Remove(lagoonBuild.Name)

@@ -479,7 +479,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 	// if the buildstatus is pending or running, or the cancel flag is provided
 	// send the update status to lagoon
 	if helpers.ContainsString(
-		lagooncrd.BuildRunningPendingFailedStatus,
+		lagooncrd.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) || cancel {
 		opLog.Info(

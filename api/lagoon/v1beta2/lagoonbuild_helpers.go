@@ -591,10 +591,10 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 }
 
 // returns all builds that are running in a given namespace
-func NamespaceRunningBuilds(namespace string, runningBuilds []string) ([]BuildCache, error) {
-	var builds []BuildCache
+func NamespaceRunningBuilds(namespace string, runningBuilds []string) ([]CachedBuildItem, error) {
+	var builds []CachedBuildItem
 	for _, str := range runningBuilds {
-		var b BuildCache
+		var b CachedBuildItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}
@@ -606,10 +606,10 @@ func NamespaceRunningBuilds(namespace string, runningBuilds []string) ([]BuildCa
 }
 
 // returns all builds that are running in a the docker build phase
-func RunningDockerBuilds(runningBuilds []string) ([]BuildCache, error) {
-	var builds []BuildCache
+func RunningDockerBuilds(runningBuilds []string) ([]CachedBuildItem, error) {
+	var builds []CachedBuildItem
 	for _, str := range runningBuilds {
-		var b BuildCache
+		var b CachedBuildItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}
@@ -621,10 +621,10 @@ func RunningDockerBuilds(runningBuilds []string) ([]BuildCache, error) {
 }
 
 // returns all builds that are currently in the queue
-func SortQueuedBuilds(pendingBuilds []string) ([]QueueCache, error) {
-	var builds []QueueCache
+func SortQueuedBuilds(pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+	var builds []CachedBuildQueueItem
 	for _, str := range pendingBuilds {
-		var b QueueCache
+		var b CachedBuildQueueItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}
@@ -641,10 +641,10 @@ func SortQueuedBuilds(pendingBuilds []string) ([]QueueCache, error) {
 }
 
 // returns all builds that are currently in the queue in a given namespace
-func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]QueueCache, error) {
-	var builds []QueueCache
+func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+	var builds []CachedBuildQueueItem
 	for _, str := range pendingBuilds {
-		var b QueueCache
+		var b CachedBuildQueueItem
 		if err := json.Unmarshal([]byte(str), &b); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 		}

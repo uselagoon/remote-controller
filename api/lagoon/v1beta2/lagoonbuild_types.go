@@ -175,7 +175,7 @@ type Monitoring struct {
 	StatuspageID string `json:"statuspageID,omitempty"`
 }
 
-type BuildCache struct {
+type CachedBuildItem struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
 	Status            string `json:"status"`
@@ -184,19 +184,19 @@ type BuildCache struct {
 	CreationTimestamp int64  `json:"creationTimestamp"`
 }
 
-func (q *BuildCache) String() string {
+func (q *CachedBuildItem) String() string {
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
-func StrToBuildCache(bcs string) BuildCache {
-	bc := BuildCache{}
+func StrToCachedBuildItem(bcs string) CachedBuildItem {
+	bc := CachedBuildItem{}
 	_ = json.Unmarshal([]byte(bcs), &bc)
 	return bc
 }
 
-func NewBuildCache(lagoonBuild LagoonBuild, status string, dockerBuild bool) BuildCache {
-	return BuildCache{
+func NewCachedBuildItem(lagoonBuild LagoonBuild, status string, dockerBuild bool) CachedBuildItem {
+	return CachedBuildItem{
 		Name:              lagoonBuild.Name,
 		Namespace:         lagoonBuild.Namespace,
 		Status:            status,
@@ -206,7 +206,7 @@ func NewBuildCache(lagoonBuild LagoonBuild, status string, dockerBuild bool) Bui
 	}
 }
 
-type QueueCache struct {
+type CachedBuildQueueItem struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
 	Priority          int    `json:"priority"`
@@ -215,19 +215,19 @@ type QueueCache struct {
 	CreationTimestamp int64  `json:"creationTimestamp"`
 }
 
-func (q *QueueCache) String() string {
+func (q *CachedBuildQueueItem) String() string {
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
-func StrToQueueCache(qcs string) QueueCache {
-	qc := QueueCache{}
+func StrToCachedBuildQueueItem(qcs string) CachedBuildQueueItem {
+	qc := CachedBuildQueueItem{}
 	_ = json.Unmarshal([]byte(qcs), &qc)
 	return qc
 }
 
-func NewQueueCache(lagoonBuild LagoonBuild, priority, position, length int) QueueCache {
-	return QueueCache{
+func NewCachedBuildQueueItem(lagoonBuild LagoonBuild, priority, position, length int) CachedBuildQueueItem {
+	return CachedBuildQueueItem{
 		Name:              lagoonBuild.Name,
 		Namespace:         lagoonBuild.Namespace,
 		Priority:          priority,

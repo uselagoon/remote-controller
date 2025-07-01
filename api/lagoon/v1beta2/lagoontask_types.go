@@ -198,60 +198,56 @@ func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type TaskCache struct {
+type CachedTaskItem struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
 	Status            string `json:"status"`
-	Step              string `json:"step"`
 	CreationTimestamp int64  `json:"creationTimestamp"`
 }
 
-func (q *TaskCache) String() string {
+func (q *CachedTaskItem) String() string {
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
-func StrToTaskCache(bcs string) TaskCache {
-	bc := TaskCache{}
+func StrToCachedTaskItem(bcs string) CachedTaskItem {
+	bc := CachedTaskItem{}
 	_ = json.Unmarshal([]byte(bcs), &bc)
 	return bc
 }
 
-func NewTaskCache(lagoonTask LagoonTask, status string) TaskCache {
-	return TaskCache{
+func NewCachedTaskItem(lagoonTask LagoonTask, status string) CachedTaskItem {
+	return CachedTaskItem{
 		Name:              lagoonTask.Name,
 		Namespace:         lagoonTask.Namespace,
 		Status:            status,
-		Step:              lagoonTask.Labels["lagoon.sh/buildStep"],
 		CreationTimestamp: lagoonTask.CreationTimestamp.Unix(),
 	}
 }
 
-type TaskQueueCache struct {
+type CachedTaskQueueItem struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
-	Priority          int    `json:"priority"`
 	Position          int    `json:"position"`
 	Length            int    `json:"length"`
 	CreationTimestamp int64  `json:"creationTimestamp"`
 }
 
-func (q *TaskQueueCache) String() string {
+func (q *CachedTaskQueueItem) String() string {
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
-func StrToTaskQueueCache(qcs string) TaskQueueCache {
-	qc := TaskQueueCache{}
+func StrToCachedTaskQueueItem(qcs string) CachedTaskQueueItem {
+	qc := CachedTaskQueueItem{}
 	_ = json.Unmarshal([]byte(qcs), &qc)
 	return qc
 }
 
-func NewTaskQueueCache(lagoonTask LagoonTask, priority, position, length int) TaskQueueCache {
-	return TaskQueueCache{
+func NewCachedTaskQueueItem(lagoonTask LagoonTask, position, length int) CachedTaskQueueItem {
+	return CachedTaskQueueItem{
 		Name:              lagoonTask.Name,
 		Namespace:         lagoonTask.Namespace,
-		Priority:          priority,
 		Position:          position,
 		Length:            length,
 		CreationTimestamp: lagoonTask.CreationTimestamp.Unix(),

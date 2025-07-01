@@ -411,7 +411,6 @@ kind/test-e2e: create-kind-cluster install-lagoon-remote kind/re-test-e2e
 .PHONY: local-kind/test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up locally
 kind/re-test-e2e:
 	export KIND_PATH=$(KIND) && \
-	export KUBECTL_PATH=$(KUBECTL) && \
 	export KIND_CLUSTER=$(KIND_CLUSTER) && \
 	$(KIND) export kubeconfig --name=$(KIND_CLUSTER) && \
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
@@ -427,6 +426,7 @@ kind/clean:
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up inside github action.
 test-e2e: build-task-image generate-broker-certs
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
+	export KUBECTL_PATH=$(KUBECTL) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
 	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/dockerhost"
@@ -49,6 +50,8 @@ type BuildMonitorReconciler struct {
 	BuildQoS              BuildQoS
 	Cache                 *expirable.LRU[string, string]
 	DockerHost            *dockerhost.DockerHost
+	QueueCache            *lru.Cache[string, string]
+	BuildCache            *lru.Cache[string, string]
 }
 
 // @TODO: all the things for now, review later
@@ -115,18 +118,10 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if !r.LFFQoSEnabled {
 		// if qos is not enabled, then handle the check for pending builds here
 		opLog.Info("Checking for any pending builds.")
-		runningBuilds := &lagooncrd.LagoonBuildList{}
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(req.Namespace),
-			client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String()}),
-		})
-		// list all builds in the namespace that have the running buildstatus
-		if err := r.List(ctx, runningBuilds, listOption); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-		}
+		runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
 		// if we have no running builds, then check for any pending builds
-		if len(runningBuilds.Items) == 0 {
-			return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, req.Namespace, "Running")
+		if len(runningNSBuilds) == 0 {
+			return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace, "Running")
 		}
 	} else if r.EnableDebug {
 		opLog.Info("No pending build check in namespaces when QoS is enabled")

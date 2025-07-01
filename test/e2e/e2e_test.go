@@ -62,7 +62,7 @@ var (
 
 	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
 	deletePolicyWant        = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
-	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
+	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev8/nginx"},{"artifact_count":1,"name":"nginx-example/dev7/nginx"},{"artifact_count":1,"name":"nginx-example/dev6/nginx"},{"artifact_count":1,"name":"nginx-example/dev5/nginx"},{"artifact_count":1,"name":"nginx-example/dev4/nginx"},{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
 )
 
 func init() {
@@ -101,6 +101,11 @@ var _ = Describe("controller", Ordered, func() {
 		utils.CleanupNamespace("nginx-example-dev1")
 		utils.CleanupNamespace("nginx-example-dev2")
 		utils.CleanupNamespace("nginx-example-dev3")
+		utils.CleanupNamespace("nginx-example-dev4")
+		utils.CleanupNamespace("nginx-example-dev5")
+		utils.CleanupNamespace("nginx-example-dev6")
+		utils.CleanupNamespace("nginx-example-dev7")
+		utils.CleanupNamespace("nginx-example-dev8")
 
 		By("delete harbor project")
 		_ = utils.DeleteHarborProject(ip, "nginx-example")
@@ -131,6 +136,7 @@ var _ = Describe("controller", Ordered, func() {
 			podlogs, err := utils.Run(cmd)
 			if err == nil {
 				fmt.Fprintf(GinkgoWriter, "info: %s\n", podlogs)
+				_ = os.WriteFile("logs.txt", []byte(podlogs), 0644)
 			}
 			// cmd = exec.Command(utils.Kubectl(), "logs",
 			// 	controllerPodName, "-c", "manager",
@@ -498,7 +504,7 @@ var _ = Describe("controller", Ordered, func() {
 			time.Sleep(5 * time.Second)
 
 			By("delete environments via rabbitmq")
-			for _, env := range []string{"main", "dev1", "dev2", "dev3"} {
+			for _, env := range []string{"main", "dev1", "dev2", "dev3", "dev4", "dev5", "dev6", "dev7", "dev8"} {
 				cmd = exec.Command(
 					"curl",
 					"-s",
@@ -518,7 +524,7 @@ var _ = Describe("controller", Ordered, func() {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 			By("validating that the namespaces are deleted")
-			for _, env := range []string{"main", "dev1", "dev2", "dev3"} {
+			for _, env := range []string{"main", "dev1", "dev2", "dev3", "dev4", "dev5", "dev6", "dev7", "dev8"} {
 				verifyNamespaceRemoved := func() error {
 					cmd = exec.Command(utils.Kubectl(), "get",
 						"namespace", fmt.Sprintf("nginx-example-%s", env),
@@ -621,7 +627,7 @@ func compareRepositories(want, got string) error {
 	hpgb, _ := json.Marshal(hpg)
 	hpwb, _ := json.Marshal(hpw)
 	if string(hpwb) != string(hpgb) {
-		return fmt.Errorf("resulting policies don't match:\nwant: %s\ngot: %s", string(hpwb), string(hpgb))
+		return fmt.Errorf("resulting project respostories don't match:\nwant: %s\ngot: %s", string(hpwb), string(hpgb))
 	}
 	return nil
 }

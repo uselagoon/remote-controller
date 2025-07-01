@@ -197,3 +197,59 @@ func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+type CachedTaskItem struct {
+	Name              string `json:"name"`
+	Namespace         string `json:"namespace"`
+	Status            string `json:"status"`
+	CreationTimestamp int64  `json:"creationTimestamp"`
+}
+
+func (q *CachedTaskItem) String() string {
+	b, _ := json.Marshal(q)
+	return string(b)
+}
+
+func StrToCachedTaskItem(bcs string) CachedTaskItem {
+	bc := CachedTaskItem{}
+	_ = json.Unmarshal([]byte(bcs), &bc)
+	return bc
+}
+
+func NewCachedTaskItem(lagoonTask LagoonTask, status string) CachedTaskItem {
+	return CachedTaskItem{
+		Name:              lagoonTask.Name,
+		Namespace:         lagoonTask.Namespace,
+		Status:            status,
+		CreationTimestamp: lagoonTask.CreationTimestamp.Unix(),
+	}
+}
+
+type CachedTaskQueueItem struct {
+	Name              string `json:"name"`
+	Namespace         string `json:"namespace"`
+	Position          int    `json:"position"`
+	Length            int    `json:"length"`
+	CreationTimestamp int64  `json:"creationTimestamp"`
+}
+
+func (q *CachedTaskQueueItem) String() string {
+	b, _ := json.Marshal(q)
+	return string(b)
+}
+
+func StrToCachedTaskQueueItem(qcs string) CachedTaskQueueItem {
+	qc := CachedTaskQueueItem{}
+	_ = json.Unmarshal([]byte(qcs), &qc)
+	return qc
+}
+
+func NewCachedTaskQueueItem(lagoonTask LagoonTask, position, length int) CachedTaskQueueItem {
+	return CachedTaskQueueItem{
+		Name:              lagoonTask.Name,
+		Namespace:         lagoonTask.Namespace,
+		Position:          position,
+		Length:            length,
+		CreationTimestamp: lagoonTask.CreationTimestamp.Unix(),
+	}
+}

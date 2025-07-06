@@ -2,7 +2,6 @@ package v1beta2
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -10,7 +9,6 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TaskQoS is use for the quality of service configuration for lagoon tasks.
@@ -40,36 +38,24 @@ func (r *LagoonTaskReconciler) qosTaskProcessor(ctx context.Context,
 }
 
 func (r *LagoonTaskReconciler) whichTaskNext(ctx context.Context, opLog logr.Logger) error {
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.MatchingLabels(map[string]string{
-			"lagoon.sh/taskStatus": lagooncrd.TaskStatusRunning.String(),
-			"lagoon.sh/controller": r.ControllerNamespace,
-		}),
-	})
-	runningTasks := &lagooncrd.LagoonTaskList{}
-	if err := r.List(ctx, runningTasks, listOption); err != nil {
-		return fmt.Errorf("unable to list tasks in the cluster, there may be none or something went wrong: %v", err)
-	}
-	tasksToStart := r.TaskQoS.MaxTasks - len(runningTasks.Items)
-	if len(runningTasks.Items) >= r.TaskQoS.MaxTasks {
+	tasksToStart := r.TaskQoS.MaxTasks - len(r.TasksCache.Values())
+	if len(r.TasksCache.Values()) >= r.TaskQoS.MaxTasks {
 		// if the maximum number of tasks is hit, then drop out and try again next time
 		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("Currently %v running tasks, no room for new tasks to be started", len(runningTasks.Items)))
+			opLog.Info(fmt.Sprintf("Currently %v running tasks, no room for new tasks to be started", len(r.TasksCache.Values())))
 		}
 		//nolint:errcheck
-		go r.processQueue(ctx, opLog, tasksToStart, true)
+		go r.processQueue(ctx, opLog, 0, true)
 		return nil
 	}
 	if tasksToStart > 0 {
-		opLog.Info(fmt.Sprintf("Currently %v running tasks, room for %v tasks to be started", len(runningTasks.Items), tasksToStart))
+		opLog.Info(fmt.Sprintf("Currently %v running tasks, room for %v tasks to be started", len(r.TasksCache.Values()), tasksToStart))
 		// if there are any free slots to start a task, do that here
 		//nolint:errcheck
-		go r.processQueue(ctx, opLog, tasksToStart, false)
+		go r.processQueue(ctx, opLog, 1, false)
 	}
 	return nil
 }
-
-var runningTaskQueueProcess bool
 
 // this is a processor for any tasks that are currently `queued` status. all normal task activity will still be performed
 // this just allows the controller to update any tasks that are in the queue periodically
@@ -84,111 +70,91 @@ func (r *LagoonTaskReconciler) processQueue(ctx context.Context, opLog logr.Logg
 	// status of the tasks, but task complete/fail/cancel will always win out on the lagoon-core side
 	// so this isn't that much of an issue if there are some delays in the messages
 	opLog = opLog.WithName("QueueProcessor")
-	if !runningTaskQueueProcess {
-		runningTaskQueueProcess = true
-		if r.EnableDebug {
-			opLog.Info("Processing queue")
-		}
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.MatchingLabels(map[string]string{
-				"lagoon.sh/taskStatus": lagooncrd.TaskStatusPending.String(),
-				"lagoon.sh/controller": r.ControllerNamespace,
-			}),
-		})
-		pendingTasks := &lagooncrd.LagoonTaskList{}
-		if err := r.List(ctx, pendingTasks, listOption); err != nil {
-			runningTaskQueueProcess = false
-			return fmt.Errorf("unable to list tasks in the cluster, there may be none or something went wrong: %v", err)
-		}
-		if len(pendingTasks.Items) > 0 {
+	if r.EnableDebug {
+		opLog.Info("Processing queue")
+	}
+	// if we have any pending tasks, then grab the latest one and make it running
+	// if there are any other pending tasks, cancel them so only the latest one runs
+	sortedTasks, _ := lagooncrd.SortQueuedTasks(r.QueueCache.Values())
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("There are %v pending tasks", len(sortedTasks)))
+	}
+	for idx, pTask := range sortedTasks {
+		// need to +1 to index because 0
+		// if the `limitHit` is not set it means that task qos has reached the maximum that this remote has allowed to start
+		if idx < tasksToStart && !limitHit {
 			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("There are %v pending tasks", len(pendingTasks.Items)))
+				opLog.Info(fmt.Sprintf("Checking if task %s can be started", pTask.Name))
 			}
-			// if we have any pending tasks, then grab the latest one and make it running
-			// if there are any other pending tasks, cancel them so only the latest one runs
-			sortTasks(pendingTasks)
-			for idx, pTask := range pendingTasks.Items {
-				// need to +1 to index because 0
-				// if the `limitHit` is not set it means that task qos has reached the maximum that this remote has allowed to start
-				if idx+1 <= tasksToStart && !limitHit {
-					if r.EnableDebug {
-						opLog.Info(fmt.Sprintf("Checking if task %s can be started", pTask.Name))
+			// if we do have a `lagoon.sh/taskStatus` set, then process as normal
+			runningNSTasks, _ := lagooncrd.NamespaceRunningTasks(pTask.Namespace, r.TasksCache.Values())
+			// if there is a limit to the number of tasks per namespace, enforce that here
+			opLog.Info(fmt.Sprintf("Running NS less than max namespace: %v", len(runningNSTasks) < r.TaskQoS.MaxNamespaceTasks))
+			if len(runningNSTasks) < r.TaskQoS.MaxNamespaceTasks {
+				/*
+					if namespaces or sorting allows for additional edge cases
+					then in the future this section should be updated to accomodate these additional rule sets
+					right now the sorting sorts by creation time, and then only the first pending item is started
+					all other tasks remain pending
+				*/
+				pendingTasks, _ := lagooncrd.SortQueuedNamespaceTasks(pTask.Namespace, r.QueueCache.Values())
+				// if we have any pending tasks, then grab the latest one and make it running
+				// this is where the task controller will take over and start the pod
+				for idx2, pTask2 := range pendingTasks {
+					var lagoonTask lagooncrd.LagoonTask
+					if err := r.Get(ctx, types.NamespacedName{Namespace: pTask2.Namespace, Name: pTask2.Name}, &lagoonTask); err != nil {
+						return helpers.IgnoreNotFound(err)
 					}
-					// if we do have a `lagoon.sh/taskStatus` set, then process as normal
-					runningNSTasks := &lagooncrd.LagoonTaskList{}
-					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-						client.InNamespace(pTask.Namespace),
-						client.MatchingLabels(map[string]string{
-							"lagoon.sh/taskStatus": lagooncrd.TaskStatusRunning.String(),
-							"lagoon.sh/controller": r.ControllerNamespace,
-						}),
-					})
-					// list any tasks that are running
-					if err := r.List(ctx, runningNSTasks, listOption); err != nil {
-						runningTaskQueueProcess = false
-						return fmt.Errorf("unable to list tasks in the namespace, there may be none or something went wrong: %v", err)
+					// if the task is the first in the sorted list of pending tasks in this namespace, then start it
+					if idx2 == 0 {
+						lagoonTask.Labels["lagoon.sh/taskStatus"] = lagooncrd.TaskStatusRunning.String()
+						r.TasksCache.Add(lagoonTask.Name, fmt.Sprintf(`{"name":"%s","namespace":"%s","status":"%s","step":"%s","creationTimestamp":%d}`, lagoonTask.Name, lagoonTask.Namespace, lagoonTask.Labels["lagoon.sh/buildStatus"], lagoonTask.Labels["lagoon.sh/buildStatus"], lagoonTask.CreationTimestamp.Unix()))
+						r.QueueCache.Remove(lagoonTask.Name)
 					}
-
-					// if there is a limit to the number of tasks per namespace, enforce that here
-					if len(runningNSTasks.Items) < r.TaskQoS.MaxNamespaceTasks {
-						pendingTasks := &lagooncrd.LagoonTaskList{}
-						listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-							client.InNamespace(pTask.Namespace),
-							client.MatchingLabels(map[string]string{"lagoon.sh/taskStatus": lagooncrd.TaskStatusPending.String()}),
-						})
-						if err := r.List(ctx, pendingTasks, listOption); err != nil {
-							return fmt.Errorf("unable to list tasks in the namespace, there may be none or something went wrong: %v", err)
-						}
-						/*
-							if namespaces or sorting allows for additional edge cases
-							then in the future this section should be updated to accomodate these additional rule sets
-							right now the sorting sorts by creation time, and then only the first pending item is started
-							all other tasks remain pending
-						*/
-						sortTasks(pendingTasks)
-						// opLog.Info(fmt.Sprintf("There are %v pending tasks", len(pendingTasks.Items)))
-						// if we have any pending tasks, then grab the latest one and make it running
-						// this is where the task controller will take over and start the pod
-						for idx, pTask := range pendingTasks.Items {
-							pendingTask := pTask.DeepCopy()
-							// if the task is the first in the sorted list of pending tasks in this namespace, then start it
-							if idx == 0 {
-								pendingTask.Labels["lagoon.sh/taskStatus"] = lagooncrd.TaskStatusRunning.String()
-							}
-							if err := r.Update(ctx, pendingTask); err != nil {
-								return err
-							}
-						}
-						// don't handle the queued process for this task, continue to next in the list
-						continue
-					}
-					// The object is not being deleted, so if it does not have our finalizer,
-					// then lets add the finalizer and update the object. This is equivalent
-					// registering our finalizer.
-					if !helpers.ContainsString(pTask.Finalizers, taskFinalizer) {
-						pTask.Finalizers = append(pTask.Finalizers, taskFinalizer)
-						// use patches to avoid update errors
-						mergePatch, _ := json.Marshal(map[string]interface{}{
-							"metadata": map[string]interface{}{
-								"finalizers": pTask.Finalizers,
-							},
-						})
-						if err := r.Patch(ctx, &pTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-							runningTaskQueueProcess = false
-							return err
-						}
+					opLog.Info(fmt.Sprintf("Updating task to running: %v", pTask2.Name))
+					if err := r.Update(ctx, &lagoonTask); err != nil {
+						return err
 					}
 				}
-				// update the task to be queued, and add a log message with the task log with the current position in the queue
-				// this position will update as tasks are created/processed, so the position of a task could change depending on
-				// higher or lower priority tasks being created
-				if err := r.updateQueuedTask(pTask, (idx + 1), len(pendingTasks.Items), opLog); err != nil {
-					runningTaskQueueProcess = false
-					return nil
-				}
+				// don't handle the queued process for this task, continue to next in the list
+				continue
+			}
+			// TODO: I can't remember if this was used for anything, it looks like it may be a copy paste error
+			/*
+				// The object is not being deleted, so if it does not have our finalizer,
+				// then lets add the finalizer and update the object. This is equivalent
+				// registering our finalizer.
+				// if !helpers.ContainsString(pTask.Finalizers, taskFinalizer) {
+				// 	pTask.Finalizers = append(pTask.Finalizers, taskFinalizer)
+				// 	// use patches to avoid update errors
+				// 	mergePatch, _ := json.Marshal(map[string]interface{}{
+				// 		"metadata": map[string]interface{}{
+				// 			"finalizers": pTask.Finalizers,
+				// 		},
+				// 	})
+				// 	if err := r.Patch(ctx, &pTask, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+				// 		return err
+				// 	}
+				// }
+			*/
+		}
+		// update the task to be queued, and add a log message with the task log with the current position in the queue
+		// this position will update as tasks are created/processed, so the position of a task could change depending on
+		// higher or lower priority tasks being created
+		qcb := sortedTasks[idx]
+		// only update the queued task if the position or length of the queue changes
+		// simply to reduce messages sent
+		if qcb.Position != (idx+1) || qcb.Length != len(sortedTasks) {
+			qcb.Position = (idx + 1)
+			qcb.Length = len(sortedTasks)
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("Updating task %s to queued: %s", pTask.Name, fmt.Sprintf("This task is currently queued in position %v/%v", qcb.Position, qcb.Length)))
+			}
+			if err := r.updateQueuedTask(ctx, types.NamespacedName{Namespace: pTask.Namespace, Name: pTask.Name}, qcb.Position, qcb.Length, opLog); err != nil {
+				return nil
 			}
 		}
-		runningTaskQueueProcess = false
+		r.QueueCache.Add(pTask.Name, qcb.String())
 	}
 	return nil
 }

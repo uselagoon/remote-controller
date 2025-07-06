@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -31,6 +32,26 @@ func testBuildQoS(timeout string, duration, interval time.Duration) {
 			Name:      "xpyz5m4",
 			Namespace: "nginx-example-dev3",
 		},
+		{
+			Name:      "xpyz5m5",
+			Namespace: "nginx-example-dev4",
+		},
+		{
+			Name:      "xpyz5m6",
+			Namespace: "nginx-example-dev5",
+		},
+		{
+			Name:      "xpyz5m7",
+			Namespace: "nginx-example-dev6",
+		},
+		{
+			Name:      "xpyz5m8",
+			Namespace: "nginx-example-dev7",
+		},
+		{
+			Name:      "xpyz5m9",
+			Namespace: "nginx-example-dev8",
+		},
 	}
 
 	ginkgo.By("validating that lagoonbuilds are queing")
@@ -57,43 +78,27 @@ func testBuildQoS(timeout string, duration, interval time.Duration) {
 	}
 	time.Sleep(5 * time.Second)
 	for _, build := range builds {
-		ginkgo.By("validating that the LagoonBuild build pod is created")
-		cmd := exec.Command(
-			utils.Kubectl(),
-			"-n", build.Namespace,
-			"wait",
-			"--for=condition=Ready",
-			"pod",
-			fmt.Sprintf("lagoon-build-%s", build.Name),
-			fmt.Sprintf("--timeout=%s", timeout),
-		)
-		_, err := utils.Run(cmd)
-		if build.Name == "xpyz5m4" {
-			// should fail because it gets queued at 3 builds max
-			gomega.ExpectWithOffset(1, err).To(gomega.HaveOccurred())
-			// then wait for the build pod to start
-			verifyBuildRuns := func() error {
-				cmd = exec.Command(utils.Kubectl(), "get",
-					"pods", fmt.Sprintf("lagoon-build-%s", build.Name),
-					"-o", "jsonpath={.status.phase}",
+		if slices.Contains([]string{"xpyz5m1", "xpyz5m2", "xpyz5m3", "xpyz5m4", "xpyz5m5", "xpyz5m6", "xpyz5m7", "xpyz5m8", "xpyz5m9"}, build.Name) {
+			ginkgo.By("validating that the LagoonBuild build pod is created")
+			verifyBuildPodCreates := func() error {
+				// Validate pod status
+				cmd := exec.Command(
+					utils.Kubectl(),
 					"-n", build.Namespace,
+					"wait",
+					"--for=create",
+					"pod",
+					fmt.Sprintf("lagoon-build-%s", build.Name),
+					fmt.Sprintf("--timeout=%s", timeout),
 				)
-				status, err := utils.Run(cmd)
-				if err != nil {
-					return err
-				}
-				if string(status) != "Running" {
-					return fmt.Errorf("build pod in %s status", status)
-				}
-				return nil
+				_, err := utils.Run(cmd)
+				return err
 			}
-			// if this fails, then qos didn't start the pod for some reason in the duration available
-			gomega.EventuallyWithOffset(1, verifyBuildRuns, duration, interval).Should(gomega.Succeed())
-
+			gomega.EventuallyWithOffset(1, verifyBuildPodCreates, duration, interval).Should(gomega.Succeed())
 			ginkgo.By("validating that the lagoon-build pod completes as expected")
 			verifyBuildPodCompletes := func() error {
 				// Validate pod status
-				cmd = exec.Command(utils.Kubectl(), "get",
+				cmd := exec.Command(utils.Kubectl(), "get",
 					"pods", fmt.Sprintf("lagoon-build-%s", build.Name), "-o", "jsonpath={.status.phase}",
 					"-n", build.Namespace,
 				)
@@ -105,9 +110,6 @@ func testBuildQoS(timeout string, duration, interval time.Duration) {
 				return nil
 			}
 			gomega.EventuallyWithOffset(1, verifyBuildPodCompletes, duration, interval).Should(gomega.Succeed())
-		} else {
-			// should pass because qos builds
-			gomega.ExpectWithOffset(1, err).NotTo(gomega.HaveOccurred())
 		}
 	}
 

@@ -1,32 +1,11 @@
 version: '3.2'
 services:
-  # local-dbaas-mariadb-provider:
-  #   build:
-  #     context: test-resources
-  #     dockerfile: Dockerfile.mariadb
-  #   restart: always
-  #   environment:
-  #     MYSQL_DATABASE: 'db'
-  #     MYSQL_USER: 'user'
-  #     MYSQL_PASSWORD: 'password'
-  #     MYSQL_ROOT_PASSWORD: 'password'
-  #   ports:
-  #     - '3306:3306'
-  # mysql:
-  #   image: amazeeio/alpine-mysql-client
-  #   environment:
-  #     MYSQL_PWD: 'password'
-  #   stdin_open: true
-  local-registry:
-    build:
-      context: test-resources
-      dockerfile: Dockerfile.registry
-    ports:
-      - '5000:5000'
   local-broker:
     build:
       context: test-resources
       dockerfile: Dockerfile.broker
+      args:
+        UPSTREAM_TAG: v2.25.0
     volumes:
       - ./local-dev/certificates/ca.crt:/ca.crt:ro
       - ./local-dev/certificates/tls.crt:/tls.crt:ro

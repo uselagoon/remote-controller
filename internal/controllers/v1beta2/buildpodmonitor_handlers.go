@@ -27,33 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// @TODO: this is for initial implementation testing only, this should be removed once the label support in https://github.com/uselagoon/build-deploy-tool/pull/390
-var nonDockerbuilds = []string{
-	// "collectEnvironment",
-	// "initialSetup",
-	// "lagoonYmlValidation",
-	// "dockerComposeValidation",
-	// "configuringVariables",
-	// "registryLogin",
-	// "buildingImages",
-	// "serviceConfigurationPhase",
-	// "configuringRoutes",
-	// "cleanupRoutes",
-	// "staleChallenges",
-	// "updateEnvSecrets",
-	// "pushingImages",
-	"deprecatedImages",
-	"configuringBackups",
-	"runningPreRolloutTasks",
-	"templatingDeployments",
-	"applyingDeployments",
-	"cleaningUpCronjobs",
-	"runningPostRolloutTasks",
-	"finalizingBuild",
-	"gatheringInsights",
-	"deployCompletedWithWarnings",
-}
-
 func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	opLog logr.Logger,
 	req ctrl.Request,
@@ -86,11 +59,6 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
 	}
 	dockerBuild := true //nolint:staticcheck
-	// if the build passes into one of these steps, then it is no longer considered a docker build
-	// @TODO: this is for initial implementation testing only, this should be removed once the label support in https://github.com/uselagoon/build-deploy-tool/pull/390
-	if helpers.ContainsString(nonDockerbuilds, jobPod.Labels["lagoon.sh/buildStep"]) {
-		dockerBuild = false
-	}
 	if imagesComplete, ok := jobPod.Labels["build.lagoon.sh/images-complete"]; ok && imagesComplete == "true" {
 		dockerBuild = false
 	}

@@ -559,18 +559,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 1000)
 	// create the cancellation cache
-	cache := expirable.NewLRU[string, string](1000, nil, time.Minute*60)
+	cache := expirable.NewLRU[string, string](cacheSize, nil, time.Minute*60)
 	// create queue cache
-	buildsQueueCache, _ := lru.New[string, string](1000)
+	buildsQueueCache, _ := lru.New[string, string](cacheSize)
 	// create builds cache
-	buildsCache, _ := lru.New[string, string](1000)
+	buildsCache, _ := lru.New[string, string](cacheSize)
 	// create tasks queue cache
-	tasksQueueCache, _ := lru.New[string, string](1000)
+	tasksQueueCache, _ := lru.New[string, string](cacheSize)
 	// create tasks cache
-	tasksCache, _ := lru.New[string, string](1000)
-
-	// @TODO: maybe do the same cache for tasks
+	tasksCache, _ := lru.New[string, string](cacheSize)
 
 	brokerDSN := fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost)
 	if mqTLS {
@@ -765,8 +764,8 @@ func main() {
 		harborConfig,
 	)
 
-	reuseCache, _ := lru.New[string, string](1000)
-	buildCache, _ := lru.New[string, string](1000)
+	reuseCache, _ := lru.New[string, string](cacheSize)
+	buildCache, _ := lru.New[string, string](cacheSize)
 	dockerhostResuseTypes := map[string]bool{
 		"namespace":    true,
 		"project":      true,

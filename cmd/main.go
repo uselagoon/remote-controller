@@ -175,7 +175,8 @@ func main() {
 
 	var lffQoSEnabled bool
 	var qosMaxBuilds int
-	var qosDefaultValue int
+	var qosMaxContainerBuilds int
+	var qosDefaultPriority int
 
 	var lffTaskQoSEnabled bool
 	var qosMaxTasks int
@@ -392,8 +393,11 @@ func main() {
 
 	// Build QoS configuration
 	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
-	flag.IntVar(&qosMaxBuilds, "qos-max-builds", 20, "The total number of builds that can run at any one time.")
-	flag.IntVar(&qosDefaultValue, "qos-default", 5, "The default qos value to apply if one is not provided.")
+	// this flag remains the same, the number of max builds flag remains unchanged to be backwards compatible
+	flag.IntVar(&qosMaxContainerBuilds, "qos-max-builds", 20, "The total number of builds during the container build phase that can run at any one time.")
+	// this new flag is added but defaults to 0, if it is greater than `qos-max-builds` then it will be used, otherwise it will default to the value of `qos-max-builds`
+	flag.IntVar(&qosMaxBuilds, "qos-total-builds", 0, "The total number of builds that can run at any one time. Defaults to qos-max-builds if not provided or less than qos-max-builds.")
+	flag.IntVar(&qosDefaultPriority, "qos-default", 5, "The default qos priority value to apply if one is not provided.")
 
 	// Task QoS configuration
 	flag.BoolVar(&lffTaskQoSEnabled, "enable-task-qos", false, "Flag to enable this controller with QoS for tasks.")
@@ -555,8 +559,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// create the cache
-	cache := expirable.NewLRU[string, string](1000, nil, time.Minute*60)
+	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 1000)
+	// create the cancellation cache
+	cache := expirable.NewLRU[string, string](cacheSize, nil, time.Minute*60)
+	// create queue cache
+	buildsQueueCache, _ := lru.New[string, string](cacheSize)
+	// create builds cache
+	buildsCache, _ := lru.New[string, string](cacheSize)
+	// create tasks queue cache
+	tasksQueueCache, _ := lru.New[string, string](cacheSize)
+	// create tasks cache
+	tasksCache, _ := lru.New[string, string](cacheSize)
 
 	brokerDSN := fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost)
 	if mqTLS {
@@ -751,8 +764,8 @@ func main() {
 		harborConfig,
 	)
 
-	reuseCache, _ := lru.New[string, string](1000)
-	buildCache, _ := lru.New[string, string](1000)
+	reuseCache, _ := lru.New[string, string](cacheSize)
+	buildCache, _ := lru.New[string, string](cacheSize)
 	dockerhostResuseTypes := map[string]bool{
 		"namespace":    true,
 		"project":      true,
@@ -778,9 +791,14 @@ func main() {
 		go messaging.Consumer(lagoonTargetName)
 	}
 
+	// this ensures that the max number of builds is not less than the container builds support
+	if qosMaxBuilds < qosMaxContainerBuilds {
+		qosMaxBuilds = qosMaxContainerBuilds
+	}
 	buildQoSConfigv1beta2 := lagoonv1beta2ctrl.BuildQoS{
-		MaxBuilds:    qosMaxBuilds,
-		DefaultValue: qosDefaultValue,
+		MaxBuilds:          qosMaxBuilds,
+		MaxContainerBuilds: qosMaxContainerBuilds,
+		DefaultPriority:    qosDefaultPriority,
 	}
 
 	taskQoSConfigv1beta2 := lagoonv1beta2ctrl.TaskQoS{
@@ -906,6 +924,8 @@ func main() {
 
 	c.Start()
 
+	// @TODO: maybe insert a pre-controller start state collector to try and seed the queue/build caches before the controllers start
+
 	setupLog.Info("starting build controller")
 	// v1beta2 is the latest version
 	if err = (&lagoonv1beta2ctrl.LagoonBuildReconciler{
@@ -968,6 +988,8 @@ func main() {
 		UnauthenticatedRegistry: unauthenticatedRegistry,
 		ImagePullPolicy:         bipp,
 		DockerHost:              dockerhosts,
+		QueueCache:              buildsQueueCache,
+		BuildCache:              buildsCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)
@@ -999,6 +1021,8 @@ func main() {
 		LFFTaskQoSEnabled: lffTaskQoSEnabled,
 		TaskQoS:           taskQoSConfigv1beta2,
 		ImagePullPolicy:   tipp,
+		QueueCache:        tasksQueueCache,
+		TasksCache:        tasksCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)
@@ -1019,6 +1043,8 @@ func main() {
 		BuildQoS:              buildQoSConfigv1beta2,
 		Cache:                 cache,
 		DockerHost:            dockerhosts,
+		QueueCache:            buildsQueueCache,
+		BuildCache:            buildsCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuildPodMonitor")
 		os.Exit(1)
@@ -1036,6 +1062,8 @@ func main() {
 		EnableDebug:           enableDebug,
 		LagoonTargetName:      lagoonTargetName,
 		Cache:                 cache,
+		QueueCache:            tasksQueueCache,
+		TasksCache:            tasksCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTaskPodMonitor")
 		os.Exit(1)

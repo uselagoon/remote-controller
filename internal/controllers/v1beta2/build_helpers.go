@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -836,7 +835,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			lagoonBuild.Name,
 			reuseType,
 			r.LFFQoSEnabled,
-			r.BuildQoS.MaxBuilds,
+			r.BuildQoS.MaxContainerBuilds,
 		)
 		dockerHostEnvVar := corev1.EnvVar{
 			Name:  "DOCKER_HOST",
@@ -868,20 +867,22 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		}).Set(1)
 		metrics.BuildsStartedCounter.Inc()
 		// then break out of the build
+	} else {
+		opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.Name))
 	}
-	opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.Name))
 	return nil
 }
 
 // updateQueuedBuild will update a build if it is queued
 func (r *LagoonBuildReconciler) updateQueuedBuild(
 	ctx context.Context,
-	lagoonBuild lagooncrd.LagoonBuild,
+	buildReq types.NamespacedName,
 	queuePosition, queueLength int,
 	opLog logr.Logger,
 ) error {
-	if r.EnableDebug {
-		opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", lagoonBuild.Name, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
+	var lagoonBuild lagooncrd.LagoonBuild
+	if err := r.Get(ctx, buildReq, &lagoonBuild); err != nil {
+		return helpers.IgnoreNotFound(err)
 	}
 	// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
 	// so just set the logs to be cancellation message
@@ -963,29 +964,4 @@ Build cancelled
 		}
 	}
 	return nil
-}
-
-func sortBuilds(defaultPriority int, pendingBuilds *lagooncrd.LagoonBuildList) {
-	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-		// sort by priority, then creation timestamp
-		iPriority := defaultPriority
-		jPriority := defaultPriority
-		if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
-			iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
-		}
-		if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
-			jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
-		}
-		// better sorting based on priority then creation timestamp
-		// sort by higher priority first, where the greater the number the higher the priority
-		// production have priority 6 default (highest)
-		// development have priority 5 default (mid)
-		// bulk deployments have priority 3 default (low)
-		switch {
-		case iPriority != jPriority:
-			return iPriority > jPriority
-		default:
-			return pendingBuilds.Items[i].CreationTimestamp.Before(&pendingBuilds.Items[j].CreationTimestamp)
-		}
-	})
 }

@@ -41,6 +41,8 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	// ensure the build is not in the queue
+	r.QueueCache.Remove(jobPod.Name)
 	cancel := false
 	if cancelBuild, ok := jobPod.Labels["lagoon.sh/cancelBuild"]; ok {
 		cancel, _ = strconv.ParseBool(cancelBuild)
@@ -56,6 +58,16 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 		opLog.Info(fmt.Sprintf("Attempting to cancel build %s", lagoonBuild.Name))
 		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, cancel)
 	}
+	dockerBuild := true //nolint:staticcheck
+	if imagesComplete, ok := jobPod.Labels["build.lagoon.sh/images-complete"]; ok && imagesComplete == "true" {
+		dockerBuild = false
+	}
+	// brand new builds won't have this label/value so it will be empty
+	if jobPod.Labels["lagoon.sh/buildStep"] == "" {
+		dockerBuild = true
+	}
+	bc := lagooncrd.NewCachedBuildItem(lagoonBuild, string(jobPod.Status.Phase), dockerBuild)
+	r.BuildCache.Add(lagoonBuild.Name, bc.String())
 	// check if the build pod is in pending, a container in the pod could be failed in this state
 	switch jobPod.Status.Phase {
 	case corev1.PodPending:
@@ -88,7 +100,8 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 						},
 					}
 					jobPod.Status.ContainerStatuses[0] = state
-
+					// remove the build from the build cache
+					r.BuildCache.Remove(jobPod.Name)
 					// send any messages to lagoon message queues
 					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
 					return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, []byte(logMsg), false)
@@ -122,6 +135,11 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 		if err != nil {
 			return err
 		}
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("Build %s reached %s", lagoonBuild.Name, jobPod.Status.Phase))
+		}
+		// remove the build from the build cache
+		r.BuildCache.Remove(jobPod.Name)
 	}
 
 	// send any messages to lagoon message queues

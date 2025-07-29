@@ -48,13 +48,13 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		opLog.Info(fmt.Sprintf("Currently %v running builds, max build limit reached.", len(r.BuildCache.Values())))
 		// can't start any builds, so pass 0
 		go r.processQueue(ctx, opLog, 0, true) //nolint:errcheck
-		return nil
-	}
-	if buildsToStart > 0 {
+	} else {
 		opLog.Info(fmt.Sprintf("Currently %v running container build phase builds, room for %v to be started.", len(dockerBuilds), buildsToStart))
-		// if there are any free slots to start a build, do that here
-		// just start 1 build per reconcile event to ensure that the number builds doesn't exceed the max builds count
-		go r.processQueue(ctx, opLog, 1, false) //nolint:errcheck
+		if buildsToStart > 0 {
+			// if there are any free slots to start a build, do that here
+			// just start 1 build per reconcile event to ensure that the number builds doesn't exceed the max builds count
+			go r.processQueue(ctx, opLog, 1, false) //nolint:errcheck
+		}
 	}
 	return nil
 }

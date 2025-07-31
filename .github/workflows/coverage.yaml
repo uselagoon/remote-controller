@@ -18,7 +18,7 @@ jobs:
       run: |
         go test -skip 'TestE2E|TestAPIs' -v -covermode=atomic -coverprofile=cover.out -coverpkg=./... ./...
     - name: Generage coverage badge
-      uses: vladopajic/go-test-coverage@937b863f06595080198d555b7ed3aa474ae5199c # v2.14.1
+      uses: vladopajic/go-test-coverage@d4177aaab9307eb783516275d495c01254da2fb9 # v2.16.0
       with:
         profile: cover.out
         local-prefix: github.com/${{ github.repository }}

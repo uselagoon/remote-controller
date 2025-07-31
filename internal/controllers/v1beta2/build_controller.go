@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +82,8 @@ type LagoonBuildReconciler struct {
 	UnauthenticatedRegistry          string
 	ImagePullPolicy                  corev1.PullPolicy
 	DockerHost                       *dockerhost.DockerHost
+	QueueCache                       *lru.Cache[string, string]
+	BuildCache                       *lru.Cache[string, string]
 }
 
 // BackupConfig holds all the backup configuration settings
@@ -140,27 +143,36 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				}
 			}
 		}
+		if status, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok && status == lagooncrd.BuildStatusPending.String() {
+			priority := r.BuildQoS.DefaultPriority
+			if lagoonBuild.Spec.Build.Priority != nil {
+				priority = *lagoonBuild.Spec.Build.Priority
+			}
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("Adding build %s to queue (%s)", lagoonBuild.Name, status))
+			}
+			// add the build to the cache when it is received
+			qc := lagooncrd.NewCachedBuildQueueItem(lagoonBuild, priority, 0, 0)
+			r.QueueCache.Add(lagoonBuild.Name, qc.String())
+		}
 		if r.LFFQoSEnabled {
 			// handle QoS builds here
 			// if we do have a `lagoon.sh/buildStatus` set as running, then process it
-			runningNSBuilds := &lagooncrd.LagoonBuildList{}
-			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-				client.InNamespace(req.Namespace),
-				client.MatchingLabels(map[string]string{
-					"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
-					"lagoon.sh/controller":  r.ControllerNamespace,
-				}),
-			})
-			// list any builds that are running
-			if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-			}
-			for _, runningBuild := range runningNSBuilds.Items {
+			runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
+			for _, runningBuild := range runningNSBuilds {
 				// if the running build is the one from this request then process it
 				if lagoonBuild.Name == runningBuild.Name {
 					// actually process the build here
 					if _, ok := lagoonBuild.Labels["lagoon.sh/buildStarted"]; !ok {
+						// create the build pod
+						// add the build to the cache first
+						bc := lagooncrd.NewCachedBuildItem(lagoonBuild, "Pending", true)
+						r.BuildCache.Add(lagoonBuild.Name, bc.String())
+						// remove the build from the queue after creating the pod
+						r.QueueCache.Remove(lagoonBuild.Name)
 						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+							// if the build pod creation errors, remove it from the buildcache
+							r.BuildCache.Remove(lagoonBuild.Name)
 							return ctrl.Result{}, err
 						}
 					}
@@ -199,6 +211,8 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, helpers.IgnoreNotFound(err)
 		}
 	}
+	// remove the build from the cache when the build itself is removed
+	r.BuildCache.Remove(lagoonBuild.Name)
 	return ctrl.Result{}, nil
 }
 
@@ -254,7 +268,7 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, namespace.Name, lagooncrd.BuildStatusPending.String())
+	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, namespace.Name, lagooncrd.BuildStatusPending.String())
 	if err != nil {
 		return ctrl.Result{}, err
 	}

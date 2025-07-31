@@ -7,14 +7,15 @@ import (
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/metrics"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // BuildQoS is use for the quality of service configuration for lagoon builds.
 type BuildQoS struct {
-	MaxBuilds    int
-	DefaultValue int
+	MaxContainerBuilds int
+	MaxBuilds          int
+	DefaultPriority    int
 }
 
 func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
@@ -34,48 +35,29 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 		opLog.Info("Checking which build next")
 	}
 	// handle the QoS build process here
-	// if the build is already running, then there is no need to check which build can be started next
-	if lagoonBuild.Labels["lagoon.sh/buildStatus"] == lagooncrd.BuildStatusRunning.String() {
-		// this is done so that all running state updates don't try to force the queue processor to run unnecessarily
-		// downside is that this can lead to queue/state changes being less frequent for queued builds in the api
-		// any new builds, or complete/failed/cancelled builds will still force the whichbuildnext processor to run though
-		return ctrl.Result{}, nil
-	}
 	// we only care if a new build can start if one is created, cancelled, failed, or completed
 	return ctrl.Result{}, r.whichBuildNext(ctx, opLog)
 }
 
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.MatchingLabels(map[string]string{
-			"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
-			"lagoon.sh/controller":  r.ControllerNamespace,
-		}),
-	})
-	runningBuilds := &lagooncrd.LagoonBuildList{}
-	if err := r.List(ctx, runningBuilds, listOption); err != nil {
-		return fmt.Errorf("unable to list builds in the cluster, there may be none or something went wrong: %v", err)
-	}
-	buildsToStart := r.BuildQoS.MaxBuilds - len(runningBuilds.Items)
-	if len(runningBuilds.Items) >= r.BuildQoS.MaxBuilds {
+	dockerBuilds, _ := lagooncrd.RunningDockerBuilds(r.BuildCache.Values())
+	buildsToStart := r.BuildQoS.MaxContainerBuilds - len(dockerBuilds)
+	// opLog.Info(fmt.Sprintf("Currently running builds. Total: %v, Docker: %v, Start: %v", len(r.BuildCache.Values()), len(dockerBuilds), buildsToStart))
+	if len(r.BuildCache.Values()) >= r.BuildQoS.MaxBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
-		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("Currently %v running builds, no room for new builds to be started", len(runningBuilds.Items)))
+		opLog.Info(fmt.Sprintf("Currently %v running builds, max build limit reached.", len(r.BuildCache.Values())))
+		// can't start any builds, so pass 0
+		go r.processQueue(ctx, opLog, 0, true) //nolint:errcheck
+	} else {
+		opLog.Info(fmt.Sprintf("Currently %v running container build phase builds, room for %v to be started.", len(dockerBuilds), buildsToStart))
+		if buildsToStart > 0 {
+			// if there are any free slots to start a build, do that here
+			// just start 1 build per reconcile event to ensure that the number builds doesn't exceed the max builds count
+			go r.processQueue(ctx, opLog, 1, false) //nolint:errcheck
 		}
-		//nolint:errcheck
-		go r.processQueue(ctx, opLog, buildsToStart, true)
-		return nil
-	}
-	if buildsToStart > 0 {
-		opLog.Info(fmt.Sprintf("Currently %v running builds, room for %v builds to be started", len(runningBuilds.Items), buildsToStart))
-		// if there are any free slots to start a build, do that here
-		//nolint:errcheck
-		go r.processQueue(ctx, opLog, buildsToStart, false)
 	}
 	return nil
 }
-
-var runningProcessQueue bool
 
 // this is a processor for any builds that are currently `queued` status. all normal build activity will still be performed
 // this just allows the controller to update any builds that are in the queue periodically
@@ -90,72 +72,51 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 	// status of the builds, but build complete/fail/cancel will always win out on the lagoon-core side
 	// so this isn't that much of an issue if there are some delays in the messages
 	opLog = opLog.WithName("QueueProcessor")
-	if !runningProcessQueue {
-		runningProcessQueue = true
-		if r.EnableDebug {
-			opLog.Info("Processing queue")
-		}
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.MatchingLabels(map[string]string{
-				"lagoon.sh/buildStatus": lagooncrd.BuildStatusPending.String(),
-				"lagoon.sh/controller":  r.ControllerNamespace,
-			}),
-		})
-		pendingBuilds := &lagooncrd.LagoonBuildList{}
-		if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-			runningProcessQueue = false
-			return fmt.Errorf("unable to list builds in the cluster, there may be none or something went wrong: %v", err)
-		}
-		metrics.BuildsPendingGauge.Set(float64(len(pendingBuilds.Items)))
-		if len(pendingBuilds.Items) > 0 {
+	if r.EnableDebug {
+		opLog.Info("Processing queue")
+	}
+	sortedBuilds, _ := lagooncrd.SortQueuedBuilds(r.QueueCache.Values())
+	metrics.BuildsPendingGauge.Set(float64(len(sortedBuilds)))
+	if r.EnableDebug {
+		opLog.Info(fmt.Sprintf("There are %v pending builds", len(sortedBuilds)))
+	}
+	// if we have any pending builds, then grab the latest one and make it running
+	// if there are any other pending builds, cancel them so only the latest one runs
+	for idx, pBuild := range sortedBuilds {
+		if idx < buildsToStart && !limitHit {
 			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
+				opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
 			}
-			// if we have any pending builds, then grab the latest one and make it running
-			// if there are any other pending builds, cancel them so only the latest one runs
-			sortBuilds(r.BuildQoS.DefaultValue, pendingBuilds)
-			for idx, pBuild := range pendingBuilds.Items {
-				// need to +1 to index because 0
-				if idx+1 <= buildsToStart && !limitHit {
-					if r.EnableDebug {
-						opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
-					}
-					// if we do have a `lagoon.sh/buildStatus` set, then process as normal
-					runningNSBuilds := &lagooncrd.LagoonBuildList{}
-					listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-						client.InNamespace(pBuild.Namespace),
-						client.MatchingLabels(map[string]string{
-							"lagoon.sh/buildStatus": lagooncrd.BuildStatusRunning.String(),
-							"lagoon.sh/controller":  r.ControllerNamespace,
-						}),
-					})
-					// list any builds that are running
-					if err := r.List(ctx, runningNSBuilds, listOption); err != nil {
-						runningProcessQueue = false
-						return fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-					}
-					// if there are no running builds, check if there are any pending builds that can be started
-					if len(runningNSBuilds.Items) == 0 {
-						if err := lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, pBuild.Namespace, "Running"); err != nil {
-							// only return if there is an error doing this operation
-							// continue on otherwise to allow the queued status updater to run
-							runningProcessQueue = false
-							return err
-						}
-						// don't handle the queued process for this build, continue to next in the list
-						continue
-					}
+			runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
+			// if there are no running builds, check if there are any pending builds that can be started
+			if len(runningNSBuilds) == 0 {
+				opLog.Info("Checking CancelExtraBuilds")
+				if err := lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace, "Running"); err != nil {
+					// only return if there is an error doing this operation
+					// continue on otherwise to allow the queued status updater to run
+					return err
 				}
-				// update the build to be queued, and add a log message with the build log with the current position in the queue
-				// this position will update as builds are created/processed, so the position of a build could change depending on
-				// higher or lower priority builds being created
-				if err := r.updateQueuedBuild(ctx, pBuild, (idx + 1), len(pendingBuilds.Items), opLog); err != nil {
-					runningProcessQueue = false
-					return nil
-				}
+				// don't handle the queued process for this build, continue to next in the list
+				continue
 			}
 		}
-		runningProcessQueue = false
+		// update the build to be queued, and add a log message with the build log with the current position in the queue
+		// this position will update as builds are created/processed, so the position of a build could change depending on
+		// higher or lower priority builds being created
+		qcb := sortedBuilds[idx]
+		// only update the queued build if the position or length of the queue changes
+		// simply to reduce messages sent
+		if qcb.Position != (idx+1) || qcb.Length != len(sortedBuilds) {
+			qcb.Position = (idx + 1)
+			qcb.Length = len(sortedBuilds)
+			if r.EnableDebug {
+				opLog.Info(fmt.Sprintf("Updating build %s to queued: %s", pBuild.Name, fmt.Sprintf("This build is currently queued in position %v/%v", qcb.Position, qcb.Length)))
+			}
+			if err := r.updateQueuedBuild(ctx, types.NamespacedName{Namespace: pBuild.Namespace, Name: pBuild.Name}, qcb.Position, qcb.Length, opLog); err != nil {
+				return nil
+			}
+		}
+		r.QueueCache.Add(pBuild.Name, qcb.String())
 	}
 	return nil
 }

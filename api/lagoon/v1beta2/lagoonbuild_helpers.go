@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-version"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/matryer/try"
 	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/helpers"
@@ -87,32 +88,28 @@ func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 }
 
 // CancelExtraBuilds cancels extra builds.
-func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, ns string, status string) error {
-	pendingBuilds := &LagoonBuildList{}
-	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-		client.InNamespace(ns),
-		client.MatchingLabels(map[string]string{"lagoon.sh/buildStatus": BuildStatusPending.String()}),
-	})
-	if err := r.List(ctx, pendingBuilds, listOption); err != nil {
-		return fmt.Errorf("unable to list builds in the namespace, there may be none or something went wrong: %v", err)
-	}
-	metrics.BuildsPendingGauge.Set(float64(len(pendingBuilds.Items)))
-	if len(pendingBuilds.Items) > 0 {
-		// opLog.Info(fmt.Sprintf("There are %v pending builds", len(pendingBuilds.Items)))
+func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string, status string) error {
+	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
+	metrics.BuildsPendingGauge.Set(float64(len(sortedBuilds)))
+	if len(sortedBuilds) > 0 {
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
-		sort.Slice(pendingBuilds.Items, func(i, j int) bool {
-			return pendingBuilds.Items[i].CreationTimestamp.After(pendingBuilds.Items[j].CreationTimestamp.Time)
-		})
-		for idx, pBuild := range pendingBuilds.Items {
-			pendingBuild := pBuild.DeepCopy()
+		for idx, pBuild := range sortedBuilds {
+			pendingBuild := &LagoonBuild{}
+			if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
+				return helpers.IgnoreNotFound(err)
+			}
 			if idx == 0 {
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
+				buildCache.Add(pendingBuild.Name, fmt.Sprintf(`{"name":"%s","namespace":"%s","status":"%s","step":"%s","dockerbuild":%v,"creationTimestamp":%d}`, pendingBuild.Name, pendingBuild.Namespace, pendingBuild.Labels["lagoon.sh/buildStatus"], pendingBuild.Labels["lagoon.sh/buildStatus"], true, pendingBuild.CreationTimestamp.Unix()))
+				queuedCache.Remove(pendingBuild.Name)
 			} else {
 				// cancel any other pending builds
 				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
 				pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
 				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
+				buildCache.Remove(pendingBuild.Name)
+				queuedCache.Remove(pendingBuild.Name)
 			}
 			if err := r.Update(ctx, pendingBuild); err != nil {
 				return err
@@ -591,4 +588,76 @@ func CancelBuild(ctx context.Context, cl client.Client, namespace string, body [
 		return false, nil, err
 	}
 	return false, nil, nil
+}
+
+// returns all builds that are running in a given namespace
+func NamespaceRunningBuilds(namespace string, runningBuilds []string) ([]CachedBuildItem, error) {
+	var builds []CachedBuildItem
+	for _, str := range runningBuilds {
+		var b CachedBuildItem
+		if err := json.Unmarshal([]byte(str), &b); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+		}
+		if b.Namespace == namespace {
+			builds = append(builds, b)
+		}
+	}
+	return builds, nil
+}
+
+// returns all builds that are running in a the docker build phase
+func RunningDockerBuilds(runningBuilds []string) ([]CachedBuildItem, error) {
+	var builds []CachedBuildItem
+	for _, str := range runningBuilds {
+		var b CachedBuildItem
+		if err := json.Unmarshal([]byte(str), &b); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+		}
+		if b.DockerBuild {
+			builds = append(builds, b)
+		}
+	}
+	return builds, nil
+}
+
+// returns all builds that are currently in the queue
+func SortQueuedBuilds(pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+	var builds []CachedBuildQueueItem
+	for _, str := range pendingBuilds {
+		var b CachedBuildQueueItem
+		if err := json.Unmarshal([]byte(str), &b); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+		}
+		builds = append(builds, b)
+	}
+	sort.Slice(builds, func(i, j int) bool {
+		// sort by priority, then creation timestamp
+		if builds[i].Priority != builds[j].Priority {
+			return builds[i].Priority > builds[j].Priority
+		}
+		return builds[i].CreationTimestamp < builds[j].CreationTimestamp
+	})
+	return builds, nil
+}
+
+// returns all builds that are currently in the queue in a given namespace
+func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+	var builds []CachedBuildQueueItem
+	for _, str := range pendingBuilds {
+		var b CachedBuildQueueItem
+		if err := json.Unmarshal([]byte(str), &b); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+		}
+		if b.Namespace == namespace {
+			builds = append(builds, b)
+		}
+	}
+	sort.Slice(builds, func(i, j int) bool {
+		// sort by priority, then creation timestamp
+		if builds[i].Priority != builds[j].Priority {
+			return builds[i].Priority > builds[j].Priority
+		}
+		return builds[i].CreationTimestamp < builds[j].CreationTimestamp
+	})
+	return builds, nil
 }

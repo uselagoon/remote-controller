@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/messenger"
@@ -46,6 +47,8 @@ type TaskMonitorReconciler struct {
 	EnableDebug           bool
 	LagoonTargetName      string
 	Cache                 *expirable.LRU[string, string]
+	QueueCache            *lru.Cache[string, string]
+	TasksCache            *lru.Cache[string, string]
 }
 
 // @TODO: all the things for now, review later

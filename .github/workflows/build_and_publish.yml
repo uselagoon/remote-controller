@@ -65,7 +65,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Attest ghcr image
-        uses: actions/attest-build-provenance@1c608d11d69870c2092266b3f9a6f3abbf17002c # v1.4.3
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-digest: ${{steps.build-and-push.outputs.digest}}
           subject-name: ghcr.io/${{ github.repository }}

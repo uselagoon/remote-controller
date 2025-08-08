@@ -142,6 +142,9 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled", lagoonBuild.Name))
 					_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "", opLog, false)
 				}
+				// ensure thh build is removed from any queues when it is cancelled
+				r.BuildCache.Remove(lagoonBuild.Name)
+				r.QueueCache.Remove(lagoonBuild.Name)
 			}
 		}
 		if status, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; ok && status == lagooncrd.BuildStatusPending.String() {
@@ -269,7 +272,9 @@ func (r *LagoonBuildReconciler) createNamespaceBuild(ctx context.Context,
 
 	// if everything is all good controller will handle the new build resource that gets created as it will have
 	// the `lagoon.sh/buildStatus = Pending` now
-	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, namespace.Name, lagooncrd.BuildStatusPending.String())
+	// since this build is being processed before it enters the namespace, any builds cancelled will be ones that are pending
+	// this ensures that this build being processed will be the next one that runs in the namespace
+	err = lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, namespace.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

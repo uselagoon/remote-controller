@@ -42,7 +42,6 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
 	dockerBuilds, _ := lagooncrd.RunningDockerBuilds(r.BuildCache.Values())
 	buildsToStart := r.BuildQoS.MaxContainerBuilds - len(dockerBuilds)
-	// opLog.Info(fmt.Sprintf("Currently running builds. Total: %v, Docker: %v, Start: %v", len(r.BuildCache.Values()), len(dockerBuilds), buildsToStart))
 	if len(r.BuildCache.Values()) >= r.BuildQoS.MaxBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
 		opLog.Info(fmt.Sprintf("Currently %v running builds, max build limit reached.", len(r.BuildCache.Values())))
@@ -52,8 +51,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		opLog.Info(fmt.Sprintf("Currently %v running container build phase builds, room for %v to be started.", len(dockerBuilds), buildsToStart))
 		if buildsToStart > 0 {
 			// if there are any free slots to start a build, do that here
-			// just start 1 build per reconcile event to ensure that the number builds doesn't exceed the max builds count
-			go r.processQueue(ctx, opLog, 1, false) //nolint:errcheck
+			go r.processQueue(ctx, opLog, buildsToStart, false) //nolint:errcheck
 		}
 	}
 	return nil
@@ -90,8 +88,10 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 			runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
 			// if there are no running builds, check if there are any pending builds that can be started
 			if len(runningNSBuilds) == 0 {
-				opLog.Info("Checking CancelExtraBuilds")
-				if err := lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace, "Running"); err != nil {
+				if r.EnableDebug {
+					opLog.Info("Checking UpdateOrCancelExtraBuilds")
+				}
+				if err := lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace); err != nil {
 					// only return if there is an error doing this operation
 					// continue on otherwise to allow the queued status updater to run
 					return err

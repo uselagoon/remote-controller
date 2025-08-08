@@ -87,31 +87,83 @@ func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 	return aVer.GreaterThanOrEqual(bVer)
 }
 
-// CancelExtraBuilds cancels extra builds.
-func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string, status string) error {
+func cancelBuild(ctx context.Context, r client.Client, opLog logr.Logger, pBuild CachedBuildQueueItem, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+	pendingBuild := &LagoonBuild{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
+		return helpers.IgnoreNotFound(err)
+	}
+	// cancel any other pending builds
+	opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
+	// set the build as cancelled
+	pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
+	pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
+	// remove it from any queues
+	buildCache.Remove(pendingBuild.Name)
+	queuedCache.Remove(pendingBuild.Name)
+	// update the build cr
+	if err := r.Update(ctx, pendingBuild); err != nil {
+		return err
+	}
+	return nil
+}
+
+func updatePendingBuild(ctx context.Context, r client.Client, pBuild CachedBuildQueueItem, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+	pendingBuild := &LagoonBuild{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
+		return helpers.IgnoreNotFound(err)
+	}
+	// set this build as running
+	pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusRunning.String()
+	// add it to the build cache
+	buildCache.Add(pendingBuild.Name, fmt.Sprintf(
+		`{"name":"%s","namespace":"%s","status":"%s","step":"%s","dockerbuild":%v,"creationTimestamp":%d}`,
+		pendingBuild.Name,
+		pendingBuild.Namespace,
+		pendingBuild.Labels["lagoon.sh/buildStatus"],
+		pendingBuild.Labels["lagoon.sh/buildStatus"],
+		true,
+		pendingBuild.CreationTimestamp.Unix(),
+	))
+	queuedCache.Remove(pendingBuild.Name)
+	// update the build cr
+	if err := r.Update(ctx, pendingBuild); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateOrCancelExtraBuilds updates a build and/or cancels any additional builds in a namespace
+func UpdateOrCancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
 	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
 	metrics.BuildsPendingGauge.Set(float64(len(sortedBuilds)))
 	if len(sortedBuilds) > 0 {
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		for idx, pBuild := range sortedBuilds {
-			pendingBuild := &LagoonBuild{}
-			if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
-				return helpers.IgnoreNotFound(err)
-			}
 			if idx == 0 {
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
-				buildCache.Add(pendingBuild.Name, fmt.Sprintf(`{"name":"%s","namespace":"%s","status":"%s","step":"%s","dockerbuild":%v,"creationTimestamp":%d}`, pendingBuild.Name, pendingBuild.Namespace, pendingBuild.Labels["lagoon.sh/buildStatus"], pendingBuild.Labels["lagoon.sh/buildStatus"], true, pendingBuild.CreationTimestamp.Unix()))
-				queuedCache.Remove(pendingBuild.Name)
+				if err := updatePendingBuild(ctx, r, pBuild, queuedCache, buildCache, ns); err != nil {
+					return err
+				}
 			} else {
 				// cancel any other pending builds
-				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
-				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
-				buildCache.Remove(pendingBuild.Name)
-				queuedCache.Remove(pendingBuild.Name)
+				if err := cancelBuild(ctx, r, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
+					return err
+				}
 			}
-			if err := r.Update(ctx, pendingBuild); err != nil {
+		}
+	}
+	return nil
+}
+
+// CancelExtraBuilds cancels queued builds in a namespace
+func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+	runningNSBuilds, _ := NamespaceRunningBuilds(ns, buildCache.Values())
+	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
+	metrics.BuildsPendingGauge.Set(float64(len(sortedBuilds)))
+	if len(sortedBuilds) > 0 && len(runningNSBuilds) > 0 {
+		// if there are any pending builds, cancel them so only the latest one runs
+		for _, pBuild := range sortedBuilds {
+			if err := cancelBuild(ctx, r, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
 				return err
 			}
 		}
@@ -653,11 +705,9 @@ func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]Cach
 		}
 	}
 	sort.Slice(builds, func(i, j int) bool {
-		// sort by priority, then creation timestamp
-		if builds[i].Priority != builds[j].Priority {
-			return builds[i].Priority > builds[j].Priority
-		}
-		return builds[i].CreationTimestamp < builds[j].CreationTimestamp
+		// sort by creation timestamp only in namespaced builds
+		// assumes last received build is the more important one in the list
+		return builds[i].CreationTimestamp > builds[j].CreationTimestamp
 	})
 	return builds, nil
 }

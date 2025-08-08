@@ -121,7 +121,7 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
 		// if we have no running builds, then check for any pending builds
 		if len(runningNSBuilds) == 0 {
-			return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace, "Running")
+			return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
 		}
 	} else if r.EnableDebug {
 		opLog.Info("No pending build check in namespaces when QoS is enabled")

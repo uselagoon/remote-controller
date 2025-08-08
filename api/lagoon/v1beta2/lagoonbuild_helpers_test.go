@@ -127,7 +127,7 @@ func TestSortQueuedNamespaceBuilds(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "test1 - namespace1 builds only sorted by priority then creation",
+			name: "test1 - namespace1 builds only sorted by creation",
 			args: args{
 				namespace: "namespace1",
 				pendingBuilds: []string{

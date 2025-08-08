@@ -34,7 +34,7 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 
 	// if there are no running builds, check if there are any pending builds that can be started
 	if len(runningNSBuilds) == 0 {
-		return ctrl.Result{}, lagooncrd.CancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace, "Running")
+		return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
 	}
 	return ctrl.Result{}, nil
 }

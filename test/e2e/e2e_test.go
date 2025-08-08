@@ -302,6 +302,9 @@ var _ = Describe("controller", Ordered, func() {
 				}
 			}
 
+			// this tests that cancellations of builds behaves correctly
+			testCancellations(timeout, duration, interval)
+
 			By("validating that only 1 build pod remains in a namespace")
 			verifyOnlyOneBuildPod := func() error {
 				cmd = exec.Command(utils.Kubectl(), "get",
@@ -610,6 +613,7 @@ func compareRepositories(want, got string) error {
 		delete(m[idx].(map[string]interface{}), "update_time")
 		delete(m[idx].(map[string]interface{}), "project_id")
 		delete(m[idx].(map[string]interface{}), "pull_count")
+		m[idx].(map[string]interface{})["artifact_count"] = 1 // override the artifact_count to account for multiple test runs
 	}
 	p, err := json.Marshal(m)
 	if err != nil {

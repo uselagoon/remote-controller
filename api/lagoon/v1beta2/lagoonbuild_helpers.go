@@ -18,8 +18,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -710,4 +712,68 @@ func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]Cach
 		return builds[i].CreationTimestamp > builds[j].CreationTimestamp
 	})
 	return builds, nil
+}
+
+func SeedBuildStartup(config *rest.Config, scheme *runtime.Scheme, controllerNamespace string, defaultPriority int,
+	buildsCache *lru.Cache[string, string], buildsQueueCache *lru.Cache[string, string],
+) error {
+	tmpClient, _ := client.New(config, client.Options{
+		Scheme: scheme,
+	})
+	runningBuilds := &LagoonBuildList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller":  controllerNamespace, // created by this controller
+			"lagoon.sh/buildStatus": BuildStatusRunning.String(),
+		}),
+	})
+	if err := tmpClient.List(context.Background(), runningBuilds, listOption); err != nil {
+		return fmt.Errorf("unable to list running LagoonBuilds, there may be none or something went wrong: %v", err)
+	}
+	for _, build := range runningBuilds.Items {
+		bc := NewCachedBuildItem(build, "Running", true)
+		buildsCache.Add(build.Name, bc.String())
+	}
+	pendingBuilds := &LagoonBuildList{}
+	listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller":  controllerNamespace, // created by this controller
+			"lagoon.sh/buildStatus": BuildStatusPending.String(),
+		}),
+	})
+	if err := tmpClient.List(context.Background(), pendingBuilds, listOption); err != nil {
+		return fmt.Errorf("unable to list pending LagoonBuilds, there may be none or something went wrong: %v", err)
+	}
+	sortBuilds(defaultPriority, pendingBuilds)
+	position := 1
+	for _, build := range pendingBuilds.Items {
+		bc := NewCachedBuildQueueItem(build, *build.Spec.Build.Priority, position, len(pendingBuilds.Items))
+		buildsQueueCache.Add(build.Name, bc.String())
+	}
+	return nil
+}
+
+func sortBuilds(defaultPriority int, pendingBuilds *LagoonBuildList) {
+	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+		// sort by priority, then creation timestamp
+		iPriority := defaultPriority
+		jPriority := defaultPriority
+		if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
+			iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
+		}
+		if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
+			jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
+		}
+		// better sorting based on priority then creation timestamp
+		// sort by higher priority first, where the greater the number the higher the priority
+		// production have priority 6 default (highest)
+		// development have priority 5 default (mid)
+		// bulk deployments have priority 3 default (low)
+		switch {
+		case iPriority != jPriority:
+			return iPriority > jPriority
+		default:
+			return pendingBuilds.Items[i].CreationTimestamp.Before(&pendingBuilds.Items[j].CreationTimestamp)
+		}
+	})
 }

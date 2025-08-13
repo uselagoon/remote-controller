@@ -565,7 +565,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 1000)
+	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 2000)
 	// create the cancellation cache
 	cache := expirable.NewLRU[string, string](cacheSize, nil, time.Minute*60)
 	// create queue cache
@@ -768,6 +768,7 @@ func main() {
 		lffSupportK8UPv2,
 		cache,
 		harborConfig,
+		lagoonTargetName,
 	)
 
 	reuseCache, _ := lru.New[string, string](cacheSize)
@@ -930,7 +931,14 @@ func main() {
 
 	c.Start()
 
-	// @TODO: maybe insert a pre-controller start state collector to try and seed the queue/build caches before the controllers start
+	// pre-seed the queues with the current state of builds
+	if err := lagoonv1beta2.SeedBuildStartup(ctrl.GetConfigOrDie(), scheme, controllerNamespace, qosDefaultPriority, buildsCache, buildsQueueCache); err != nil {
+		setupLog.Error(err, "unable to seed controller startup state")
+	}
+	// pre-seed the queues with the current state of tasks
+	if err := lagoonv1beta2.SeedTaskStartup(ctrl.GetConfigOrDie(), scheme, controllerNamespace, tasksCache, tasksQueueCache); err != nil {
+		setupLog.Error(err, "unable to seed controller startup state")
+	}
 
 	setupLog.Info("starting build controller")
 	// v1beta2 is the latest version

@@ -84,6 +84,12 @@ var _ = Describe("controller", Ordered, func() {
 		cmd := exec.Command(utils.Kubectl(), "delete", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
+		By("seed dockerhosts")
+		err = utils.SeedDockerHosts()
+		if err != nil {
+			fmt.Println(err)
+		}
+
 		By("creating manager namespace")
 		cmd = exec.Command(utils.Kubectl(), "create", "ns", namespace)
 		_, _ = utils.Run(cmd)

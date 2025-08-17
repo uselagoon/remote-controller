@@ -51,6 +51,12 @@ var (
 			Help: "The total number of Lagoon tasks running",
 		},
 	)
+	TasksPendingGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "lagoon_tasks_pending_current",
+			Help: "The total number of Lagoon tasks pending or queued",
+		},
+	)
 	TasksStartedCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "lagoon_tasks_started_total",
@@ -124,6 +130,7 @@ func init() {
 		BuildsFailedCounter,
 		BuildsCancelledCounter,
 		TasksRunningGauge,
+		TasksPendingGauge,
 		TasksStartedCounter,
 		TasksCompletedCounter,
 		TasksFailedCounter,

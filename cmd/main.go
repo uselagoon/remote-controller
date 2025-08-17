@@ -174,7 +174,7 @@ func main() {
 	var pruneLongRunningPodsCron string
 
 	var lffQoSEnabled bool
-	var qosMaxBuilds int
+	var qosTotalBuilds int
 	var qosMaxContainerBuilds int
 	var qosDefaultPriority int
 
@@ -398,7 +398,7 @@ func main() {
 	// this flag remains the same, the number of max builds flag remains unchanged to be backwards compatible
 	flag.IntVar(&qosMaxContainerBuilds, "qos-max-builds", 20, "The total number of builds during the container build phase that can run at any one time.")
 	// this new flag is added but defaults to 0, if it is greater than `qos-max-builds` then it will be used, otherwise it will default to the value of `qos-max-builds`
-	flag.IntVar(&qosMaxBuilds, "qos-total-builds", 0, "The total number of builds that can run at any one time. Defaults to qos-max-builds if not provided or less than qos-max-builds.")
+	flag.IntVar(&qosTotalBuilds, "qos-total-builds", 0, "The total number of builds that can run at any one time. Defaults to qos-max-builds if not provided or less than qos-max-builds.")
 	flag.IntVar(&qosDefaultPriority, "qos-default", 5, "The default qos priority value to apply if one is not provided.")
 
 	// Task QoS configuration
@@ -756,6 +756,7 @@ func main() {
 
 	messaging := messenger.New(config,
 		mgr.GetClient(),
+		mgr.GetAPIReader(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
 		controllerNamespace,
@@ -799,11 +800,11 @@ func main() {
 	}
 
 	// this ensures that the max number of builds is not less than the container builds support
-	if qosMaxBuilds < qosMaxContainerBuilds {
-		qosMaxBuilds = qosMaxContainerBuilds
+	if qosTotalBuilds < qosMaxContainerBuilds {
+		qosTotalBuilds = qosMaxContainerBuilds
 	}
 	buildQoSConfigv1beta2 := lagoonv1beta2ctrl.BuildQoS{
-		MaxBuilds:          qosMaxBuilds,
+		TotalBuilds:        qosTotalBuilds,
 		MaxContainerBuilds: qosMaxContainerBuilds,
 		DefaultPriority:    qosDefaultPriority,
 	}
@@ -829,6 +830,7 @@ func main() {
 	}
 
 	resourceCleanup := pruner.New(mgr.GetClient(),
+		mgr.GetAPIReader(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
@@ -944,6 +946,7 @@ func main() {
 	// v1beta2 is the latest version
 	if err = (&lagoonv1beta2ctrl.LagoonBuildReconciler{
 		Client:                mgr.GetClient(),
+		APIReader:             mgr.GetAPIReader(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuild"),
 		Scheme:                mgr.GetScheme(),
 		EnableMQ:              enableMQ,
@@ -1046,6 +1049,7 @@ func main() {
 	setupLog.Info("starting build pod monitor controller")
 	if err = (&lagoonv1beta2ctrl.BuildMonitorReconciler{
 		Client:                mgr.GetClient(),
+		APIReader:             mgr.GetAPIReader(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuildPodMonitor"),
 		Scheme:                mgr.GetScheme(),
 		EnableMQ:              enableMQ,
@@ -1089,6 +1093,7 @@ func main() {
 	if lffHarborEnabled {
 		if err = (&harborctrl.HarborCredentialReconciler{
 			Client:              mgr.GetClient(),
+			APIReader:           mgr.GetAPIReader(),
 			Log:                 ctrl.Log.WithName("harbor").WithName("HarborCredentialReconciler"),
 			Scheme:              mgr.GetScheme(),
 			LFFHarborEnabled:    lffHarborEnabled,

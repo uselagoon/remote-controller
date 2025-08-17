@@ -243,10 +243,8 @@ func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error)
 }
 
 // CancelTask handles cancelling tasks or handling if a tasks no longer exists.
-func CancelTask(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
+func CancelTask(ctx context.Context, cl client.Client, namespace string, jobSpec *LagoonTaskSpec) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	jobSpec := &LagoonTaskSpec{}
-	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
 	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])

@@ -61,10 +61,6 @@ type LagoonTaskReconciler struct {
 	ClusterAutoscalerEvict bool
 }
 
-var (
-	taskFinalizer = "finalizer.lagoontask.crd.lagoon.sh/v1beta2"
-)
-
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks/status,verbs=get;update;patch
 
@@ -116,15 +112,18 @@ func (r *LagoonTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		// if qos is not enabled, just process it as a standard task
 		return r.standardTaskProcessor(ctx, opLog, lagoonTask)
-	} else if helpers.ContainsString(lagoonTask.Finalizers, taskFinalizer) {
+	} else if helpers.ContainsString(lagoonTask.Finalizers, lagooncrd.TaskFinalizer) {
 		// our finalizer is present, so lets handle any external dependency
 		if err := r.deleteExternalResources(ctx, &lagoonTask, req.Namespace); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
 			return ctrl.Result{}, err
 		}
+		// ensure the task is removed from any queues when it is removed
+		r.TasksCache.Remove(lagoonTask.Name)
+		r.QueueCache.Remove(lagoonTask.Name)
 		// remove our finalizer from the list and update it.
-		lagoonTask.Finalizers = helpers.RemoveString(lagoonTask.Finalizers, taskFinalizer)
+		lagoonTask.Finalizers = helpers.RemoveString(lagoonTask.Finalizers, lagooncrd.TaskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -391,8 +390,8 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
-	if !helpers.ContainsString(lagoonTask.Finalizers, taskFinalizer) {
-		lagoonTask.Finalizers = append(lagoonTask.Finalizers, taskFinalizer)
+	if !helpers.ContainsString(lagoonTask.Finalizers, lagooncrd.TaskFinalizer) {
+		lagoonTask.Finalizers = append(lagoonTask.Finalizers, lagooncrd.TaskFinalizer)
 		// use patches to avoid update errors
 		mergePatch, _ := json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{

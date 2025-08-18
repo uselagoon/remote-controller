@@ -9,7 +9,6 @@ import (
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
 	"github.com/uselagoon/machinery/utils/cron"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/harbor"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -48,12 +47,8 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 	if err := json.Unmarshal(jobSpec.Misc.MiscResource, retPol); err != nil {
 		return err
 	}
-	lagoonHarbor, err := harbor.New(m.Harbor)
-	if err != nil {
-		return err
-	}
 	projectName := retPol.Data.Project.Name
-	project, err := lagoonHarbor.ClientV5.GetProject(ctx, projectName)
+	project, err := m.Harbor.ClientV5.GetProject(ctx, projectName)
 	if err != nil {
 		opLog.Info(fmt.Sprintf("Error getting project %s, err: %v", projectName, err))
 		return err
@@ -88,7 +83,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 		return fmt.Errorf("unable to determine policy type")
 	}
 	// get the existing one if one exists
-	existingPolicy, err := lagoonHarbor.ClientV5.GetRetentionPolicyByProject(ctx, projectName)
+	existingPolicy, err := m.Harbor.ClientV5.GetRetentionPolicyByProject(ctx, projectName)
 	if err != nil && !strings.Contains(err.Error(), "project metadata value is empty: retention_id") {
 		opLog.Info(fmt.Sprintf("Error getting retention policy %s: %v", project.Name, err))
 		return err
@@ -99,7 +94,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 		r2, _ := json.Marshal(retentionPolicy)
 		// if the policy differs, then we need to update it with our new policy
 		if string(r1) != string(r2) {
-			err := lagoonHarbor.ClientV5.UpdateRetentionPolicy(ctx, retentionPolicy)
+			err := m.Harbor.ClientV5.UpdateRetentionPolicy(ctx, retentionPolicy)
 			if err != nil {
 				f, _ := json.Marshal(err)
 				opLog.Info(fmt.Sprintf("Error updating retention policy %s: %v", project.Name, string(f)))
@@ -109,7 +104,7 @@ func (m *Messenger) HarborPolicy(ctx context.Context, jobSpec *lagoonv1beta2.Lag
 		}
 	} else {
 		// create it if it doesn't
-		if err := lagoonHarbor.ClientV5.NewRetentionPolicy(ctx, retentionPolicy); err != nil {
+		if err := m.Harbor.ClientV5.NewRetentionPolicy(ctx, retentionPolicy); err != nil {
 			opLog.Info(fmt.Sprintf("Error creating retention policy %s: %v", project.Name, err))
 			return err
 		}

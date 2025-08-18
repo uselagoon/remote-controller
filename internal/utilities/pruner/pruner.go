@@ -8,6 +8,7 @@ import (
 // Pruner is used for cleaning up old pods or resources.
 type Pruner struct {
 	Client                client.Client
+	APIReader             client.Reader
 	BuildsToKeep          int
 	TasksToKeep           int
 	BuildPodsToKeep       int
@@ -24,6 +25,7 @@ type Pruner struct {
 // New returns a pruner with controller-runtime client.
 func New(
 	client client.Client,
+	reader client.Reader,
 	buildsToKeep int,
 	buildPodsToKeep int,
 	tasksToKeep int,
@@ -35,6 +37,7 @@ func New(
 	enableDebug bool) *Pruner {
 	return &Pruner{
 		Client:              client,
+		APIReader:           reader,
 		BuildsToKeep:        buildsToKeep,
 		TasksToKeep:         tasksToKeep,
 		BuildPodsToKeep:     buildPodsToKeep,

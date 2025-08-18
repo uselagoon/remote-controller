@@ -2,12 +2,12 @@ package pruner
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -28,7 +28,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 			Selector: labels.NewSelector().Add(*labelRequirements),
 		},
 	})
-	if err := p.Client.List(ctx, namespaces, listOption); err != nil {
+	if err := p.APIReader.List(ctx, namespaces, listOption); err != nil {
 		opLog.Error(err, "unable to list namespaces created by Lagoon, there may be none or something went wrong")
 		return
 	}
@@ -63,7 +63,7 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 				Selector: labels.NewSelector().Add(*jobTypeLabelRequirements),
 			},
 		})
-		if err := p.Client.List(ctx, &podList, listOption); err != nil {
+		if err := p.APIReader.List(ctx, &podList, listOption); err != nil {
 			opLog.Error(err, "unable to list pod resources, there may be none or something went wrong")
 			continue
 		}
@@ -71,39 +71,60 @@ func (p *Pruner) LagoonOldProcPruner(pruneBuilds, pruneTasks bool) {
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodRunning {
 				if podType, ok := pod.GetLabels()["lagoon.sh/jobType"]; ok {
-					var mergeLabels map[string]string
 					switch {
 					case podType == "task" && pruneTasks && pod.CreationTimestamp.Time.Before(removeTaskIfCreatedBefore):
-						mergeLabels = map[string]string{
-							"lagoon.sh/cancelTask": "true",
+						// clean up the task using the cancel task function to ensure correct cancellation
+						lagoonTask := &v1beta2.LagoonTask{}
+						if err := p.APIReader.Get(ctx, types.NamespacedName{
+							Name:      pod.Name,
+							Namespace: pod.Namespace,
+						}, lagoonTask); err != nil {
+							opLog.Error(err,
+								fmt.Sprintf(
+									"Unable to cancel %s.",
+									pod.Name,
+								),
+							)
+							return
 						}
+						_, _, err := v1beta2.CancelTask(ctx, p.Client, pod.Namespace, &lagoonTask.Spec)
+						if err != nil {
+							opLog.Error(err,
+								fmt.Sprintf(
+									"Unable to cancel %s.",
+									pod.Name,
+								),
+							)
+						}
+						return
 					case podType == "build" && pruneBuilds && pod.CreationTimestamp.Time.Before(removeBuildIfCreatedBefore):
-						mergeLabels = map[string]string{
-							"lagoon.sh/cancelBuild": "true",
+						// clean up the task using the cancel build function to ensure correct cancellation
+						envName := ns.Labels["lagoon.sh/environment"]
+						projectName := ns.Labels["lagoon.sh/project"]
+						jobSpec := &v1beta2.LagoonTaskSpec{
+							Misc: &v1beta2.LagoonMiscInfo{
+								Name: pod.Name,
+							},
+							Environment: v1beta2.LagoonTaskEnvironment{
+								Name: envName,
+							},
+							Project: v1beta2.LagoonTaskProject{
+								Name: projectName,
+							},
 						}
+						_, _, err := v1beta2.CancelBuild(ctx, p.Client, pod.Namespace, jobSpec)
+						if err != nil {
+							opLog.Error(err,
+								fmt.Sprintf(
+									"Unable to cancel %s.",
+									pod.Name,
+								),
+							)
+						}
+						return
 					default:
 						return
 					}
-
-					mergeMap := map[string]interface{}{
-						"metadata": map[string]interface{}{
-							"labels": mergeLabels,
-							"annotations": map[string]string{
-								"lagoon.sh/cancelReason": "Cancelled due to timeout",
-							},
-						},
-					}
-					mergePatch, _ := json.Marshal(mergeMap)
-					cPod := pod.DeepCopy()
-					if err := p.Client.Patch(ctx, cPod, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-						opLog.Error(err,
-							fmt.Sprintf(
-								"Unable to patch %s to cancel it.",
-								cPod.Name,
-							),
-						)
-					}
-					opLog.Info(fmt.Sprintf("Cancelled pod %v - timeout", cPod.Name))
 				} else {
 					continue
 				}

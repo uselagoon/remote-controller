@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -16,9 +17,9 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 	// this means it was created by the message queue handler
 	// so we should do the steps required for a lagoon build and then copy the build
 	// into the created namespace
-	if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; !ok {
-		return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
-	}
+	// if _, ok := lagoonBuild.Labels["lagoon.sh/buildStatus"]; !ok {
+	// 	return r.createNamespaceBuild(ctx, opLog, lagoonBuild)
+	// }
 	runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
 	for _, runningBuild := range runningNSBuilds {
 		// if the running build is the one from this request then process it
@@ -34,7 +35,15 @@ func (r *LagoonBuildReconciler) standardBuildProcessor(ctx context.Context,
 
 	// if there are no running builds, check if there are any pending builds that can be started
 	if len(runningNSBuilds) == 0 {
-		return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
+		startBuild, err := lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		var lagoonBuild lagooncrd.LagoonBuild
+		if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: startBuild}, &lagoonBuild); err != nil {
+			return ctrl.Result{}, err
+		}
+		r.processBuild(ctx, opLog, lagoonBuild)
 	}
 	return ctrl.Result{}, nil
 }

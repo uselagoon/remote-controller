@@ -37,6 +37,7 @@ import (
 // BuildMonitorReconciler reconciles a Lagoon Build Pod object
 type BuildMonitorReconciler struct {
 	client.Client
+	APIReader             client.Reader
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EnableMQ              bool
@@ -66,15 +67,10 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
-	err := r.calculateBuildMetrics(ctx)
-	if err != nil {
-		opLog.Error(err, "Unable to generate metrics.")
-	}
 	if jobPod.DeletionTimestamp.IsZero() {
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleBuildMonitor(ctx, opLog, req, jobPod)
 	}
-
 	// remove from the cache when a pod is deleted, this is just a fallback/redundancy removal, most cases will be no-op
 	_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
 
@@ -82,7 +78,7 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// first try and clean up the pod and capture the logs and update
 	// the lagoonbuild that owns it with the status
 	var lagoonBuild lagooncrd.LagoonBuild
-	err = r.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Namespace: jobPod.Namespace,
 		Name:      jobPod.Labels["lagoon.sh/buildName"],
 	}, &lagoonBuild)
@@ -115,13 +111,15 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// we check all `LagoonBuild` in the requested namespace
 	// if there are no running jobs, we check for any pending jobs
 	// sorted by their creation timestamp and set the first to running
+	// @TODO: remove standard build processing entirely, only support QoS
 	if !r.LFFQoSEnabled {
 		// if qos is not enabled, then handle the check for pending builds here
 		opLog.Info("Checking for any pending builds.")
 		runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
 		// if we have no running builds, then check for any pending builds
 		if len(runningNSBuilds) == 0 {
-			return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
+			// @TODO figure out non qos builds
+			// return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
 		}
 	} else if r.EnableDebug {
 		opLog.Info("No pending build check in namespaces when QoS is enabled")

@@ -46,6 +46,9 @@ func (m *Messenger) Consumer(targetName string) {
 	}
 	defer messageQueue.Close()
 
+	// add the message queue to messenger for use in publishing
+	m.MQ = messageQueue
+
 	go func() {
 		count := 0
 		for err := range messageQueue.Error() {
@@ -68,36 +71,7 @@ func (m *Messenger) Consumer(targetName string) {
 			// unmarshal the body into a lagoonbuild
 			newBuild := &lagoonv1beta2.LagoonBuild{}
 			_ = json.Unmarshal(message.Body(), newBuild)
-			// new builds that come in should initially get created in the controllers own
-			// namespace before being handled and re-created in the correct namespace
-			// so set the controller namespace to the build namespace here
-			newBuild.Namespace = m.ControllerNamespace
-			newBuild.SetLabels(
-				map[string]string{
-					"lagoon.sh/controller":  m.ControllerNamespace,
-					"crd.lagoon.sh/version": "v1beta2",
-				},
-			)
-			opLog.Info(
-				fmt.Sprintf(
-					"Received builddeploy task for project %s, environment %s",
-					newBuild.Spec.Project.Name,
-					newBuild.Spec.Project.Environment,
-				),
-			)
-			// create it now
-			if err := m.Client.Create(ctx, newBuild); err != nil {
-				opLog.Error(err,
-					fmt.Sprintf(
-						"Failed to create builddeploy task for project %s, environment %s",
-						newBuild.Spec.Project.Name,
-						newBuild.Spec.Project.Environment,
-					),
-				)
-				// @TODO: send msg back to lagoon and update task to failed?
-				_ = message.Ack(false) // ack to remove from queue
-				return
-			}
+			m.handleBuildMessage(ctx, opLog, newBuild)
 		}
 		_ = message.Ack(false) // ack to remove from queue
 	})
@@ -138,7 +112,7 @@ func (m *Messenger) Consumer(targetName string) {
 				),
 			)
 			namespace := &corev1.Namespace{}
-			err := m.Client.Get(ctx, types.NamespacedName{
+			err := m.APIReader.Get(ctx, types.NamespacedName{
 				Name: ns,
 			}, namespace)
 			if err != nil {
@@ -308,7 +282,7 @@ func (m *Messenger) Consumer(targetName string) {
 				)
 				m.Cache.Add(jobSpec.Misc.Name, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelBuild(ctx, m.Client, m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					// @TODO: send msg back to lagoon and update task to failed?
 					_ = message.Ack(false) // ack to remove from queue
@@ -332,7 +306,7 @@ func (m *Messenger) Consumer(targetName string) {
 				)
 				m.Cache.Add(jobSpec.Task.TaskName, jobSpec.Project.Name)
 				// check if there is a v1beta2 task to cancel
-				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, m.genNamespace(jobSpec), message.Body())
+				_, v1beta2Bytes, err := lagoonv1beta2.CancelTask(ctx, m.Client, m.genNamespace(jobSpec), jobSpec)
 				if err != nil {
 					// @TODO: send msg back to lagoon and update task to failed?
 					_ = message.Ack(false) // ack to remove from queue

@@ -15,7 +15,7 @@ type DeleteConfig struct {
 type Deletions struct {
 	Client                          client.Client
 	DeleteConfig                    DeleteConfig
-	Harbor                          harbor.Harbor
+	Harbor                          *harbor.Harbor
 	CleanupHarborRepositoryOnDelete bool
 	EnableDebug                     bool
 }
@@ -23,7 +23,7 @@ type Deletions struct {
 // New returns a pruner with controller-runtime client.
 func New(
 	client client.Client,
-	harborConfig harbor.Harbor,
+	harborConfig *harbor.Harbor,
 	deleteConfig DeleteConfig,
 	cleanupHarborOnDelete bool,
 	enableDebug bool,

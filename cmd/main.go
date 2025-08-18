@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"strings"
@@ -744,8 +745,12 @@ func main() {
 		TLSSkipVerify:         tlsSkipVerify,
 	}
 
+	// setup harbor config
+	var lagoonHarbor *harbor.Harbor
+	lagoonHarbor, _ = harbor.New(harborConfig)
+
 	deletion := deletions.New(mgr.GetClient(),
-		harborConfig,
+		lagoonHarbor,
 		deletions.DeleteConfig{
 			PVCRetryAttempts: pvcRetryAttempts,
 			PVCRetryInterval: pvcRetryInterval,
@@ -768,7 +773,7 @@ func main() {
 		enableDebug,
 		lffSupportK8UPv2,
 		cache,
-		harborConfig,
+		lagoonHarbor,
 		lagoonTargetName,
 		buildsCache,
 		buildsQueueCache,
@@ -901,7 +906,6 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		_, err := c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 		if err != nil {
@@ -986,7 +990,7 @@ func main() {
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,
-		Harbor:                           harborConfig,
+		Harbor:                           lagoonHarbor,
 		LFFQoSEnabled:                    lffQoSEnabled,
 		BuildQoS:                         buildQoSConfigv1beta2,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
@@ -1100,7 +1104,7 @@ func main() {
 			Scheme:              mgr.GetScheme(),
 			LFFHarborEnabled:    lffHarborEnabled,
 			ControllerNamespace: controllerNamespace,
-			Harbor:              harborConfig,
+			Harbor:              lagoonHarbor,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "HarborCredentialReconciler")
 			os.Exit(1)

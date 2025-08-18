@@ -136,11 +136,9 @@ func (r *LagoonTaskReconciler) updateLagoonTask(opLog logr.Logger,
 ) (bool, schema.LagoonMessage) {
 	if r.EnableMQ && lagoonTask != nil {
 		if taskCondition.ToLower() == "failed" || taskCondition.ToLower() == "complete" || taskCondition.ToLower() == "cancelled" {
-			time.AfterFunc(31*time.Second, func() {
-				metrics.TaskRunningStatus.Delete(prometheus.Labels{
-					"task_namespace": lagoonTask.Namespace,
-					"task_name":      lagoonTask.Name,
-				})
+			metrics.TaskRunningStatus.Delete(prometheus.Labels{
+				"task_namespace": lagoonTask.Namespace,
+				"task_name":      lagoonTask.Name,
 			})
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}

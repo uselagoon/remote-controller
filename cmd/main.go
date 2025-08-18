@@ -770,6 +770,8 @@ func main() {
 		cache,
 		harborConfig,
 		lagoonTargetName,
+		buildsCache,
+		buildsQueueCache,
 	)
 
 	reuseCache, _ := lru.New[string, string](cacheSize)

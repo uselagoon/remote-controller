@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"github.com/cheshir/go-mq/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
@@ -22,6 +23,7 @@ type removeTask struct {
 type Messenger struct {
 	Config                           mq.Config
 	Client                           client.Client
+	APIReader                        client.Reader
 	ConnectionAttempts               int
 	ConnectionRetryInterval          int
 	ControllerNamespace              string
@@ -34,11 +36,15 @@ type Messenger struct {
 	SupportK8upV2                    bool
 	Cache                            *expirable.LRU[string, string]
 	Harbor                           harbor.Harbor
+	LagoonTargetName                 string
+	BuildCache                       *lru.Cache[string, string]
+	BuildQueueCache                  *lru.Cache[string, string]
 }
 
 // New returns a messaging with config and controller-runtime client.
 func New(config mq.Config,
 	client client.Client,
+	reader client.Reader,
 	startupAttempts int,
 	startupInterval int,
 	controllerNamespace,
@@ -51,10 +57,14 @@ func New(config mq.Config,
 	supportK8upV2 bool,
 	cache *expirable.LRU[string, string],
 	harbor harbor.Harbor,
+	targetName string,
+	buildCache *lru.Cache[string, string],
+	buildQueueCache *lru.Cache[string, string],
 ) *Messenger {
 	return &Messenger{
 		Config:                           config,
 		Client:                           client,
+		APIReader:                        reader,
 		ConnectionAttempts:               startupAttempts,
 		ConnectionRetryInterval:          startupInterval,
 		ControllerNamespace:              controllerNamespace,
@@ -67,5 +77,8 @@ func New(config mq.Config,
 		SupportK8upV2:                    supportK8upV2,
 		Cache:                            cache,
 		Harbor:                           harbor,
+		LagoonTargetName:                 targetName,
+		BuildCache:                       buildCache,
+		BuildQueueCache:                  buildQueueCache,
 	}
 }

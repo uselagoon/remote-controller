@@ -16,7 +16,6 @@ func Test_pickHost(t *testing.T) {
 		available []string
 		inUse     map[string]int
 		qosMax    int
-		qos       bool
 	}
 	tests := []struct {
 		name        string

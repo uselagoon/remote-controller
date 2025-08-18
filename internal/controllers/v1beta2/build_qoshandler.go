@@ -66,7 +66,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		}
 	}
 	// update all the queued items as required
-	go r.updateQueue(ctx, opLog)
+	go r.updateQueue(ctx, opLog) //nolint:errcheck
 	return nil
 }
 

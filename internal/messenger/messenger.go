@@ -35,10 +35,11 @@ type Messenger struct {
 	EnableDebug                      bool
 	SupportK8upV2                    bool
 	Cache                            *expirable.LRU[string, string]
-	Harbor                           harbor.Harbor
+	Harbor                           *harbor.Harbor
 	LagoonTargetName                 string
 	BuildCache                       *lru.Cache[string, string]
 	BuildQueueCache                  *lru.Cache[string, string]
+	MQ                               *mq.MessageQueue
 }
 
 // New returns a messaging with config and controller-runtime client.
@@ -56,7 +57,7 @@ func New(config mq.Config,
 	enableDebug bool,
 	supportK8upV2 bool,
 	cache *expirable.LRU[string, string],
-	harbor harbor.Harbor,
+	harbor *harbor.Harbor,
 	targetName string,
 	buildCache *lru.Cache[string, string],
 	buildQueueCache *lru.Cache[string, string],

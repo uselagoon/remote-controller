@@ -20,7 +20,6 @@ spec:
         - "--enable-harbor"
         - "--harbor-enable-project-webhook"
         - "--enable-debug"
-        - "--enable-qos"
         - "--qos-total-builds=5"
         - "--qos-max-builds=3"
         - "--enable-deprecated-apis"

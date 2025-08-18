@@ -70,7 +70,6 @@ type LagoonBuildReconciler struct {
 	LFFHarborEnabled                 bool
 	BackupConfig                     BackupConfig
 	Harbor                           *harbor.Harbor
-	LFFQoSEnabled                    bool
 	BuildQoS                         BuildQoS
 	NativeCronPodMinFrequency        int
 	LagoonTargetName                 string
@@ -157,12 +156,8 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			qc := lagooncrd.NewCachedBuildQueueItem(lagoonBuild, priority, 0, 0)
 			r.QueueCache.Add(lagoonBuild.Name, qc.String())
 		}
-		if r.LFFQoSEnabled {
-			// handle QoS builds here
-			return r.qosBuildProcessor(ctx, opLog, lagoonBuild)
-		}
-		// if qos is not enabled, just process it as a standard build
-		return r.standardBuildProcessor(ctx, opLog, lagoonBuild, req)
+		// handle QoS builds here
+		return r.qosBuildProcessor(ctx, opLog, lagoonBuild)
 	}
 	// The object is being deleted
 	if helpers.ContainsString(lagoonBuild.Finalizers, lagooncrd.BuildFinalizer) {

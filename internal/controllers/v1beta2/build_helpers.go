@@ -728,7 +728,6 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		dockerHost := r.DockerHost.AssignDockerHost(
 			lagoonBuild.Name,
 			reuseType,
-			r.LFFQoSEnabled,
 			r.BuildQoS.MaxContainerBuilds,
 		)
 		dockerHostEnvVar := corev1.EnvVar{

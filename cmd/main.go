@@ -395,7 +395,7 @@ func main() {
 	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
 
 	// Build QoS configuration
-	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
+	flag.BoolVar(&lffQoSEnabled, "enable-qos", true, "Deprecated: Flag to enable this controller with QoS for builds. No longer configurable")
 	// this flag remains the same, the number of max builds flag remains unchanged to be backwards compatible
 	flag.IntVar(&qosMaxContainerBuilds, "qos-max-builds", 20, "The total number of builds during the container build phase that can run at any one time.")
 	// this new flag is added but defaults to 0, if it is greater than `qos-max-builds` then it will be used, otherwise it will default to the value of `qos-max-builds`
@@ -991,7 +991,6 @@ func main() {
 		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,
 		Harbor:                           lagoonHarbor,
-		LFFQoSEnabled:                    lffQoSEnabled,
 		BuildQoS:                         buildQoSConfigv1beta2,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
@@ -1065,7 +1064,6 @@ func main() {
 		RandomNamespacePrefix: randomPrefix,
 		EnableDebug:           enableDebug,
 		LagoonTargetName:      lagoonTargetName,
-		LFFQoSEnabled:         lffQoSEnabled,
 		BuildQoS:              buildQoSConfigv1beta2,
 		Cache:                 cache,
 		DockerHost:            dockerhosts,

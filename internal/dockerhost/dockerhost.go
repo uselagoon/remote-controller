@@ -24,7 +24,7 @@ type DockerHost struct {
 	BuildCache          *lru.Cache[string, string]
 }
 
-func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos bool, qosMax int) string {
+func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax int) string {
 	ctx := context.TODO()
 	dockerHost := d.defaultHost()
 	dockerHosts := &corev1.ServiceList{}
@@ -61,7 +61,7 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qos boo
 
 	// pick a host to use
 	hostsInUse := countDupes(d.BuildCache.Values())
-	dockerHost = d.pickHost(dockerHost, availableHosts, hostsInUse, qosMax, qos)
+	dockerHost = d.pickHost(dockerHost, availableHosts, hostsInUse, qosMax)
 	// finally assign in the cache
 	_ = d.BuildCache.Add(buildName, dockerHost)
 	_ = d.ReuseCache.Add(reuseIdentifier, dockerHost)
@@ -117,42 +117,22 @@ func countDupes(list []string) map[string]int {
 
 // pick host will attempt to determine the most suitable docker host to use with limited information
 // without deep inspecting the docker hosts for actual usage/consumption, just use the number of builds as an estimate
-func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsInUse map[string]int, qosMax int, qos bool) string {
+func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsInUse map[string]int, qosMax int) string {
 	buildsPerHost := 0
 	numAvailableHosts := len(availableHosts)
 	if numAvailableHosts == 0 {
 		// return the default docker-host if no available hosts
 		return d.defaultHost()
 	}
-	if qos {
-		// if qos enabled, work out how many builds per host can be used
-		buildsPerHost = qosMax / numAvailableHosts
-		if buildsPerHost%2 != 0 {
-			// add one so that if the number of builds is odd
-			// it will favor building on the host it may have already run on
-			// to try leverage cache where possible
-			buildsPerHost += 1
-		}
-	} else {
-		// work out how many builds per host based on distribution
-		totBuilds := 0
-		for _, boh := range hostsInUse {
-			totBuilds += boh
-		}
-		if totBuilds > 0 {
-			buildsPerHost = totBuilds / numAvailableHosts
-			if buildsPerHost%2 != 0 {
-				// add one so that if the number of builds is odd
-				// it will favor building on the host it may have already run on
-				// to try leverage cache where possible
-				buildsPerHost += 1
-			}
-		} else {
-			// default to 2, as builds increase this will be ignored
-			// set to 2 just to allow builds to schedule properly somewhere
-			buildsPerHost = 2
-		}
+	// if qos enabled, work out how many builds per host can be used
+	buildsPerHost = qosMax / numAvailableHosts
+	if buildsPerHost%2 != 0 {
+		// add one so that if the number of builds is odd
+		// it will favor building on the host it may have already run on
+		// to try leverage cache where possible
+		buildsPerHost += 1
 	}
+
 	for h := range hostsInUse {
 		if !helpers.ContainsString(availableHosts, h) {
 			// delete any no longer available hosts from the in use table to force selection of another

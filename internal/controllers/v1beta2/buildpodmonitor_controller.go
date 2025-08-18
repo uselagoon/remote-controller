@@ -47,7 +47,6 @@ type BuildMonitorReconciler struct {
 	RandomNamespacePrefix bool
 	EnableDebug           bool
 	LagoonTargetName      string
-	LFFQoSEnabled         bool
 	BuildQoS              BuildQoS
 	Cache                 *expirable.LRU[string, string]
 	DockerHost            *dockerhost.DockerHost
@@ -105,25 +104,6 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// then manually patching the `LagoonBuild` with the label
 	// "lagoon.sh/buildStatus=Cancelled"
 	// should be enough to get things rolling again if no pending builds are being picked up
-
-	// if we got any pending builds come through while one is running
-	// they will be processed here when any pods are cleaned up
-	// we check all `LagoonBuild` in the requested namespace
-	// if there are no running jobs, we check for any pending jobs
-	// sorted by their creation timestamp and set the first to running
-	// @TODO: remove standard build processing entirely, only support QoS
-	if !r.LFFQoSEnabled {
-		// if qos is not enabled, then handle the check for pending builds here
-		opLog.Info("Checking for any pending builds.")
-		runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(req.Namespace, r.BuildCache.Values())
-		// if we have no running builds, then check for any pending builds
-		if len(runningNSBuilds) == 0 {
-			// @TODO figure out non qos builds
-			// return ctrl.Result{}, lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, req.Namespace)
-		}
-	} else if r.EnableDebug {
-		opLog.Info("No pending build check in namespaces when QoS is enabled")
-	}
 	return ctrl.Result{}, nil
 }
 

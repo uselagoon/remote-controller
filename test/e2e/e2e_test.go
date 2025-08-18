@@ -237,21 +237,9 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("validating that lagoonbuilds are working")
 			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx"} {
-				if name == "9m5zypx" {
-					By("creating a LagoonBuild resource via rabbitmq")
-					err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name))
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
-				} else {
-					By("creating a LagoonBuild resource")
-					cmd = exec.Command(
-						utils.Kubectl(),
-						"apply",
-						"-f",
-						fmt.Sprintf("test/e2e/testdata/lagoon-build-%s.yaml", name),
-					)
-					_, err = utils.Run(cmd)
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
-				}
+				By("creating a LagoonBuild resource via rabbitmq")
+				err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name))
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 				time.Sleep(10 * time.Second)
 

@@ -777,6 +777,7 @@ func main() {
 		lagoonTargetName,
 		buildsCache,
 		buildsQueueCache,
+		qosDefaultPriority,
 	)
 
 	reuseCache, _ := lru.New[string, string](cacheSize)

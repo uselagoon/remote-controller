@@ -730,7 +730,11 @@ func SeedBuildStartup(config *rest.Config, scheme *runtime.Scheme, controllerNam
 	sortBuilds(defaultPriority, pendingBuilds)
 	position := 1
 	for _, build := range pendingBuilds.Items {
-		bc := NewCachedBuildQueueItem(build, *build.Spec.Build.Priority, position, len(pendingBuilds.Items))
+		priority := defaultPriority
+		if build.Spec.Build.Priority != nil {
+			priority = *build.Spec.Build.Priority
+		}
+		bc := NewCachedBuildQueueItem(build, priority, position, len(pendingBuilds.Items))
 		buildsQueueCache.Add(build.Name, bc.String())
 	}
 	return nil

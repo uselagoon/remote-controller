@@ -40,6 +40,7 @@ type Messenger struct {
 	BuildCache                       *lru.Cache[string, string]
 	BuildQueueCache                  *lru.Cache[string, string]
 	MQ                               *mq.MessageQueue
+	DefaultPriority                  int
 }
 
 // New returns a messaging with config and controller-runtime client.
@@ -61,6 +62,7 @@ func New(config mq.Config,
 	targetName string,
 	buildCache *lru.Cache[string, string],
 	buildQueueCache *lru.Cache[string, string],
+	defaultPriority int,
 ) *Messenger {
 	return &Messenger{
 		Config:                           config,
@@ -81,5 +83,6 @@ func New(config mq.Config,
 		LagoonTargetName:                 targetName,
 		BuildCache:                       buildCache,
 		BuildQueueCache:                  buildQueueCache,
+		DefaultPriority:                  defaultPriority,
 	}
 }

@@ -95,6 +95,10 @@ Received. Awaiting processing`)
 	m.BuildLogsToLagoonLogs(true, opLog, newBuild, msg, lagoonv1beta2.BuildStatusQueued, m.LagoonTargetName)
 	// add to queue cache
 	position := len(m.BuildQueueCache.Keys()) + 1
-	bc := lagoonv1beta2.NewCachedBuildQueueItem(*newBuild, *newBuild.Spec.Build.Priority, position, position)
+	priority := m.DefaultPriority
+	if newBuild.Spec.Build.Priority != nil {
+		priority = *newBuild.Spec.Build.Priority
+	}
+	bc := lagoonv1beta2.NewCachedBuildQueueItem(*newBuild, priority, position, position)
 	m.BuildQueueCache.Add(newBuild.Name, bc.String())
 }

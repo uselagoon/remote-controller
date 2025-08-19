@@ -31,7 +31,7 @@ jobs:
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
           - kindest_node_version: v1.30.2
-            harbor: "1.14.3"
+            harbor: "1.17.1"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
     steps:

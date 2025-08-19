@@ -89,7 +89,12 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 					lagoonHarbor.DeleteRepository(ctx, project, environment)
 				}
 				if cleanupRobot {
-					lagoonHarbor.DeleteRobotAccount(ctx, project, environment)
+					projectHarbor, err := lagoonHarbor.ClientV5.GetProject(ctx, project)
+					if err != nil {
+						opLog.Info(fmt.Sprintf("Error getting project %s, err: %v", project, err))
+						return err
+					}
+					lagoonHarbor.DeleteRobotAccount(ctx, int64(projectHarbor.ProjectID), project, environment)
 				}
 			}
 		}

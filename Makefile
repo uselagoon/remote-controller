@@ -16,7 +16,7 @@ OVERRIDE_BUILD_DEPLOY_DIND_IMAGE ?= uselagoon/build-deploy-image:main
 
 INGRESS_VERSION=4.9.1
 
-HARBOR_VERSION=1.14.3
+HARBOR_VERSION=1.17.1
 
 KIND_CLUSTER ?= remote-controller
 KIND_NETWORK ?= remote-controller

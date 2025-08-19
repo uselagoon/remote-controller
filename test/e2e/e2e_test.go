@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -452,7 +453,10 @@ var _ = Describe("controller", Ordered, func() {
 				)
 				podlogs, err := utils.Run(cmd)
 				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				if !strings.Contains(string(podlogs), "Robot credentials rotated for nginx-example-main") {
+				re := regexp.MustCompile(`Robot credentials rotated for nginx-example-`)
+				matches := re.FindAllString(string(podlogs), -1)
+				// if there are less than 4 rotation logs, then consider the rotations failed and check for ERROR in the logs
+				if len(matches) < 4 {
 					return fmt.Errorf("robot credentials not rotated yet")
 				}
 				return nil

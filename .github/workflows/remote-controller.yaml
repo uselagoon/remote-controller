@@ -17,20 +17,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kindest_node_version: [v1.25.16]
+        kindest_node_version: [v1.29.14@sha256:8703bd94ee24e51b778d5556ae310c6c0fa67d761fae6379c8e0bb480e6fea29]
         harbor: ["1.11.0"]
         lagoon_build_image: ["uselagoon/build-deploy-image:main"]
         experimental: [false]
         include:
-          - kindest_node_version: v1.27.13
+          - kindest_node_version: v1.30.10@sha256:4de75d0e82481ea846c0ed1de86328d821c1e6a6a91ac37bf804e5313670e507
             harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: false
-          - kindest_node_version: v1.29.4
-            harbor: "1.14.3"
-            lagoon_build_image: "uselagoon/build-deploy-image:main"
-            experimental: true
-          - kindest_node_version: v1.30.2
+          - kindest_node_version: v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f
             harbor: "1.18.0"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
@@ -66,30 +62,37 @@ jobs:
         curl -sSLO https://github.com/itchyny/gojq/releases/download/v0.11.1/gojq_v0.11.1_linux_amd64.tar.gz
         tar -xf ./gojq_v0.11.1_linux_amd64.tar.gz
         sudo cp /tmp/gojq_v0.11.1_linux_amd64/gojq /usr/local/bin/jq
-        
-    - name: Configure node IP in kind-config.yaml
-      run: |
-        docker network create kind
-        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
-        KIND_NODE_IP=$(echo "${LAGOON_KIND_CIDR_BLOCK%???}" | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
-        export KIND_NODE_IP
-        envsubst < test-resources/test-suite.kind-config.yaml.tpl > test-resources/test-suite.kind-config.yaml
 
     - name: Create kind cluster
       uses: helm/kind-action@v1.14.0
       with:
-        version: v0.24.0
+        version: v0.27.0
         cluster_name: remote-controller
         node_image: kindest/node:${{ matrix.kindest_node_version }}
-        kubectl_version: v1.30.4
+        kubectl_version: v1.32.2
         config: test-resources/test-suite.kind-config.yaml
-  
+
+    - name: Configure registry for containerd
+      run: |
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '.[].Containers[].IPv4Address' | tr -d '"')
+        KIND_NODE_IP=$(echo "${LAGOON_KIND_CIDR_BLOCK%???}" | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
+        export KIND_NODE_IP
+        envsubst < test-resources/test-suite.registry.toml.tpl > test-resources/test-suite.registry.toml
+        REGISTRY_DIR="/etc/containerd/certs.d/registry.${KIND_NODE_IP}.nip.io"
+        export REGISTRY_DIR
+        for node in $(kind get nodes --name remote-controller); do
+          echo "fixing node $node"
+          docker exec "$node" mkdir -p "${REGISTRY_DIR}"
+          cat test-resources/test-suite.registry.toml
+          docker exec -i "$node" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml" < test-resources/test-suite.registry.toml
+        done
+
     - name: Check node IP matches kind configuration
       run: |
-        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '. [0].IPAM.Config[0].Subnet' | tr -d '"')
+        LAGOON_KIND_CIDR_BLOCK=$(docker network inspect kind | jq '.[].Containers[].IPv4Address' | tr -d '"')
         NODE_IP=$(echo "${LAGOON_KIND_CIDR_BLOCK%???}" | awk -F'.' '{print $1,$2,$3,240}' OFS='.')
         echo Checking for NODE_IP "$NODE_IP"
-        grep "$NODE_IP" test-resources/test-suite.kind-config.yaml
+        grep "$NODE_IP" test-resources/test-suite.registry.toml
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3

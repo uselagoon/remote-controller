@@ -23,7 +23,7 @@ bin
 *.swo
 *~
 
-test-resources/test-suite.kind-config.yaml
+test-resources/test-suite.registry.toml
 test-resources/test-suite.metallb-pool.yaml
 
 local-dev

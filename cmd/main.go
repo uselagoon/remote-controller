@@ -800,12 +800,6 @@ func main() {
 		buildCache,
 	)
 	c := cron.New()
-	// if we are running with MQ support, then start the consumer handler
-
-	if enableMQ {
-		setupLog.Info("starting messaging handler")
-		go messaging.Consumer(lagoonTargetName)
-	}
 
 	// this ensures that the max number of builds is not less than the container builds support
 	if qosTotalBuilds < qosMaxContainerBuilds {
@@ -1110,6 +1104,12 @@ func main() {
 		}
 	}
 	// +kubebuilder:scaffold:builder
+
+	// if we are running with MQ support, then start the consumer handler
+	if enableMQ {
+		setupLog.Info("starting messaging handler")
+		go messaging.Consumer(lagoonTargetName)
+	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

@@ -88,7 +88,8 @@ func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 	return aVer.GreaterThanOrEqual(bVer)
 }
 
-func cancelBuild(ctx context.Context, cl client.Client, opLog logr.Logger, pBuild CachedBuildQueueItem, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+// will label a build as cancelled and remove it from any queues
+func labelBuildCancelled(ctx context.Context, cl client.Client, opLog logr.Logger, pBuild CachedBuildQueueItem, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
 	pendingBuild := &LagoonBuild{}
 	if err := cl.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
 		return helpers.IgnoreNotFound(err)
@@ -133,7 +134,7 @@ func StartBuildOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog 
 				startBuild = pBuild.Name
 			} else {
 				// cancel any other pending builds
-				if err := cancelBuild(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
+				if err := labelBuildCancelled(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
 					return "", err
 				}
 			}
@@ -149,7 +150,7 @@ func CancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger,
 	if len(sortedBuilds) > 0 && len(runningNSBuilds) > 0 {
 		// if there are any pending builds, cancel them so only the latest one runs
 		for _, pBuild := range sortedBuilds {
-			if err := cancelBuild(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
+			if err := labelBuildCancelled(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
 				return err
 			}
 		}

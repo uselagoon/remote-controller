@@ -102,9 +102,9 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 			// avoid exceeding total builds
 			if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < r.BuildQoS.TotalBuilds {
 				if r.EnableDebug {
-					opLog.Info("Checking UpdateOrCancelExtraBuilds")
+					opLog.Info("Checking StartBuildOrCancelExtraBuilds")
 				}
-				startBuild, err := lagooncrd.UpdateOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace)
+				startBuild, err := lagooncrd.StartBuildOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace)
 				if err != nil {
 					// only return if there is an error doing this operation
 					// continue on otherwise to allow the queued status updater to run

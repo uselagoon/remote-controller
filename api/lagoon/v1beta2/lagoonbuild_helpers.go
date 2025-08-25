@@ -108,8 +108,8 @@ func cancelBuild(ctx context.Context, cl client.Client, opLog logr.Logger, pBuil
 	return nil
 }
 
-// UpdateOrCancelExtraBuilds updates a build and/or cancels any additional builds in a namespace
-func UpdateOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) (string, error) {
+// StartBuildOrCancelExtraBuilds starts a build and/or will cancel extra builds in a namespace
+func StartBuildOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) (string, error) {
 	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
 	var startBuild string
 	if len(sortedBuilds) > 0 {

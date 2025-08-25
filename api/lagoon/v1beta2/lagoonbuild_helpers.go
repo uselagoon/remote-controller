@@ -21,7 +21,6 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -697,12 +696,9 @@ func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]Cach
 	return builds, nil
 }
 
-func SeedBuildStartup(config *rest.Config, scheme *runtime.Scheme, controllerNamespace string, defaultPriority int,
+func SeedBuildStartup(cl client.Client, scheme *runtime.Scheme, controllerNamespace string, defaultPriority int,
 	buildsCache *lru.Cache[string, string], buildsQueueCache *lru.Cache[string, string],
 ) error {
-	tmpClient, _ := client.New(config, client.Options{
-		Scheme: scheme,
-	})
 	runningBuilds := &LagoonBuildList{}
 	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
 		client.MatchingLabels(map[string]string{
@@ -710,7 +706,7 @@ func SeedBuildStartup(config *rest.Config, scheme *runtime.Scheme, controllerNam
 			"lagoon.sh/buildStatus": BuildStatusRunning.String(),
 		}),
 	})
-	if err := tmpClient.List(context.Background(), runningBuilds, listOption); err != nil {
+	if err := cl.List(context.Background(), runningBuilds, listOption); err != nil {
 		return fmt.Errorf("unable to list running LagoonBuilds, there may be none or something went wrong: %v", err)
 	}
 	for _, build := range runningBuilds.Items {
@@ -724,7 +720,7 @@ func SeedBuildStartup(config *rest.Config, scheme *runtime.Scheme, controllerNam
 			"lagoon.sh/buildStatus": BuildStatusPending.String(),
 		}),
 	})
-	if err := tmpClient.List(context.Background(), pendingBuilds, listOption); err != nil {
+	if err := cl.List(context.Background(), pendingBuilds, listOption); err != nil {
 		return fmt.Errorf("unable to list pending LagoonBuilds, there may be none or something went wrong: %v", err)
 	}
 	sortBuilds(defaultPriority, pendingBuilds)

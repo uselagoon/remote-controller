@@ -33,6 +33,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/uselagoon/remote-controller/internal/dockerhost"
@@ -934,12 +935,16 @@ func main() {
 
 	c.Start()
 
+	// create a temporary client to use in seed functions
+	tmpClient, _ := client.New(ctrl.GetConfigOrDie(), client.Options{
+		Scheme: scheme,
+	})
 	// pre-seed the queues with the current state of builds
-	if err := lagoonv1beta2.SeedBuildStartup(ctrl.GetConfigOrDie(), scheme, controllerNamespace, qosDefaultPriority, buildsCache, buildsQueueCache); err != nil {
+	if err := lagoonv1beta2.SeedBuildStartup(tmpClient, scheme, controllerNamespace, qosDefaultPriority, buildsCache, buildsQueueCache); err != nil {
 		setupLog.Error(err, "unable to seed controller startup state")
 	}
 	// pre-seed the queues with the current state of tasks
-	if err := lagoonv1beta2.SeedTaskStartup(ctrl.GetConfigOrDie(), scheme, controllerNamespace, tasksCache, tasksQueueCache); err != nil {
+	if err := lagoonv1beta2.SeedTaskStartup(tmpClient, scheme, controllerNamespace, tasksCache, tasksQueueCache); err != nil {
 		setupLog.Error(err, "unable to seed controller startup state")
 	}
 

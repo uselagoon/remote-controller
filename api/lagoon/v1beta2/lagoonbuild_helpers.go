@@ -111,7 +111,7 @@ func labelBuildCancelled(ctx context.Context, cl client.Client, opLog logr.Logge
 
 // StartBuildOrCancelExtraBuilds starts a build and/or will cancel extra builds in a namespace
 func StartBuildOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) (string, error) {
-	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
+	sortedBuilds, _ := SortQueuedNamespaceBuildsByCreation(ns, queuedCache.Values())
 	var startBuild string
 	if len(sortedBuilds) > 0 {
 		// if we have any pending builds, then grab the latest one and make it running
@@ -146,7 +146,7 @@ func StartBuildOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog 
 // CancelExtraBuilds cancels queued builds in a namespace
 func CancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
 	runningNSBuilds, _ := NamespaceRunningBuilds(ns, buildCache.Values())
-	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
+	sortedBuilds, _ := SortQueuedNamespaceBuildsByCreation(ns, queuedCache.Values())
 	if len(sortedBuilds) > 0 && len(runningNSBuilds) > 0 {
 		// if there are any pending builds, cancel them so only the latest one runs
 		for _, pBuild := range sortedBuilds {
@@ -678,7 +678,7 @@ func SortQueuedBuilds(pendingBuilds []string) ([]CachedBuildQueueItem, error) {
 }
 
 // returns all builds that are currently in the queue in a given namespace
-func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+func SortQueuedNamespaceBuildsByCreation(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
 	var builds []CachedBuildQueueItem
 	for _, str := range pendingBuilds {
 		var b CachedBuildQueueItem

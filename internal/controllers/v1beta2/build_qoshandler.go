@@ -41,7 +41,10 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 }
 
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
-	dockerBuilds, _ := lagooncrd.RunningDockerBuilds(r.BuildCache.Values())
+	dockerBuilds, err := lagooncrd.RunningDockerBuilds(r.BuildCache.Values())
+	if err != nil {
+		return fmt.Errorf("unable to determine running docker builds: %v", err)
+	}
 	buildsToStart := r.BuildQoS.MaxContainerBuilds - len(dockerBuilds)
 	runningBuilds := len(r.BuildCache.Values())
 	queuedBuilds := len(r.QueueCache.Values())
@@ -97,7 +100,10 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 			if r.EnableDebug {
 				opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
 			}
-			runningNSBuilds, _ := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
+			runningNSBuilds, err := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
+			if err != nil {
+				return fmt.Errorf("unable to determine running namespace builds: %v", err)
+			}
 			// if there are no running builds, check if there are any pending builds that can be started
 			// avoid exceeding total builds
 			if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < r.BuildQoS.TotalBuilds {

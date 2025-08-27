@@ -95,40 +95,46 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 	}
 	// if we have any pending builds, then grab the latest one and make it running
 	// if there are any other pending builds, cancel them so only the latest one runs
-	for idx, pBuild := range sortedBuilds {
-		if idx < buildsToStart && !limitHit {
-			if r.EnableDebug {
-				opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
-			}
-			runningNSBuilds, err := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
-			if err != nil {
-				return fmt.Errorf("unable to determine running namespace builds: %v", err)
-			}
-			// if there are no running builds, check if there are any pending builds that can be started
-			// avoid exceeding total builds
-			if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < r.BuildQoS.TotalBuilds {
+	if !limitHit {
+		startedBuilds := 0
+		for _, pBuild := range sortedBuilds {
+			if startedBuilds < buildsToStart {
 				if r.EnableDebug {
-					opLog.Info("Checking StartBuildOrCancelExtraBuilds")
+					opLog.Info(fmt.Sprintf("Checking if build %s can be started", pBuild.Name))
 				}
-				startBuild, err := lagooncrd.StartBuildOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace)
+				runningNSBuilds, err := lagooncrd.NamespaceRunningBuilds(pBuild.Namespace, r.BuildCache.Values())
 				if err != nil {
-					// only return if there is an error doing this operation
-					// continue on otherwise to allow the queued status updater to run
-					return err
-				} else {
-					// start the build pod immediately
-					var lagoonBuild lagooncrd.LagoonBuild
-					if err := r.Get(ctx, types.NamespacedName{Namespace: pBuild.Namespace, Name: startBuild}, &lagoonBuild); err != nil {
-						return err
-					}
-					if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
-						// remove it from the cache if there is a failure to process the build
-						r.BuildCache.Remove(lagoonBuild.Name)
-						r.QueueCache.Remove(lagoonBuild.Name)
-					}
+					return fmt.Errorf("unable to determine running namespace builds: %v", err)
 				}
-				// don't handle the queued process for this build, continue to next in the list
-				continue
+				// if there are no running builds, check if there are any pending builds that can be started
+				// avoid exceeding total builds
+				if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < r.BuildQoS.TotalBuilds {
+					if r.EnableDebug {
+						opLog.Info("Checking StartBuildOrCancelExtraBuilds")
+					}
+					startBuild, err := lagooncrd.StartBuildOrCancelExtraBuilds(ctx, r.Client, opLog, r.QueueCache, r.BuildCache, pBuild.Namespace)
+					if err != nil {
+						// only return if there is an error doing this operation
+						// continue on otherwise to allow the queued status updater to run
+						return err
+					} else {
+						// start the build pod immediately
+						var lagoonBuild lagooncrd.LagoonBuild
+						if err := r.Get(ctx, types.NamespacedName{Namespace: pBuild.Namespace, Name: startBuild}, &lagoonBuild); err != nil {
+							return err
+						}
+						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {
+							// remove it from the cache if there is a failure to process the build
+							r.BuildCache.Remove(lagoonBuild.Name)
+							r.QueueCache.Remove(lagoonBuild.Name)
+						}
+						startedBuilds++
+					}
+					// don't handle the queued process for this build, continue to next in the list
+					continue
+				}
+			} else {
+				break
 			}
 		}
 	}

@@ -199,6 +199,8 @@ func main() {
 	var dockerHostNamespace string
 	var dockerHostReuseType string
 
+	var clusterAutoscalerEvict bool
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
@@ -429,6 +431,10 @@ func main() {
 	flag.StringVar(&dockerHostReuseType, "docker-host-reuse-type", "namespace",
 		`The resource type (namespace, project, organization) to use when assigning a docker-host to a build to preference an already used dockerhost
 		eg. If project is defined, all builds from a project will prefer to build on the same docker-host where possible`)
+
+	// Flag to control the setting for the label cluster-autoscaler.kubernetes.io/safe-to-evict on build pods, defaults to false to avoid evicting pods
+	flag.BoolVar(&clusterAutoscalerEvict, "enable-cluster-autoscaler-eviction", false,
+		"Flag to enable cluster autoscaler eviction on build pods, defaults to false to avoid evicting running builds")
 
 	flag.Parse()
 
@@ -990,6 +996,7 @@ func main() {
 		DockerHost:              dockerhosts,
 		QueueCache:              buildsQueueCache,
 		BuildCache:              buildsCache,
+		ClusterAutoscalerEvict:  clusterAutoscalerEvict,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonBuild")
 		os.Exit(1)

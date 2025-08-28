@@ -7,7 +7,9 @@ import (
 	"math"
 	"time"
 
+	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
+	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,10 +30,7 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 	robotName := h.generateRobotName(environmentName)
 
 	expiryDays := int64(math.Ceil(expiry.Hours() / 24))
-	robots, err := h.ClientV5.ListProjectRobotsV1(
-		ctx,
-		project.Name,
-	)
+	robots, err := h.getRobotsByProjectID(ctx, int64(project.ProjectID))
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", project.Name))
 		return nil, err
@@ -74,9 +73,8 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				// account is required, as there isn't a way to get the credentials after
 				// robot accounts are created
 				h.Log.Info(fmt.Sprintf("Kubernetes secret doesn't exist, robot account %s needs to be re-created", robot.Name))
-				err := h.ClientV5.DeleteProjectRobotV1(
+				err := h.ClientV5.DeleteRobotAccountByID(
 					ctx,
-					project.Name,
 					int64(robot.ID),
 				)
 				if err != nil {
@@ -90,9 +88,8 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 				// if accounts are disabled, and deletion of disabled accounts is enabled
 				// then this will delete the account to get re-created
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s disabled, deleting it", robot.Name))
-				err := h.ClientV5.DeleteProjectRobotV1(
+				err := h.ClientV5.DeleteRobotAccountByID(
 					ctx,
-					project.Name,
 					int64(robot.ID),
 				)
 				if err != nil {
@@ -105,9 +102,8 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			if h.shouldRotate(robot.CreationTime.String(), h.RotateInterval) {
 				// this forces a rotation after a certain period, whether its expiring or already expired.
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  should rotate, deleting it", robot.Name))
-				err := h.ClientV5.DeleteProjectRobotV1(
+				err := h.ClientV5.DeleteRobotAccountByID(
 					ctx,
-					project.Name,
 					int64(robot.ID),
 				)
 				if err != nil {
@@ -120,9 +116,8 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 			if h.expiresSoon(robot.ExpiresAt, h.ExpiryInterval) {
 				// if the account is about to expire, then refresh the credentials
 				h.Log.Info(fmt.Sprintf("Harbor robot account %s  expires soon, deleting it", robot.Name))
-				err := h.ClientV5.DeleteProjectRobotV1(
+				err := h.ClientV5.DeleteRobotAccountByID(
 					ctx,
-					project.Name,
 					int64(robot.ID),
 				)
 				if err != nil {
@@ -143,12 +138,9 @@ func (h *Harbor) CreateOrRefreshRobotV2(ctx context.Context,
 }
 
 // DeleteRobotAccount will delete robot account related to an environment
-func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectName, branch string) {
+func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectID int64, projectName, branch string) {
 	environmentName := helpers.ShortenEnvironment(projectName, helpers.MakeSafe(branch))
-	robots, err := h.ClientV5.ListProjectRobotsV1(
-		ctx,
-		projectName,
-	)
+	robots, err := h.getRobotsByProjectID(ctx, projectID)
 	if err != nil {
 		h.Log.Info(fmt.Sprintf("Error listing project %s robot accounts", projectName))
 		return
@@ -212,4 +204,18 @@ func (h *Harbor) CreateRobotAccountV2(ctx context.Context, robotName, projectNam
 	}
 	h.Log.Info(fmt.Sprintf("Created robot account %s", token.Name))
 	return &harborRegistryCredentials, nil
+}
+
+func (h *Harbor) getRobotsByProjectID(ctx context.Context, id int64) ([]*harborclientv5model.Robot, error) {
+	query := fmt.Sprintf("Level=project,ProjectID=%d", id)
+	conf := &config.Options{
+		Page:     1,
+		PageSize: 100,
+		Query:    query,
+	}
+	cl, err := harborclientv5.NewRESTClientForHost(h.API, h.Username, h.Password, conf)
+	if err != nil {
+		return nil, err
+	}
+	return cl.ListRobotAccounts(ctx)
 }

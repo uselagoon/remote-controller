@@ -435,7 +435,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			try.MaxRetries = 12
 			err = try.Do(func(attempt int) (bool, error) {
 				var secretErr error
-				err := r.Get(ctx, types.NamespacedName{
+				err := r.APIReader.Get(ctx, types.NamespacedName{
 					Namespace: lagoonBuild.Namespace,
 					Name:      "lagoon-internal-registry-secret",
 				}, robotCredential)

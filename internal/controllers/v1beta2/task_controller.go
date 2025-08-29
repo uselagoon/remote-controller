@@ -58,6 +58,7 @@ type LagoonTaskReconciler struct {
 	ImagePullPolicy        corev1.PullPolicy
 	QueueCache             *lru.Cache[string, string]
 	TasksCache             *lru.Cache[string, string]
+	ClusterAutoscalerEvict bool
 }
 
 var (
@@ -322,6 +323,11 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				if lagoonTask.Spec.Project.Organization != nil {
 					taskPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
 					taskPod.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+				}
+
+				if !r.ClusterAutoscalerEvict {
+					// try to prevent build pods from being evicted by cluster autoscaler
+					taskPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 				}
 				return taskPod, nil
 			}
@@ -661,6 +667,10 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		if lagoonTask.Spec.Project.Organization != nil {
 			newPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
 			newPod.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+		}
+		if !r.ClusterAutoscalerEvict {
+			// try to prevent build pods from being evicted by cluster autoscaler
+			newPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 		}
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it

@@ -1025,11 +1025,12 @@ func main() {
 			HTTPSProxy: httpsProxy,
 			NoProxy:    noProxy,
 		},
-		LFFTaskQoSEnabled: lffTaskQoSEnabled,
-		TaskQoS:           taskQoSConfigv1beta2,
-		ImagePullPolicy:   tipp,
-		QueueCache:        tasksQueueCache,
-		TasksCache:        tasksCache,
+		LFFTaskQoSEnabled:      lffTaskQoSEnabled,
+		TaskQoS:                taskQoSConfigv1beta2,
+		ImagePullPolicy:        tipp,
+		QueueCache:             tasksQueueCache,
+		TasksCache:             tasksCache,
+		ClusterAutoscalerEvict: clusterAutoscalerEvict,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

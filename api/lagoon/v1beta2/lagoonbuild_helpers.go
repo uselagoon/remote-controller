@@ -829,6 +829,9 @@ func GetOrCreateNamespace(ctx context.Context,
 
 	// if kubernetes, just create it if it doesn't exist
 	if err := cl.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		if helpers.IgnoreNotFound(err) != nil {
+			return true, fmt.Errorf("there was an error getting the namespace: Error was: %v", err)
+		}
 		if err := cl.Create(ctx, namespace); err != nil {
 			return true, fmt.Errorf("there was an error creating the namespace. Error was: %v", err)
 		}

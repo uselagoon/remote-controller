@@ -799,6 +799,11 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		newPod.Labels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
 	}
 
+	if !r.ClusterAutoscalerEvict {
+		// try to prevent build pods from being evicted by cluster autoscaler
+		newPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+	}
+
 	// set the pod security context, if defined to a non-default value
 	if r.BuildPodRunAsUser != 0 || r.BuildPodRunAsGroup != 0 ||
 		r.BuildPodFSGroup != 0 {

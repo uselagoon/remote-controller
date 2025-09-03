@@ -84,6 +84,7 @@ type LagoonBuildReconciler struct {
 	DockerHost                       *dockerhost.DockerHost
 	QueueCache                       *lru.Cache[string, string]
 	BuildCache                       *lru.Cache[string, string]
+	ClusterAutoscalerEvict           bool
 }
 
 // BackupConfig holds all the backup configuration settings

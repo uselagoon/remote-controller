@@ -18,6 +18,7 @@ package v1beta2
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -182,6 +183,7 @@ type CachedBuildItem struct {
 	Step              string `json:"step"`
 	DockerBuild       bool   `json:"dockerBuild"`
 	CreationTimestamp int64  `json:"creationTimestamp"`
+	UpdatedTimestamp  int64  `json:"updatedTimestamp"`
 }
 
 func (q *CachedBuildItem) String() string {
@@ -203,6 +205,7 @@ func NewCachedBuildItem(lagoonBuild LagoonBuild, status string, dockerBuild bool
 		Step:              lagoonBuild.Labels["lagoon.sh/buildStep"],
 		DockerBuild:       dockerBuild,
 		CreationTimestamp: lagoonBuild.CreationTimestamp.Unix(),
+		UpdatedTimestamp:  time.Now().UTC().Unix(),
 	}
 }
 
@@ -213,6 +216,7 @@ type CachedBuildQueueItem struct {
 	Position          int    `json:"position"`
 	Length            int    `json:"length"`
 	CreationTimestamp int64  `json:"creationTimestamp"`
+	UpdatedTimestamp  int64  `json:"updatedTimestamp"`
 }
 
 func (q *CachedBuildQueueItem) String() string {
@@ -234,5 +238,21 @@ func NewCachedBuildQueueItem(lagoonBuild LagoonBuild, priority, position, length
 		Position:          position,
 		Length:            length,
 		CreationTimestamp: lagoonBuild.CreationTimestamp.Unix(),
+		UpdatedTimestamp:  time.Now().UTC().Unix(),
 	}
 }
+
+const (
+	BuildFinalizer = "finalizer.lagoonbuild.crd.lagoon.sh/v1beta2"
+
+	// NotOwnedByControllerMessage is used to describe an error where the controller was unable to start the build because
+	// the `lagoon.sh/controller` label does not match this controllers name
+	NotOwnedByControllerMessage = `Build was cancelled due to an issue with the build controller.
+This issue is related to the deployment system, not the repository or code base changes.
+Contact your Lagoon support team for help`
+	// MissingLabelsMessage is used to describe an error where the controller was unable to start the build because
+	// the `lagoon.sh/controller` label is missing
+	MissingLabelsMessage = `"Build was cancelled due to namespace configuration issue. A label or labels are missing on the namespace.
+This issue is related to the deployment system, not the repository or code base changes.
+Contact your Lagoon support team for help`
+)

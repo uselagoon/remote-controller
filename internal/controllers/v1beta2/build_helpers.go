@@ -12,15 +12,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
+	"github.com/matryer/try"
 	"github.com/prometheus/client_golang/prometheus"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 
@@ -29,19 +27,6 @@ import (
 
 var (
 	crdVersion string = "v1beta2"
-)
-
-const (
-	// NotOwnedByControllerMessage is used to describe an error where the controller was unable to start the build because
-	// the `lagoon.sh/controller` label does not match this controllers name
-	NotOwnedByControllerMessage = `Build was cancelled due to an issue with the build controller.
-This issue is related to the deployment system, not the repository or code base changes.
-Contact your Lagoon support team for help`
-	// MissingLabelsMessage is used to describe an error where the controller was unable to start the build because
-	// the `lagoon.sh/controller` label is missing
-	MissingLabelsMessage = `"Build was cancelled due to namespace configuration issue. A label or labels are missing on the namespace.
-This issue is related to the deployment system, not the repository or code base changes.
-Contact your Lagoon support team for help`
 )
 
 // getOrCreateServiceAccount will create the lagoon-deployer service account if it doesn't exist.
@@ -87,133 +72,6 @@ func (r *LagoonBuildReconciler) getOrCreateSARoleBinding(ctx context.Context, sa
 	if err != nil {
 		if err := r.Create(ctx, saRoleBinding); err != nil {
 			return fmt.Errorf("there was an error creating the lagoon-deployer-admin role binding. Error was: %v", err)
-		}
-	}
-	return nil
-}
-
-// getOrCreateNamespace will create the namespace if it doesn't exist.
-func (r *LagoonBuildReconciler) getOrCreateNamespace(ctx context.Context, namespace *corev1.Namespace, lagoonBuild lagooncrd.LagoonBuild, opLog logr.Logger) error {
-	// parse the project/env through the project pattern, or use the default
-	ns := helpers.GenerateNamespaceName(
-		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-		lagoonBuild.Spec.Project.Environment,
-		lagoonBuild.Spec.Project.Name,
-		r.NamespacePrefix,
-		r.ControllerNamespace,
-		r.RandomNamespacePrefix,
-	)
-	nsLabels := map[string]string{
-		"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
-		"lagoon.sh/environment":     lagoonBuild.Spec.Project.Environment,
-		"lagoon.sh/environmentType": lagoonBuild.Spec.Project.EnvironmentType,
-		"lagoon.sh/controller":      r.ControllerNamespace,
-	}
-	if lagoonBuild.Spec.Project.Organization != nil {
-		nsLabels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
-		nsLabels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
-	}
-	if lagoonBuild.Spec.Project.ID != nil {
-		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ID)
-	}
-	if lagoonBuild.Spec.Project.EnvironmentID != nil {
-		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentID)
-	}
-	// set the auto idling values if they are defined
-	if lagoonBuild.Spec.Project.EnvironmentIdling != nil {
-		// eventually deprecate 'lagoon.sh/environmentAutoIdle' for 'lagoon.sh/environmentIdlingEnabled'
-		nsLabels["lagoon.sh/environmentAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentIdling)
-		if *lagoonBuild.Spec.Project.EnvironmentIdling == 1 {
-			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "true"
-		} else {
-			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "false"
-		}
-	}
-	if lagoonBuild.Spec.Project.ProjectIdling != nil {
-		// eventually deprecate 'lagoon.sh/projectAutoIdle' for 'lagoon.sh/projectIdlingEnabled'
-		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
-		if *lagoonBuild.Spec.Project.ProjectIdling == 1 {
-			nsLabels["lagoon.sh/projectIdlingEnabled"] = "true"
-		} else {
-			nsLabels["lagoon.sh/projectIdlingEnabled"] = "false"
-		}
-	}
-	if lagoonBuild.Spec.Project.StorageCalculator != nil {
-		if *lagoonBuild.Spec.Project.StorageCalculator == 1 {
-			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "true"
-		} else {
-			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "false"
-		}
-	}
-	// add the required lagoon labels to the namespace when creating
-	namespace.ObjectMeta = metav1.ObjectMeta{
-		Name:   ns,
-		Labels: nsLabels,
-	}
-
-	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		if helpers.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("there was an error getting the namespace. Error was: %v", err)
-		}
-	}
-	if namespace.Status.Phase == corev1.NamespaceTerminating {
-		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.Name))
-		_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, "Namespace is currently in terminating status - contact your Lagoon support team for help", opLog, true)
-		return fmt.Errorf("%s is currently terminating, aborting build", ns)
-	}
-
-	// if the namespace exists, check that the controller label exists and matches this controllers namespace name
-	if namespace.Status.Phase == corev1.NamespaceActive {
-		if value, ok := namespace.Labels["lagoon.sh/controller"]; ok {
-			if value != r.ControllerNamespace {
-				// if the namespace is deployed by a different controller, fail the build
-				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.Name))
-				_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, NotOwnedByControllerMessage, opLog, true)
-				return fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
-			}
-		} else {
-			// if the label doesn't exist at all, fail the build
-			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.Name))
-			_ = r.cleanUpUndeployableBuild(ctx, lagoonBuild, MissingLabelsMessage, opLog, true)
-			return fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
-		}
-	}
-
-	// if kubernetes, just create it if it doesn't exist
-	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		if err := r.Create(ctx, namespace); err != nil {
-			return fmt.Errorf("there was an error creating the namespace. Error was: %v", err)
-		}
-	}
-
-	// once the namespace exists, then we can patch it with our labels
-	// this means the labels will always get added or updated if we need to change them or add new labels
-	// after the namespace has been created
-	mergePatch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": nsLabels,
-		},
-	})
-	if err := r.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-		return fmt.Errorf("there was an error patching the namespace. Error was: %v", err)
-	}
-	if err := r.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
-		return fmt.Errorf("there was an error getting the namespace. Error was: %v", err)
-	}
-
-	// if local/regional harbor is enabled
-	if r.LFFHarborEnabled {
-		// create the harbor client
-		lagoonHarbor, err := harbor.New(r.Harbor)
-		if err != nil {
-			return fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
-		}
-		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, *namespace, false)
-		if err != nil {
-			opLog.Error(err, "error rotating robot credential")
-		}
-		if rotated {
-			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", ns))
 		}
 	}
 	return nil
@@ -541,6 +399,23 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	}
 	// if local/regional harbor is enabled
 	if r.LFFHarborEnabled {
+		// handle rotating the credential for harbor before the build starts as required
+		namespace := &corev1.Namespace{}
+		err = r.Get(ctx, types.NamespacedName{
+			Name: lagoonBuild.Namespace,
+		}, namespace)
+		if err != nil {
+			return fmt.Errorf("error getting namespace. Error was: %v", err)
+		}
+		// create the harbor client
+		rotated, err := r.Harbor.RotateRobotCredential(ctx, r.Client, *namespace, false)
+		if err != nil {
+			opLog.Error(err, "error rotating robot credential")
+		}
+		if rotated {
+			opLog.Info(fmt.Sprintf("Robot credentials rotated for %s", lagoonBuild.Namespace))
+		}
+
 		// unmarshal the project variables
 		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
 		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
@@ -557,10 +432,24 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// this will overwrite what is provided by lagoon (if lagoon has provided them)
 			// or it will add them.
 			robotCredential := &corev1.Secret{}
-			if err = r.Get(ctx, types.NamespacedName{
-				Namespace: lagoonBuild.Namespace,
-				Name:      "lagoon-internal-registry-secret",
-			}, robotCredential); err != nil {
+			try.MaxRetries = 12
+			err = try.Do(func(attempt int) (bool, error) {
+				var secretErr error
+				err := r.APIReader.Get(ctx, types.NamespacedName{
+					Namespace: lagoonBuild.Namespace,
+					Name:      "lagoon-internal-registry-secret",
+				}, robotCredential)
+				if err != nil {
+					// if the secret doesn't exist wait 5 seconds before trying again
+					time.Sleep(5 * time.Second)
+					secretErr = fmt.Errorf("secret %s doesn't exist", "lagoon-internal-registry-secret")
+				} else {
+					// the secret exists, exit the retry
+					secretErr = nil
+				}
+				return attempt < 12, secretErr
+			})
+			if err != nil {
 				return fmt.Errorf("could not find Harbor RobotAccount credential")
 			}
 			auths := dockerconfig.ConfigFile{}
@@ -839,7 +728,6 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		dockerHost := r.DockerHost.AssignDockerHost(
 			lagoonBuild.Name,
 			reuseType,
-			r.LFFQoSEnabled,
 			r.BuildQoS.MaxContainerBuilds,
 		)
 		dockerHostEnvVar := corev1.EnvVar{
@@ -851,7 +739,6 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 		}
 		newPod.Spec.Containers[0].Env = append(newPod.Spec.Containers[0].Env, dockerHostEnvVar)
 		opLog.Info(fmt.Sprintf("Assigning build %s to dockerhost %s", lagoonBuild.Name, dockerHost))
-
 		// if it doesn't exist, then create the build pod
 		opLog.Info(fmt.Sprintf("Creating build pod for: %s", lagoonBuild.Name))
 		if err := r.Create(ctx, newPod); err != nil {
@@ -897,76 +784,8 @@ func (r *LagoonBuildReconciler) updateQueuedBuild(
 ========================================
 `, fmt.Sprintf("This build is currently queued in position %v/%v", queuePosition, queueLength)))
 	// send any messages to lagoon message queues
-	// update the deployment with the status, lagoon v2.12.0 supports queued status, otherwise use pending
-	if lagooncrd.CheckLagoonVersion(&lagoonBuild, "2.12.0") {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusQueued, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued)
-	} else {
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusPending, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
-		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusPending)
-	}
-	return nil
-}
-
-// cleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod, pending in queue)
-func (r *LagoonBuildReconciler) cleanUpUndeployableBuild(
-	ctx context.Context,
-	lagoonBuild lagooncrd.LagoonBuild,
-	message string,
-	opLog logr.Logger,
-	cancelled bool,
-) error {
-	var allContainerLogs []byte
-	if cancelled {
-		// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
-		// so just set the logs to be cancellation message
-		allContainerLogs = []byte(fmt.Sprintf(`
-========================================
-Build cancelled
-========================================
-%s`, message))
-		buildCondition := lagooncrd.BuildStatusCancelled
-		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
-		mergePatch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": map[string]interface{}{
-					"lagoon.sh/buildStatus": buildCondition.String(),
-				},
-			},
-		})
-		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, "Unable to update build status")
-		}
-	}
-	// send any messages to lagoon message queues
-	// update the deployment with the status of cancelled in lagoon
-	r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, "cancelled")
-	r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, "cancelled")
-	if cancelled {
-		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
-	}
-	// check if the build has a `BuildStep` type condition
-	buildStep := meta.FindStatusCondition(lagoonBuild.Status.Conditions, "BuildStep")
-	if buildStep != nil && buildStep.Reason == "Queued" {
-		// if the build was cancelled at the queued phase of a build, then it is likely it was cancelled by a new build
-		// update the buildstep to be cancelled by new build for clearer visibility in the resource status
-		if value, ok := lagoonBuild.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
-			condition, _ := helpers.BuildStepToStatusConditions("CancelledByNewBuild", "", time.Now().UTC())
-			_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
-		}
-		// finaly patch the build with the cancelled status phase
-		mergeMap := map[string]interface{}{
-			"status": map[string]interface{}{
-				"conditions": lagoonBuild.Status.Conditions,
-				"phase":      lagooncrd.BuildStatusCancelled.String(),
-			},
-		}
-		mergePatch, _ := json.Marshal(mergeMap)
-		if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
-			opLog.Error(err, "unable to update resource")
-		}
-	}
+	r.Messaging.BuildStatusLogsToLagoonLogs(ctx, r.EnableMQ, opLog, &lagoonBuild, lagooncrd.BuildStatusQueued, r.LagoonTargetName, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+	r.Messaging.UpdateDeploymentAndEnvironmentTask(ctx, r.EnableMQ, opLog, &lagoonBuild, true, lagooncrd.BuildStatusQueued, r.LagoonTargetName, fmt.Sprintf("queued %v/%v", queuePosition, queueLength))
+	r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusQueued, r.LagoonTargetName)
 	return nil
 }

@@ -84,6 +84,12 @@ var _ = Describe("controller", Ordered, func() {
 		cmd := exec.Command(utils.Kubectl(), "delete", "ns", namespace)
 		_, _ = utils.Run(cmd)
 
+		By("seed dockerhosts")
+		err = utils.SeedDockerHosts()
+		if err != nil {
+			fmt.Println(err)
+		}
+
 		By("creating manager namespace")
 		cmd = exec.Command(utils.Kubectl(), "create", "ns", namespace)
 		_, _ = utils.Run(cmd)
@@ -231,11 +237,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("validating that lagoonbuilds are working")
 			for _, name := range []string{"7m5zypx", "8m5zypx", "9m5zypx"} {
-				if name == "9m5zypx" {
-					By("creating a LagoonBuild resource via rabbitmq")
-					err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name))
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
-				} else {
+				if name == "8m5zypx" {
 					By("creating a LagoonBuild resource")
 					cmd = exec.Command(
 						utils.Kubectl(),
@@ -244,6 +246,10 @@ var _ = Describe("controller", Ordered, func() {
 						fmt.Sprintf("test/e2e/testdata/lagoon-build-%s.yaml", name),
 					)
 					_, err = utils.Run(cmd)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				} else {
+					By("creating a LagoonBuild resource via rabbitmq")
+					err = utils.PublishMessage(fmt.Sprintf("@test/e2e/testdata/lagoon-build-%s.json", name))
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 				}
 
@@ -301,6 +307,9 @@ var _ = Describe("controller", Ordered, func() {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 				}
 			}
+
+			// this tests that cancellations of builds behaves correctly
+			testCancellations(timeout, duration, interval)
 
 			By("validating that only 1 build pod remains in a namespace")
 			verifyOnlyOneBuildPod := func() error {
@@ -610,6 +619,7 @@ func compareRepositories(want, got string) error {
 		delete(m[idx].(map[string]interface{}), "update_time")
 		delete(m[idx].(map[string]interface{}), "project_id")
 		delete(m[idx].(map[string]interface{}), "pull_count")
+		m[idx].(map[string]interface{})["artifact_count"] = 1 // override the artifact_count to account for multiple test runs
 	}
 	p, err := json.Marshal(m)
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
-	"github.com/uselagoon/remote-controller/internal/harbor"
 )
 
 func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace) error {
@@ -76,25 +75,21 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 		}
 		if cleanupRepo || cleanupRobot {
 			// either of the repo or the robot need cleaning up when the namespace is terminated, then perform the required actions here
-			lagoonHarbor, err := harbor.New(d.Harbor)
+			curVer, err := d.Harbor.GetHarborVersion(ctx)
 			if err != nil {
 				return err
 			}
-			curVer, err := lagoonHarbor.GetHarborVersion(ctx)
-			if err != nil {
-				return err
-			}
-			if lagoonHarbor.UseV2Functions(curVer) {
+			if d.Harbor.UseV2Functions(curVer) {
 				if cleanupRepo {
-					lagoonHarbor.DeleteRepository(ctx, project, environment)
+					d.Harbor.DeleteRepository(ctx, project, environment)
 				}
 				if cleanupRobot {
-					projectHarbor, err := lagoonHarbor.ClientV5.GetProject(ctx, project)
+					projectHarbor, err := d.Harbor.ClientV5.GetProject(ctx, project)
 					if err != nil {
 						opLog.Info(fmt.Sprintf("Error getting project %s, err: %v", project, err))
 						return err
 					}
-					lagoonHarbor.DeleteRobotAccount(ctx, int64(projectHarbor.ProjectID), project, environment)
+					d.Harbor.DeleteRobotAccount(ctx, int64(projectHarbor.ProjectID), project, environment)
 				}
 			}
 		}

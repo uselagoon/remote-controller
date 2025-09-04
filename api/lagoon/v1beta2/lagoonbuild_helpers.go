@@ -14,10 +14,11 @@ import (
 	"github.com/matryer/try"
 	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -87,31 +88,69 @@ func CheckLagoonVersion(build *LagoonBuild, checkVersion string) bool {
 	return aVer.GreaterThanOrEqual(bVer)
 }
 
-// CancelExtraBuilds cancels extra builds.
-func CancelExtraBuilds(ctx context.Context, r client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string, status string) error {
-	sortedBuilds, _ := SortQueuedNamespaceBuilds(ns, queuedCache.Values())
-	metrics.BuildsPendingGauge.Set(float64(len(sortedBuilds)))
+// will label a build as cancelled and remove it from any queues
+func labelBuildCancelled(ctx context.Context, cl client.Client, opLog logr.Logger, pBuild CachedBuildQueueItem, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+	pendingBuild := &LagoonBuild{}
+	if err := cl.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
+		return helpers.IgnoreNotFound(err)
+	}
+	// cancel any other pending builds
+	opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
+	// set the build as cancelled
+	pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
+	pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
+	// remove it from any queues
+	buildCache.Remove(pendingBuild.Name)
+	queuedCache.Remove(pendingBuild.Name)
+	// update the build cr
+	if err := cl.Update(ctx, pendingBuild); err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartBuildOrCancelExtraBuilds starts a build and/or will cancel extra builds in a namespace
+func StartBuildOrCancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) (string, error) {
+	sortedBuilds, _ := SortQueuedNamespaceBuildsByCreation(ns, queuedCache.Values())
+	var startBuild string
 	if len(sortedBuilds) > 0 {
 		// if we have any pending builds, then grab the latest one and make it running
 		// if there are any other pending builds, cancel them so only the latest one runs
 		for idx, pBuild := range sortedBuilds {
-			pendingBuild := &LagoonBuild{}
-			if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: pBuild.Name}, pendingBuild); err != nil {
-				return helpers.IgnoreNotFound(err)
-			}
 			if idx == 0 {
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = status
-				buildCache.Add(pendingBuild.Name, fmt.Sprintf(`{"name":"%s","namespace":"%s","status":"%s","step":"%s","dockerbuild":%v,"creationTimestamp":%d}`, pendingBuild.Name, pendingBuild.Namespace, pendingBuild.Labels["lagoon.sh/buildStatus"], pendingBuild.Labels["lagoon.sh/buildStatus"], true, pendingBuild.CreationTimestamp.Unix()))
-				queuedCache.Remove(pendingBuild.Name)
+				opLog.Info(fmt.Sprintf("Setting build %s as running", pBuild.Name))
+				// set this build as running
+				// add it to the build cache
+				buildCache.Add(pBuild.Name, fmt.Sprintf(
+					`{"name":"%s","namespace":"%s","status":"%s","step":"%s","dockerbuild":%v,"creationTimestamp":%d}`,
+					pBuild.Name,
+					pBuild.Namespace,
+					BuildStatusRunning.String(),
+					BuildStatusRunning.String(),
+					true,
+					pBuild.CreationTimestamp,
+				))
+				queuedCache.Remove(pBuild.Name)
+				startBuild = pBuild.Name
 			} else {
 				// cancel any other pending builds
-				opLog.Info(fmt.Sprintf("Setting build %s as cancelled", pendingBuild.Name))
-				pendingBuild.Labels["lagoon.sh/buildStatus"] = BuildStatusCancelled.String()
-				pendingBuild.Labels["lagoon.sh/cancelledByNewBuild"] = "true"
-				buildCache.Remove(pendingBuild.Name)
-				queuedCache.Remove(pendingBuild.Name)
+				if err := labelBuildCancelled(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
+					return "", err
+				}
 			}
-			if err := r.Update(ctx, pendingBuild); err != nil {
+		}
+	}
+	return startBuild, nil
+}
+
+// CancelExtraBuilds cancels queued builds in a namespace
+func CancelExtraBuilds(ctx context.Context, cl client.Client, opLog logr.Logger, queuedCache, buildCache *lru.Cache[string, string], ns string) error {
+	runningNSBuilds, _ := NamespaceRunningBuilds(ns, buildCache.Values())
+	sortedBuilds, _ := SortQueuedNamespaceBuildsByCreation(ns, queuedCache.Values())
+	if len(sortedBuilds) > 0 && len(runningNSBuilds) > 0 {
+		// if there are any pending builds, cancel them so only the latest one runs
+		for _, pBuild := range sortedBuilds {
+			if err := labelBuildCancelled(ctx, cl, opLog, pBuild, queuedCache, buildCache, ns); err != nil {
 				return err
 			}
 		}
@@ -266,15 +305,15 @@ func LagoonBuildPruner(ctx context.Context, cl client.Client, cns string, builds
 						opLog.Info(fmt.Sprintf("Cleaning up LagoonBuild %s", lagoonBuild.Name))
 						// attempt to clean up any build pods associated to this build
 						if err := DeleteBuildPod(ctx, cl, opLog, &lagoonBuild, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: lagoonBuild.Name}, cns); err != nil {
-							opLog.Error(err, "unable to delete build pod")
+							opLog.Info(fmt.Sprintf("unable to delete build pod: %v", err))
 						}
 						// attempt to clean up other resources for a build
 						if err := DeleteBuildResources(ctx, cl, opLog, &lagoonBuild, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: lagoonBuild.Name}, cns); err != nil {
-							opLog.Error(err, "unable to update build resources")
+							opLog.Info(fmt.Sprintf("unable to update build resources: %v", err))
 						}
 						// then delete the build
 						if err := cl.Delete(ctx, &lagoonBuild); err != nil {
-							opLog.Error(err, "unable to delete build")
+							opLog.Info(fmt.Sprintf("unable to delete build: %v", err))
 							break
 						}
 					}
@@ -526,10 +565,8 @@ func updateLagoonBuild(namespace string, jobSpec LagoonTaskSpec, lagoonBuild *La
 }
 
 // CancelBuild handles cancelling builds or handling if a build no longer exists.
-func CancelBuild(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
+func CancelBuild(ctx context.Context, cl client.Client, namespace string, jobSpec *LagoonTaskSpec) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	jobSpec := &LagoonTaskSpec{}
-	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
 	if err := cl.Get(ctx, types.NamespacedName{
 		Name:      jobSpec.Misc.Name,
@@ -641,7 +678,7 @@ func SortQueuedBuilds(pendingBuilds []string) ([]CachedBuildQueueItem, error) {
 }
 
 // returns all builds that are currently in the queue in a given namespace
-func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
+func SortQueuedNamespaceBuildsByCreation(namespace string, pendingBuilds []string) ([]CachedBuildQueueItem, error) {
 	var builds []CachedBuildQueueItem
 	for _, str := range pendingBuilds {
 		var b CachedBuildQueueItem
@@ -653,11 +690,242 @@ func SortQueuedNamespaceBuilds(namespace string, pendingBuilds []string) ([]Cach
 		}
 	}
 	sort.Slice(builds, func(i, j int) bool {
-		// sort by priority, then creation timestamp
-		if builds[i].Priority != builds[j].Priority {
-			return builds[i].Priority > builds[j].Priority
-		}
-		return builds[i].CreationTimestamp < builds[j].CreationTimestamp
+		// sort by creation timestamp only in namespaced builds
+		// assumes last received build is the more important one in the list
+		return builds[i].CreationTimestamp > builds[j].CreationTimestamp
 	})
 	return builds, nil
+}
+
+func SeedBuildStartup(cl client.Client, scheme *runtime.Scheme, controllerNamespace string, defaultPriority int,
+	buildsCache *lru.Cache[string, string], buildsQueueCache *lru.Cache[string, string],
+) error {
+	runningBuilds := &LagoonBuildList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller":  controllerNamespace, // created by this controller
+			"lagoon.sh/buildStatus": BuildStatusRunning.String(),
+		}),
+	})
+	if err := cl.List(context.Background(), runningBuilds, listOption); err != nil {
+		return fmt.Errorf("unable to list running LagoonBuilds, there may be none or something went wrong: %v", err)
+	}
+	for _, build := range runningBuilds.Items {
+		bc := NewCachedBuildItem(build, "Running", true)
+		buildsCache.Add(build.Name, bc.String())
+	}
+	pendingBuilds := &LagoonBuildList{}
+	listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller":  controllerNamespace, // created by this controller
+			"lagoon.sh/buildStatus": BuildStatusPending.String(),
+		}),
+	})
+	if err := cl.List(context.Background(), pendingBuilds, listOption); err != nil {
+		return fmt.Errorf("unable to list pending LagoonBuilds, there may be none or something went wrong: %v", err)
+	}
+	sortBuilds(defaultPriority, pendingBuilds)
+	position := 1
+	for _, build := range pendingBuilds.Items {
+		priority := defaultPriority
+		if build.Spec.Build.Priority != nil {
+			priority = *build.Spec.Build.Priority
+		}
+		bc := NewCachedBuildQueueItem(build, priority, position, len(pendingBuilds.Items))
+		buildsQueueCache.Add(build.Name, bc.String())
+	}
+	return nil
+}
+
+func sortBuilds(defaultPriority int, pendingBuilds *LagoonBuildList) {
+	sort.Slice(pendingBuilds.Items, func(i, j int) bool {
+		// sort by priority, then creation timestamp
+		iPriority := defaultPriority
+		jPriority := defaultPriority
+		if ok := pendingBuilds.Items[i].Spec.Build.Priority; ok != nil {
+			iPriority = *pendingBuilds.Items[i].Spec.Build.Priority
+		}
+		if ok := pendingBuilds.Items[j].Spec.Build.Priority; ok != nil {
+			jPriority = *pendingBuilds.Items[j].Spec.Build.Priority
+		}
+		// better sorting based on priority then creation timestamp
+		// sort by higher priority first, where the greater the number the higher the priority
+		// production have priority 6 default (highest)
+		// development have priority 5 default (mid)
+		// bulk deployments have priority 3 default (low)
+		switch {
+		case iPriority != jPriority:
+			return iPriority > jPriority
+		default:
+			return pendingBuilds.Items[i].CreationTimestamp.Before(&pendingBuilds.Items[j].CreationTimestamp)
+		}
+	})
+}
+
+// GetOrCreateNamespace will create the namespace if it doesn't exist.
+func GetOrCreateNamespace(ctx context.Context,
+	cl client.Client,
+	namespace *corev1.Namespace,
+	lagoonBuild LagoonBuild,
+	opLog logr.Logger,
+	controllerNamespace, namespacePrefix string,
+	randomNamespacePrefix bool) (bool, error) {
+	// parse the project/env through the project pattern, or use the default
+	ns := helpers.GenerateNamespaceName(
+		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
+		lagoonBuild.Spec.Project.Environment,
+		lagoonBuild.Spec.Project.Name,
+		namespacePrefix,
+		controllerNamespace,
+		randomNamespacePrefix,
+	)
+	nsLabels := map[string]string{
+		"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
+		"lagoon.sh/environment":     lagoonBuild.Spec.Project.Environment,
+		"lagoon.sh/environmentType": lagoonBuild.Spec.Project.EnvironmentType,
+		"lagoon.sh/controller":      controllerNamespace,
+	}
+	if lagoonBuild.Spec.Project.Organization != nil {
+		nsLabels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
+		nsLabels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
+	}
+	if lagoonBuild.Spec.Project.ID != nil {
+		nsLabels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ID)
+	}
+	if lagoonBuild.Spec.Project.EnvironmentID != nil {
+		nsLabels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentID)
+	}
+	// set the auto idling values if they are defined
+	if lagoonBuild.Spec.Project.EnvironmentIdling != nil {
+		// eventually deprecate 'lagoon.sh/environmentAutoIdle' for 'lagoon.sh/environmentIdlingEnabled'
+		nsLabels["lagoon.sh/environmentAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentIdling)
+		if *lagoonBuild.Spec.Project.EnvironmentIdling == 1 {
+			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/environmentIdlingEnabled"] = "false"
+		}
+	}
+	if lagoonBuild.Spec.Project.ProjectIdling != nil {
+		// eventually deprecate 'lagoon.sh/projectAutoIdle' for 'lagoon.sh/projectIdlingEnabled'
+		nsLabels["lagoon.sh/projectAutoIdle"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ProjectIdling)
+		if *lagoonBuild.Spec.Project.ProjectIdling == 1 {
+			nsLabels["lagoon.sh/projectIdlingEnabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/projectIdlingEnabled"] = "false"
+		}
+	}
+	if lagoonBuild.Spec.Project.StorageCalculator != nil {
+		if *lagoonBuild.Spec.Project.StorageCalculator == 1 {
+			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "true"
+		} else {
+			nsLabels["lagoon.sh/storageCalculatorEnabled"] = "false"
+		}
+	}
+	// add the required lagoon labels to the namespace when creating
+	namespace.ObjectMeta = metav1.ObjectMeta{
+		Name:   ns,
+		Labels: nsLabels,
+	}
+
+	// if kubernetes, just create it if it doesn't exist
+	if err := cl.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		if helpers.IgnoreNotFound(err) != nil {
+			return true, fmt.Errorf("there was an error getting the namespace: Error was: %v", err)
+		}
+		if err := cl.Create(ctx, namespace); err != nil {
+			return true, fmt.Errorf("there was an error creating the namespace. Error was: %v", err)
+		}
+	}
+
+	if namespace.Status.Phase == corev1.NamespaceTerminating {
+		opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is stuck in terminating state", lagoonBuild.Name))
+		return true, fmt.Errorf("%s is currently terminating, aborting build", ns)
+	}
+
+	// if the namespace exists, check that the controller label exists and matches this controllers namespace name
+	if namespace.Status.Phase == corev1.NamespaceActive {
+		if value, ok := namespace.Labels["lagoon.sh/controller"]; ok {
+			if value != controllerNamespace {
+				// if the namespace is deployed by a different controller, fail the build
+				opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is owned by a different remote-controller", lagoonBuild.Name))
+				return true, fmt.Errorf("%s is owned by a different remote-controller, aborting build", ns)
+			}
+		} else {
+			// if the label doesn't exist at all, fail the build
+			opLog.Info(fmt.Sprintf("Cleaning up build %s as cancelled, the namespace is not a Lagoon project/environment", lagoonBuild.Name))
+			return true, fmt.Errorf("%s is not a Lagoon project/environment, aborting build", ns)
+		}
+	}
+
+	// once the namespace exists, then we can patch it with our labels
+	// this means the labels will always get added or updated if we need to change them or add new labels
+	// after the namespace has been created
+	mergePatch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": nsLabels,
+		},
+	})
+	if err := cl.Patch(ctx, namespace, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+		return false, fmt.Errorf("there was an error patching the namespace. Error was: %v", err)
+	}
+	return false, nil
+}
+
+// CleanUpUndeployableBuild will clean up a build if the namespace is being terminated, or some other reason that it can't deploy (or create the pod, pending in queue)
+func CleanUpUndeployableBuild(
+	ctx context.Context,
+	cl client.Client,
+	mq bool,
+	lagoonBuild LagoonBuild,
+	message string,
+	opLog logr.Logger,
+	cancelled bool,
+	targetName string,
+) ([]byte, error) {
+	var allContainerLogs []byte
+	if cancelled {
+		// if we get this handler, then it is likely that the build was in a pending or running state with no actual running pod
+		// so just set the logs to be cancellation message
+		allContainerLogs = []byte(fmt.Sprintf(`
+========================================
+Build cancelled
+========================================
+%s`, message))
+		buildCondition := BuildStatusCancelled
+		lagoonBuild.Labels["lagoon.sh/buildStatus"] = buildCondition.String()
+		mergePatch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]interface{}{
+					"lagoon.sh/buildStatus": buildCondition.String(),
+				},
+			},
+		})
+		if err := cl.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			opLog.Error(err, "Unable to update build status")
+		}
+	}
+	// send any messages to lagoon message queues
+	// update the deployment with the status of cancelled in lagoon
+	// check if the build has a `BuildStep` type condition
+	buildStep := meta.FindStatusCondition(lagoonBuild.Status.Conditions, "BuildStep")
+	if buildStep != nil && buildStep.Reason == "Queued" {
+		// if the build was cancelled at the queued phase of a build, then it is likely it was cancelled by a new build
+		// update the buildstep to be cancelled by new build for clearer visibility in the resource status
+		if value, ok := lagoonBuild.Labels["lagoon.sh/cancelledByNewBuild"]; ok && value == "true" {
+			condition, _ := helpers.BuildStepToStatusConditions("CancelledByNewBuild", "", time.Now().UTC())
+			_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+		}
+		// finaly patch the build with the cancelled status phase
+		mergeMap := map[string]interface{}{
+			"status": map[string]interface{}{
+				"conditions": lagoonBuild.Status.Conditions,
+				"phase":      BuildStatusCancelled.String(),
+			},
+		}
+		mergePatch, _ := json.Marshal(mergeMap)
+		if err := cl.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+			opLog.Error(err, "unable to update resource")
+		}
+	}
+	return allContainerLogs, nil
 }

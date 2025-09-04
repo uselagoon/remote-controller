@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/uselagoon/remote-controller/internal/dockerhost"
@@ -174,7 +176,7 @@ func main() {
 	var pruneLongRunningPodsCron string
 
 	var lffQoSEnabled bool
-	var qosMaxBuilds int
+	var qosTotalBuilds int
 	var qosMaxContainerBuilds int
 	var qosDefaultPriority int
 
@@ -394,11 +396,11 @@ func main() {
 	flag.IntVar(&timeoutForLongRunningTaskPods, "timeout-longrunning-task-pod-cleanup", 6, "How many hours a task pod should run before forcefully closed.")
 
 	// Build QoS configuration
-	flag.BoolVar(&lffQoSEnabled, "enable-qos", false, "Flag to enable this controller with QoS for builds.")
+	flag.BoolVar(&lffQoSEnabled, "enable-qos", true, "Deprecated: Flag to enable this controller with QoS for builds. No longer configurable")
 	// this flag remains the same, the number of max builds flag remains unchanged to be backwards compatible
 	flag.IntVar(&qosMaxContainerBuilds, "qos-max-builds", 20, "The total number of builds during the container build phase that can run at any one time.")
 	// this new flag is added but defaults to 0, if it is greater than `qos-max-builds` then it will be used, otherwise it will default to the value of `qos-max-builds`
-	flag.IntVar(&qosMaxBuilds, "qos-total-builds", 0, "The total number of builds that can run at any one time. Defaults to qos-max-builds if not provided or less than qos-max-builds.")
+	flag.IntVar(&qosTotalBuilds, "qos-total-builds", 0, "The total number of builds that can run at any one time. Defaults to qos-max-builds if not provided or less than qos-max-builds.")
 	flag.IntVar(&qosDefaultPriority, "qos-default", 5, "The default qos priority value to apply if one is not provided.")
 
 	// Task QoS configuration
@@ -565,7 +567,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 1000)
+	cacheSize := helpers.GetEnvInt("CACHE_SIZE", 2000)
 	// create the cancellation cache
 	cache := expirable.NewLRU[string, string](cacheSize, nil, time.Minute*60)
 	// create queue cache
@@ -744,8 +746,12 @@ func main() {
 		TLSSkipVerify:         tlsSkipVerify,
 	}
 
+	// setup harbor config
+	var lagoonHarbor *harbor.Harbor
+	lagoonHarbor, _ = harbor.New(harborConfig)
+
 	deletion := deletions.New(mgr.GetClient(),
-		harborConfig,
+		lagoonHarbor,
 		deletions.DeleteConfig{
 			PVCRetryAttempts: pvcRetryAttempts,
 			PVCRetryInterval: pvcRetryInterval,
@@ -756,6 +762,7 @@ func main() {
 
 	messaging := messenger.New(config,
 		mgr.GetClient(),
+		mgr.GetAPIReader(),
 		startupConnectionAttempts,
 		startupConnectionInterval,
 		controllerNamespace,
@@ -767,7 +774,11 @@ func main() {
 		enableDebug,
 		lffSupportK8UPv2,
 		cache,
-		harborConfig,
+		lagoonHarbor,
+		lagoonTargetName,
+		buildsCache,
+		buildsQueueCache,
+		qosDefaultPriority,
 	)
 
 	reuseCache, _ := lru.New[string, string](cacheSize)
@@ -790,19 +801,13 @@ func main() {
 		buildCache,
 	)
 	c := cron.New()
-	// if we are running with MQ support, then start the consumer handler
-
-	if enableMQ {
-		setupLog.Info("starting messaging handler")
-		go messaging.Consumer(lagoonTargetName)
-	}
 
 	// this ensures that the max number of builds is not less than the container builds support
-	if qosMaxBuilds < qosMaxContainerBuilds {
-		qosMaxBuilds = qosMaxContainerBuilds
+	if qosTotalBuilds < qosMaxContainerBuilds {
+		qosTotalBuilds = qosMaxContainerBuilds
 	}
 	buildQoSConfigv1beta2 := lagoonv1beta2ctrl.BuildQoS{
-		MaxBuilds:          qosMaxBuilds,
+		TotalBuilds:        qosTotalBuilds,
 		MaxContainerBuilds: qosMaxContainerBuilds,
 		DefaultPriority:    qosDefaultPriority,
 	}
@@ -828,6 +833,7 @@ func main() {
 	}
 
 	resourceCleanup := pruner.New(mgr.GetClient(),
+		mgr.GetAPIReader(),
 		buildsToKeep,
 		buildPodsToKeep,
 		tasksToKeep,
@@ -896,7 +902,6 @@ func main() {
 		// use cron to run a task pod cleanup task
 		// this will check any Lagoon task pods and attempt to delete them
 		_, err := c.AddFunc(harborCredentialCron, func() {
-			lagoonHarbor, _ := harbor.New(harborConfig)
 			lagoonHarbor.RotateRobotCredentials(context.Background(), mgr.GetClient())
 		})
 		if err != nil {
@@ -930,12 +935,24 @@ func main() {
 
 	c.Start()
 
-	// @TODO: maybe insert a pre-controller start state collector to try and seed the queue/build caches before the controllers start
+	// create a temporary client to use in seed functions
+	tmpClient, _ := client.New(ctrl.GetConfigOrDie(), client.Options{
+		Scheme: scheme,
+	})
+	// pre-seed the queues with the current state of builds
+	if err := lagoonv1beta2.SeedBuildStartup(tmpClient, scheme, controllerNamespace, qosDefaultPriority, buildsCache, buildsQueueCache); err != nil {
+		setupLog.Error(err, "unable to seed controller startup state")
+	}
+	// pre-seed the queues with the current state of tasks
+	if err := lagoonv1beta2.SeedTaskStartup(tmpClient, scheme, controllerNamespace, tasksCache, tasksQueueCache); err != nil {
+		setupLog.Error(err, "unable to seed controller startup state")
+	}
 
 	setupLog.Info("starting build controller")
 	// v1beta2 is the latest version
 	if err = (&lagoonv1beta2ctrl.LagoonBuildReconciler{
 		Client:                mgr.GetClient(),
+		APIReader:             mgr.GetAPIReader(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuild"),
 		Scheme:                mgr.GetScheme(),
 		EnableMQ:              enableMQ,
@@ -973,8 +990,7 @@ func main() {
 		LFFBackupWeeklyRandom:            lffBackupWeeklyRandom,
 		LFFRouterURL:                     lffRouterURL,
 		LFFHarborEnabled:                 lffHarborEnabled,
-		Harbor:                           harborConfig,
-		LFFQoSEnabled:                    lffQoSEnabled,
+		Harbor:                           lagoonHarbor,
 		BuildQoS:                         buildQoSConfigv1beta2,
 		NativeCronPodMinFrequency:        nativeCronPodMinFrequency,
 		LagoonTargetName:                 lagoonTargetName,
@@ -1038,6 +1054,7 @@ func main() {
 	setupLog.Info("starting build pod monitor controller")
 	if err = (&lagoonv1beta2ctrl.BuildMonitorReconciler{
 		Client:                mgr.GetClient(),
+		APIReader:             mgr.GetAPIReader(),
 		Log:                   ctrl.Log.WithName("v1beta2").WithName("LagoonBuildPodMonitor"),
 		Scheme:                mgr.GetScheme(),
 		EnableMQ:              enableMQ,
@@ -1047,7 +1064,6 @@ func main() {
 		RandomNamespacePrefix: randomPrefix,
 		EnableDebug:           enableDebug,
 		LagoonTargetName:      lagoonTargetName,
-		LFFQoSEnabled:         lffQoSEnabled,
 		BuildQoS:              buildQoSConfigv1beta2,
 		Cache:                 cache,
 		DockerHost:            dockerhosts,
@@ -1081,17 +1097,24 @@ func main() {
 	if lffHarborEnabled {
 		if err = (&harborctrl.HarborCredentialReconciler{
 			Client:              mgr.GetClient(),
+			APIReader:           mgr.GetAPIReader(),
 			Log:                 ctrl.Log.WithName("harbor").WithName("HarborCredentialReconciler"),
 			Scheme:              mgr.GetScheme(),
 			LFFHarborEnabled:    lffHarborEnabled,
 			ControllerNamespace: controllerNamespace,
-			Harbor:              harborConfig,
+			Harbor:              lagoonHarbor,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "HarborCredentialReconciler")
 			os.Exit(1)
 		}
 	}
 	// +kubebuilder:scaffold:builder
+
+	// if we are running with MQ support, then start the consumer handler
+	if enableMQ {
+		setupLog.Info("starting messaging handler")
+		go messaging.Consumer(lagoonTargetName)
+	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

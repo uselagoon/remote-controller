@@ -87,6 +87,26 @@ func StopLocalServices() {
 	}
 }
 
+// SeedDockerHosts seeds the dockerhosts with the main image used during the tests of builds
+func SeedDockerHosts() error {
+	cmd := exec.Command("kubectl", "-n", "lagoon", "exec", "lagoon-lagoon-remote-docker-host-0", "--", "docker", "pull", "uselagoon/nginx:25.5.0")
+	_, err := Run(cmd)
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command("kubectl", "-n", "lagoon", "exec", "lagoon-lagoon-remote-docker-host-1", "--", "docker", "pull", "uselagoon/nginx:25.5.0")
+	_, err = Run(cmd)
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command("kubectl", "-n", "lagoon", "exec", "lagoon-lagoon-remote-docker-host-2", "--", "docker", "pull", "uselagoon/nginx:25.5.0")
+	_, err = Run(cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CleanupNamespace cleans up a namespace and all potentially stuck resources
 func CleanupNamespace(namespace string) {
 	cmd := exec.Command(kubectlPath, "delete", "ns", namespace, "--timeout=30s")

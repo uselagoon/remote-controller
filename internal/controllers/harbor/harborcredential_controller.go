@@ -19,10 +19,11 @@ import (
 // HarborCredentialReconciler reconciles a namespace object
 type HarborCredentialReconciler struct {
 	client.Client
+	APIReader           client.Reader
 	Log                 logr.Logger
 	Scheme              *runtime.Scheme
 	LFFHarborEnabled    bool
-	Harbor              harbor.Harbor
+	Harbor              *harbor.Harbor
 	ControllerNamespace string
 }
 
@@ -41,15 +42,11 @@ func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	value, ok := harborSecret.Labels["harbor.lagoon.sh/force-rotate"]
 	if ok && value == "true" {
 		opLog.Info(fmt.Sprintf("Rotating harbor credentials for namespace %s", harborSecret.Namespace))
-		lagoonHarbor, err := harbor.New(r.Harbor)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("error creating harbor client, check your harbor configuration. Error was: %v", err)
-		}
 		var ns corev1.Namespace
-		if err := r.Get(ctx, types.NamespacedName{Name: harborSecret.Namespace}, &ns); err != nil {
+		if err := r.APIReader.Get(ctx, types.NamespacedName{Name: harborSecret.Namespace}, &ns); err != nil {
 			return ctrl.Result{}, helpers.IgnoreNotFound(err)
 		}
-		rotated, err := lagoonHarbor.RotateRobotCredential(ctx, r.Client, ns, true)
+		rotated, err := r.Harbor.RotateRobotCredential(ctx, r.Client, ns, true)
 		if err != nil {
 			// @TODO: resource unknown
 			return ctrl.Result{}, fmt.Errorf("error rotating robot credential was: %v", err)

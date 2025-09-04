@@ -115,7 +115,7 @@ func TestSortQueuedBuilds(t *testing.T) {
 	}
 }
 
-func TestSortQueuedNamespaceBuilds(t *testing.T) {
+func TestSortQueuedNamespaceBuildsByCreation(t *testing.T) {
 	type args struct {
 		namespace     string
 		pendingBuilds []string
@@ -127,7 +127,7 @@ func TestSortQueuedNamespaceBuilds(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "test1 - namespace1 builds only sorted by priority then creation",
+			name: "test1 - namespace1 builds only sorted by creation",
 			args: args{
 				namespace: "namespace1",
 				pendingBuilds: []string{
@@ -154,13 +154,13 @@ func TestSortQueuedNamespaceBuilds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := SortQueuedNamespaceBuilds(tt.args.namespace, tt.args.pendingBuilds)
+			got, err := SortQueuedNamespaceBuildsByCreation(tt.args.namespace, tt.args.pendingBuilds)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SortQueuedNamespaceBuilds() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("SortQueuedNamespaceBuildsByCreation() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("SortQueuedNamespaceBuilds() = %v, want %v", got, tt.want)
+				t.Errorf("SortQueuedNamespaceBuildsByCreation() = %v, want %v", got, tt.want)
 			}
 		})
 	}

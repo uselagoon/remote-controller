@@ -2,10 +2,11 @@ kind: LagoonBuild
 apiVersion: crd.lagoon.sh/v1beta2
 metadata:
     name: lagoon-build-8m5zypx
-    namespace: remote-controller-system
+    namespace: nginx-example-main
     labels:
         lagoon.sh/controller: remote-controller-system
         crd.lagoon.sh/version: v1beta2
+        lagoon.sh/buildStatus: Pending
 spec:
     build:
         ci: 'true' #to make sure that readwritemany is changed to readwriteonce

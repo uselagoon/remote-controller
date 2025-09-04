@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -39,6 +40,8 @@ func (r *LagoonTaskReconciler) qosTaskProcessor(ctx context.Context,
 
 func (r *LagoonTaskReconciler) whichTaskNext(ctx context.Context, opLog logr.Logger) error {
 	tasksToStart := r.TaskQoS.MaxTasks - len(r.TasksCache.Values())
+	metrics.TasksRunningGauge.Set(float64(r.TasksCache.Len()))
+	metrics.TasksPendingGauge.Set(float64(r.QueueCache.Len()))
 	if len(r.TasksCache.Values()) >= r.TaskQoS.MaxTasks {
 		// if the maximum number of tasks is hit, then drop out and try again next time
 		if r.EnableDebug {

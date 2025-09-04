@@ -6,17 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +29,7 @@ func (r *LagoonBuildReconciler) deleteExternalResources(
 		if strings.Contains(err.Error(), "unable to find a build pod for") {
 			err = r.updateCancelledDeploymentWithLogs(ctx, req, *lagoonBuild)
 			if err != nil {
-				opLog.Error(err, "unable to update the lagoon with LagoonBuild result")
+				opLog.Info(fmt.Sprintf("unable to update the lagoon with LagoonBuild result: %v", err))
 			}
 		} else {
 			return err
@@ -87,211 +81,9 @@ Build cancelled
 		}
 		// send any messages to lagoon message queues
 		// update the deployment with the status of cancelled in lagoon
-		r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, "cancelled")
-		r.updateDeploymentAndEnvironmentTask(ctx, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, "cancelled")
-		r.buildLogsToLagoonLogs(opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled)
+		r.Messaging.BuildStatusLogsToLagoonLogs(ctx, r.EnableMQ, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
+		r.Messaging.UpdateDeploymentAndEnvironmentTask(ctx, r.EnableMQ, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
+		r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled, r.LagoonTargetName)
 	}
 	return nil
-}
-
-// buildLogsToLagoonLogs sends the build logs to the lagoon-logs message queue
-// it contains the actual pod log output that is sent to elasticsearch, it is what eventually is displayed in the UI
-func (r *LagoonBuildReconciler) buildLogsToLagoonLogs(
-	opLog logr.Logger,
-	lagoonBuild *lagooncrd.LagoonBuild,
-	logs []byte,
-	buildCondition lagooncrd.BuildStatusType,
-) {
-	if r.EnableMQ {
-		condition := buildCondition
-		buildStep := "queued"
-		if condition == lagooncrd.BuildStatusCancelled {
-			buildStep = "cancelled"
-		}
-		msg := schema.LagoonLog{
-			Severity: "info",
-			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "build-logs:builddeploy-kubernetes:" + lagoonBuild.Name,
-			Meta: &schema.LagoonLogMeta{
-				JobName:     lagoonBuild.Name, // @TODO: remove once lagoon is corrected in controller-handler
-				BuildName:   lagoonBuild.Name,
-				BuildStatus: buildCondition.ToLower(), // same as buildstatus label
-				BuildStep:   buildStep,
-				BranchName:  lagoonBuild.Spec.Project.Environment,
-				RemoteID:    string(lagoonBuild.UID),
-				LogLink:     lagoonBuild.Spec.Project.UILink,
-				Cluster:     r.LagoonTargetName,
-			},
-		}
-		// add the actual build log message
-		msg.Message = string(logs)
-		msgBytes, err := json.Marshal(msg)
-		if err != nil {
-			opLog.Error(err, "unable to encode message as JSON")
-		}
-		// @TODO: if we can't publish the message because we are deleting the resource, then should we even
-		// bother to patch the resource??
-		// leave it for now cause the resource will just be deleted anyway
-		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
-			// if we can't publish the message, just return
-			return
-		}
-	}
-}
-
-// updateDeploymentAndEnvironmentTask sends the status of the build and deployment to the controllerhandler message queue in lagoon,
-// this is for the handler in lagoon to process.
-func (r *LagoonBuildReconciler) updateDeploymentAndEnvironmentTask(
-	ctx context.Context,
-	opLog logr.Logger,
-	lagoonBuild *lagooncrd.LagoonBuild,
-	checkLagoonEnv bool,
-	buildCondition lagooncrd.BuildStatusType,
-	buildStep string,
-) {
-	namespace := helpers.GenerateNamespaceName(
-		lagoonBuild.Spec.Project.NamespacePattern, // the namespace pattern or `openshiftProjectPattern` from Lagoon is never received by the controller
-		lagoonBuild.Spec.Project.Environment,
-		lagoonBuild.Spec.Project.Name,
-		r.NamespacePrefix,
-		r.ControllerNamespace,
-		r.RandomNamespacePrefix,
-	)
-	if r.EnableMQ {
-		ns := &corev1.Namespace{}
-		if err := r.Get(ctx, types.NamespacedName{Name: namespace}, ns); err != nil {
-			if helpers.IgnoreNotFound(err) != nil {
-				opLog.Error(err, "namespace %s not found", namespace)
-				return
-			}
-		}
-		envName := ns.Labels["lagoon.sh/environment"]
-		eID, _ := strconv.Atoi(ns.Labels["lagoon.sh/environmentId"])
-		envID := helpers.UintPtr(uint(eID))
-		projectName := ns.Labels["lagoon.sh/project"]
-		pID, _ := strconv.Atoi(ns.Labels["lagoon.sh/projectId"])
-		projectID := helpers.UintPtr(uint(pID))
-		msg := schema.LagoonMessage{
-			Type:      "build",
-			Namespace: namespace,
-			Meta: &schema.LagoonLogMeta{
-				Environment:   envName,
-				Project:       projectName,
-				EnvironmentID: envID,
-				ProjectID:     projectID,
-				BuildStatus:   buildCondition.ToLower(),
-				BuildStep:     buildStep,
-				BuildName:     lagoonBuild.Name,
-				LogLink:       lagoonBuild.Spec.Project.UILink,
-				RemoteID:      string(lagoonBuild.UID),
-				Cluster:       r.LagoonTargetName,
-			},
-		}
-		labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
-		listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-			client.InNamespace(lagoonBuild.Namespace),
-			client.MatchingLabelsSelector{
-				Selector: labels.NewSelector().Add(*labelRequirements1),
-			},
-		})
-		podList := &corev1.PodList{}
-		serviceNames := []string{}
-		services := []schema.EnvironmentService{}
-		if err := r.List(context.TODO(), podList, listOption); err == nil {
-			// generate the list of services to add to the environment
-			for _, pod := range podList.Items {
-				var serviceName, serviceType string
-				containers := []schema.ServiceContainer{}
-				if name, ok := pod.Labels["lagoon.sh/service"]; ok {
-					serviceName = name
-					serviceNames = append(serviceNames, serviceName)
-					for _, container := range pod.Spec.Containers {
-						containers = append(containers, schema.ServiceContainer{Name: container.Name})
-					}
-				}
-				if sType, ok := pod.Labels["lagoon.sh/service-type"]; ok {
-					serviceType = sType
-				}
-				// probably need to collect dbaas consumers too at some stage
-				services = append(services, schema.EnvironmentService{
-					Name:       serviceName,
-					Type:       serviceType,
-					Containers: containers,
-				})
-			}
-			msg.Meta.Services = serviceNames
-			msg.Meta.EnvironmentServices = services
-		}
-		if checkLagoonEnv {
-			route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.Namespace)
-			// if we aren't being provided the lagoon config, we can skip adding the routes etc
-			if err == nil {
-				msg.Meta.Route = route
-				msg.Meta.Routes = routes
-			}
-		}
-		if buildCondition.ToLower() == "failed" || buildCondition.ToLower() == "complete" || buildCondition.ToLower() == "cancelled" {
-			msg.Meta.EndTime = time.Now().UTC().Format("2006-01-02 15:04:05")
-		}
-		msgBytes, err := json.Marshal(msg)
-		if err != nil {
-			opLog.Error(err, "unable to encode message as JSON")
-		}
-		// @TODO: if we can't publish the message because we are deleting the resource, then should we even
-		// bother to patch the resource??
-		// leave it for now cause the resource will just be deleted anyway
-		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
-			// if we can't publish the message, just return
-			return
-		}
-	}
-}
-
-// buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
-func (r *LagoonBuildReconciler) buildStatusLogsToLagoonLogs(
-	ctx context.Context,
-	opLog logr.Logger,
-	lagoonBuild *lagooncrd.LagoonBuild,
-	buildCondition lagooncrd.BuildStatusType,
-	buildStep string,
-) {
-	if r.EnableMQ {
-		msg := schema.LagoonLog{
-			Severity: "info",
-			Project:  lagoonBuild.Spec.Project.Name,
-			Event:    "task:builddeploy-kubernetes:" + buildCondition.ToLower(), // @TODO: this probably needs to be changed to a new task event for the controller
-			Meta: &schema.LagoonLogMeta{
-				ProjectName: lagoonBuild.Spec.Project.Name,
-				BranchName:  lagoonBuild.Spec.Project.Environment,
-				BuildStatus: buildCondition.ToLower(), // same as buildstatus label
-				BuildName:   lagoonBuild.Name,
-				BuildStep:   buildStep,
-				LogLink:     lagoonBuild.Spec.Project.UILink,
-				Cluster:     r.LagoonTargetName,
-			},
-			Message: fmt.Sprintf("*[%s]* %s Build `%s` %s",
-				lagoonBuild.Spec.Project.Name,
-				lagoonBuild.Spec.Project.Environment,
-				lagoonBuild.Name,
-				buildCondition.ToLower(),
-			),
-		}
-		route, routes, err := helpers.GetLagoonEnvRoutes(ctx, opLog, r.Client, lagoonBuild.Namespace)
-		// if we aren't being provided the lagoon config, we can skip adding the routes etc
-		if err == nil {
-			msg.Meta.Route = route
-			msg.Meta.Routes = routes
-		}
-		msgBytes, err := json.Marshal(msg)
-		if err != nil {
-			opLog.Error(err, "unable to encode message as JSON")
-		}
-		// @TODO: if we can't publish the message because we are deleting the resource, then should we even
-		// bother to patch the resource??
-		// leave it for now cause the resource will just be deleted anyway
-		if err := r.Messaging.Publish("lagoon-logs", msgBytes); err != nil {
-			// if we can't publish the message, just return
-			return
-		}
-	}
 }

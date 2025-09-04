@@ -102,6 +102,7 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					jobPod.Status.ContainerStatuses[0] = state
 					// remove the build from the build cache
 					r.BuildCache.Remove(jobPod.Name)
+					r.QueueCache.Remove(lagoonBuild.Name)
 					// send any messages to lagoon message queues
 					logMsg := fmt.Sprintf("%v: %v", container.State.Waiting.Reason, container.State.Waiting.Message)
 					return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, []byte(logMsg), false)
@@ -109,37 +110,16 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 			}
 		}
 		return r.updateDeploymentWithLogs(ctx, req, lagoonBuild, jobPod, nil, false)
-	case corev1.PodRunning:
-		// if the pod is running and detects a change to the pod (eg, detecting an updated lagoon.sh/buildStep label)
-		// then ship or store the logs
-		// get the build associated to this pod, the information in the resource is used for shipping the logs
-		var lagoonBuild lagooncrd.LagoonBuild
-		err := r.Get(ctx,
-			types.NamespacedName{
-				Namespace: jobPod.Namespace,
-				Name:      jobPod.Labels["lagoon.sh/buildName"],
-			}, &lagoonBuild)
-		if err != nil {
-			return err
-		}
 		// if the buildpod status is failed or succeeded
 		// mark the build accordingly and ship the information back to lagoon
 	case corev1.PodFailed, corev1.PodSucceeded:
 		// get the build associated to this pod, we wil need update it at some point
-		var lagoonBuild lagooncrd.LagoonBuild
-		err := r.Get(ctx,
-			types.NamespacedName{
-				Namespace: jobPod.Namespace,
-				Name:      jobPod.Labels["lagoon.sh/buildName"],
-			}, &lagoonBuild)
-		if err != nil {
-			return err
-		}
 		if r.EnableDebug {
-			opLog.Info(fmt.Sprintf("Build %s reached %s", lagoonBuild.Name, jobPod.Status.Phase))
+			opLog.Info(fmt.Sprintf("Build %s reached %s", jobPod.Name, jobPod.Status.Phase))
 		}
 		// remove the build from the build cache
 		r.BuildCache.Remove(jobPod.Name)
+		r.QueueCache.Remove(lagoonBuild.Name)
 	}
 
 	// send any messages to lagoon message queues
@@ -251,11 +231,10 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			buildStep = value
 		}
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
-			time.AfterFunc(31*time.Second, func() {
-				metrics.BuildRunningStatus.Delete(prometheus.Labels{
-					"build_namespace": jobPod.Namespace,
-					"build_name":      jobPod.Name,
-				})
+			metrics.BuildRunningStatus.Delete(prometheus.Labels{
+				"build_namespace":  jobPod.Namespace,
+				"build_name":       jobPod.Name,
+				"build_dockerhost": jobPod.Annotations["dockerhost.lagoon.sh/name"],
 			})
 			// remove the build from the buildcache
 			_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
@@ -303,7 +282,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		depList := &appsv1.DeploymentList{}
 		serviceNames := []string{}
 		services := []schema.EnvironmentService{}
-		if err := r.List(context.TODO(), depList, listOption); err == nil {
+		if err := r.APIReader.List(context.TODO(), depList, listOption); err == nil {
 			// generate the list of services to add or update to the environment
 			for _, deployment := range depList.Items {
 				var serviceName, serviceType string

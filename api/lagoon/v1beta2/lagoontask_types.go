@@ -253,3 +253,7 @@ func NewCachedTaskQueueItem(lagoonTask LagoonTask, position, length int) CachedT
 		CreationTimestamp: lagoonTask.CreationTimestamp.Unix(),
 	}
 }
+
+const (
+	TaskFinalizer = "finalizer.lagoontask.crd.lagoon.sh/v1beta2"
+)

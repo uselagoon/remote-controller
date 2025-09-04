@@ -16,7 +16,6 @@ func Test_pickHost(t *testing.T) {
 		available []string
 		inUse     map[string]int
 		qosMax    int
-		qos       bool
 	}
 	tests := []struct {
 		name        string
@@ -37,7 +36,6 @@ func Test_pickHost(t *testing.T) {
 					"dockerhost1": 2,
 				},
 				qosMax: 3,
-				qos:    true,
 			},
 			want: "dockerhost2",
 		},
@@ -54,7 +52,6 @@ func Test_pickHost(t *testing.T) {
 					"dockerhost1": 2,
 				},
 				qosMax: 3,
-				qos:    true,
 			},
 			want: "dockerhost2",
 		},
@@ -70,7 +67,6 @@ func Test_pickHost(t *testing.T) {
 					"dockerhost1": 2,
 				},
 				qosMax: 3,
-				qos:    true,
 			},
 			want: "dockerhost2",
 		},
@@ -90,47 +86,6 @@ func Test_pickHost(t *testing.T) {
 					"dockerhost3": 2,
 				},
 				qosMax: 3,
-				qos:    true,
-			},
-			want: "dockerhost2",
-		},
-		{
-			name:        "test5",
-			description: "no qos, prefer lowest in use dockerhost which is chosen",
-			args: args{
-				chosen: "dockerhost2",
-				available: []string{
-					"dockerhost1",
-					"dockerhost2",
-					"dockerhost3",
-				},
-				inUse: map[string]int{
-					"dockerhost1": 2,
-					"dockerhost2": 1,
-					"dockerhost3": 2,
-				},
-				qosMax: 20,
-				qos:    false,
-			},
-			want: "dockerhost2",
-		},
-		{
-			name:        "test6",
-			description: "no qos, prefer lowest in use dockerhost when chosen is busier",
-			args: args{
-				chosen: "dockerhost3",
-				available: []string{
-					"dockerhost1",
-					"dockerhost2",
-					"dockerhost3",
-				},
-				inUse: map[string]int{
-					"dockerhost1": 2,
-					"dockerhost2": 1,
-					"dockerhost3": 2,
-				},
-				qosMax: 20,
-				qos:    false,
 			},
 			want: "dockerhost2",
 		},
@@ -144,7 +99,7 @@ func Test_pickHost(t *testing.T) {
 			fakeClient := clientBuilder.Build()
 			logs := ctrl.Log.WithName("dockerhost")
 			d := New(fakeClient, logs, "lagoon", tt.args.reuseType, &lru.Cache[string, string]{}, &lru.Cache[string, string]{})
-			if got := d.pickHost(tt.args.chosen, tt.args.available, tt.args.inUse, tt.args.qosMax, tt.args.qos); got != tt.want {
+			if got := d.pickHost(tt.args.chosen, tt.args.available, tt.args.inUse, tt.args.qosMax); got != tt.want {
 				t.Errorf("pickHost() = %v, want %v", got, tt.want)
 			}
 		})

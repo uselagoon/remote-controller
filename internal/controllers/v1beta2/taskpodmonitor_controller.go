@@ -63,10 +63,6 @@ func (r *TaskMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, helpers.IgnoreNotFound(err)
 	}
 
-	err := r.calculateTaskMetrics(ctx)
-	if err != nil {
-		opLog.Error(err, "Unable to generate metrics.")
-	}
 	if jobPod.DeletionTimestamp.IsZero() {
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)

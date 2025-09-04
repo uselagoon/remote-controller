@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/uselagoon/machinery/api/schema"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -240,10 +242,8 @@ func updateLagoonTask(namespace string, taskSpec LagoonTaskSpec) ([]byte, error)
 }
 
 // CancelTask handles cancelling tasks or handling if a tasks no longer exists.
-func CancelTask(ctx context.Context, cl client.Client, namespace string, body []byte) (bool, []byte, error) {
+func CancelTask(ctx context.Context, cl client.Client, namespace string, jobSpec *LagoonTaskSpec) (bool, []byte, error) {
 	opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
-	jobSpec := &LagoonTaskSpec{}
-	_ = json.Unmarshal(body, jobSpec)
 	var jobPod corev1.Pod
 	// @TODO: use `taskName` in the future only
 	taskName := fmt.Sprintf("lagoon-task-%s-%s", jobSpec.Task.ID, helpers.HashString(jobSpec.Task.ID)[0:6])
@@ -344,4 +344,47 @@ func SortQueuedNamespaceTasks(namespace string, pendingTasks []string) ([]Cached
 		return tasks[i].CreationTimestamp < tasks[j].CreationTimestamp
 	})
 	return tasks, nil
+}
+
+func SeedTaskStartup(cl client.Client, scheme *runtime.Scheme, controllerNamespace string,
+	tasksCache *lru.Cache[string, string], tasksQueueCache *lru.Cache[string, string],
+) error {
+	runningTasks := &LagoonTaskList{}
+	listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller": controllerNamespace, // created by this controller
+			"lagoon.sh/taskStatus": BuildStatusRunning.String(),
+		}),
+	})
+	if err := cl.List(context.Background(), runningTasks, listOption); err != nil {
+		return fmt.Errorf("unable to list running LagoonTasks, there may be none or something went wrong: %v", err)
+	}
+	for _, build := range runningTasks.Items {
+		bc := NewCachedTaskItem(build, "Running")
+		tasksCache.Add(build.Name, bc.String())
+	}
+	pendingTasks := &LagoonTaskList{}
+	listOption = (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+		client.MatchingLabels(map[string]string{
+			"lagoon.sh/controller": controllerNamespace, // created by this controller
+			"lagoon.sh/taskStatus": BuildStatusPending.String(),
+		}),
+	})
+	if err := cl.List(context.Background(), pendingTasks, listOption); err != nil {
+		return fmt.Errorf("unable to list pending LagoonTasks, there may be none or something went wrong: %v", err)
+	}
+	sortTasks(pendingTasks)
+	position := 1
+	for _, build := range pendingTasks.Items {
+		bc := NewCachedTaskQueueItem(build, position, len(pendingTasks.Items))
+		tasksQueueCache.Add(build.Name, bc.String())
+	}
+	return nil
+}
+
+func sortTasks(pendingTasks *LagoonTaskList) {
+	sort.Slice(pendingTasks.Items, func(i, j int) bool {
+		// sort by creation timestamp
+		return pendingTasks.Items[i].CreationTimestamp.Before(&pendingTasks.Items[j].CreationTimestamp)
+	})
 }

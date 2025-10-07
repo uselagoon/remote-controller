@@ -9,6 +9,7 @@ import (
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/uuid"
 )
 
 const (
@@ -30,6 +31,14 @@ func (m *Messenger) handleBuildMessage(ctx context.Context, opLog logr.Logger, n
 			),
 		)
 		if clean {
+			// set a uid for the failed build as one will not have been generated if the resource can't be created
+			if newBuild.UID == "" {
+				newBuild.SetUID(uuid.NewUUID())
+			}
+			// set labels a new map if is nil to prevent nil pointer issues in following functions
+			if newBuild.Labels == nil {
+				newBuild.Labels = make(map[string]string)
+			}
 			msg, _ := lagoonv1beta2.CleanUpUndeployableBuild(ctx, m.Client, true, *newBuild, failedMsg, opLog, true, m.LagoonTargetName)
 			m.BuildStatusLogsToLagoonLogs(ctx, true, opLog, newBuild, lagoonv1beta2.BuildStatusCancelled, m.LagoonTargetName, "cancelled")
 			m.UpdateDeploymentAndEnvironmentTask(ctx, true, opLog, newBuild, true, lagoonv1beta2.BuildStatusCancelled, m.LagoonTargetName, "cancelled")

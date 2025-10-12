@@ -233,7 +233,11 @@ func GenerateNamespaceName(pattern, environmentName, projectname, prefix, contro
 func ShortenEnvironment(project, environment string) string {
 	overlength := 58 - len(project)
 	if len(environment) > overlength {
-		environment = fmt.Sprintf("%s-%s", environment[0:overlength-5], HashString(environment)[0:4])
+		if overlength < 5 {
+			environment = fmt.Sprintf("-%s", HashString(environment)[0:4])
+		} else {
+			environment = fmt.Sprintf("%s-%s", environment[0:overlength-5], HashString(environment)[0:4])
+		}
 	}
 	return environment
 }

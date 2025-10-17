@@ -18,7 +18,6 @@ package v1beta2
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -26,9 +25,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -67,20 +64,6 @@ func (r *TaskMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// pod is not being deleted
 		return ctrl.Result{}, r.handleTaskMonitor(ctx, opLog, req, jobPod)
 	}
-	// pod deletion request came through, check if this is an activestandby task, if it is, delete the activestandby role
-	if value, ok := jobPod.Labels["lagoon.sh/activeStandby"]; ok {
-		isActiveStandby, _ := strconv.ParseBool(value)
-		if isActiveStandby {
-			var destinationNamespace string
-			if value, ok := jobPod.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
-				destinationNamespace = value
-			}
-			err := r.deleteActiveStandbyRole(ctx, destinationNamespace)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
 	return ctrl.Result{}, nil
 }
 
@@ -109,21 +92,4 @@ func (r *TaskMonitorReconciler) collectLogs(ctx context.Context, req reconcile.R
 		allContainerLogs = append(allContainerLogs, cLogs...)
 	}
 	return allContainerLogs, nil
-}
-
-// deleteActiveStandbyRole
-func (r *TaskMonitorReconciler) deleteActiveStandbyRole(ctx context.Context, destinationNamespace string) error {
-	activeStandbyRoleBinding := &rbacv1.RoleBinding{}
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: destinationNamespace,
-		Name:      "lagoon-deployer-activestandby",
-	}, activeStandbyRoleBinding)
-	if err != nil {
-		_ = helpers.IgnoreNotFound(err)
-	}
-	err = r.Delete(ctx, activeStandbyRoleBinding)
-	if err != nil {
-		return fmt.Errorf("unable to delete lagoon-deployer-activestandby role binding")
-	}
-	return nil
 }

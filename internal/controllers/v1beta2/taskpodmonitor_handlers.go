@@ -17,6 +17,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -110,6 +111,18 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 		}
 		// remove the task from the task cache
 		r.TasksCache.Remove(jobPod.Name)
+		if value, ok := lagoonTask.Labels["lagoon.sh/activeStandby"]; ok {
+			isActiveStandby, _ := strconv.ParseBool(value)
+			if isActiveStandby {
+				// remove roles on failure or completion of the pod
+				if destinationNamespace, ok := lagoonTask.Labels["lagoon.sh/activeStandbyDestinationNamespace"]; ok {
+					_ = r.deleteActiveStandbyRole(ctx, opLog, destinationNamespace)
+				}
+				if sourceNamespace, ok := lagoonTask.Labels["lagoon.sh/activeStandbySourceNamespace"]; ok {
+					_ = r.deleteActiveStandbyRole(ctx, opLog, sourceNamespace)
+				}
+			}
+		}
 	}
 	// if it isn't pending, failed, or complete, it will be running, we should tell lagoon
 	return r.updateTaskWithLogs(ctx, req, lagoonTask, jobPod, nil, false)
@@ -408,6 +421,28 @@ Task %s
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// deleteActiveStandbyRole
+func (r *TaskMonitorReconciler) deleteActiveStandbyRole(ctx context.Context, opLog logr.Logger, namespace string) error {
+	activeStandbyRoleBinding := &rbacv1.RoleBinding{}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      "lagoon-deployer-activestandby",
+	}, activeStandbyRoleBinding)
+	if err != nil {
+		err = helpers.IgnoreNotFound(err)
+		if err != nil {
+			return fmt.Errorf("unable to get lagoon-deployer-activestandby role binding")
+		}
+	} else {
+		opLog.Info("removing lagoon-deployer-activestandby role binding")
+		err = r.Delete(ctx, activeStandbyRoleBinding)
+		if err != nil {
+			return fmt.Errorf("unable to delete lagoon-deployer-activestandby role binding")
 		}
 	}
 	return nil

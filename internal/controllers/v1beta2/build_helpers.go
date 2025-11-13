@@ -629,11 +629,14 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			Name:      lagoonBuild.Name,
 			Namespace: lagoonBuild.Namespace,
 			Labels: map[string]string{
-				"lagoon.sh/jobType":       "build",
-				"lagoon.sh/buildName":     lagoonBuild.Name,
-				"lagoon.sh/controller":    r.ControllerNamespace,
-				"crd.lagoon.sh/version":   crdVersion,
-				"lagoon.sh/buildRemoteID": string(lagoonBuild.UID),
+				"lagoon.sh/jobType":         "build",
+				"lagoon.sh/buildName":       lagoonBuild.Name,
+				"lagoon.sh/project":         lagoonBuild.Spec.Project.Name,
+				"lagoon.sh/environment":     lagoonBuild.Spec.Project.Environment,
+				"lagoon.sh/environmentType": lagoonBuild.Spec.Project.EnvironmentType,
+				"lagoon.sh/controller":      r.ControllerNamespace,
+				"crd.lagoon.sh/version":     crdVersion,
+				"lagoon.sh/buildRemoteID":   string(lagoonBuild.UID),
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
@@ -686,6 +689,13 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	if lagoonBuild.Spec.Project.Organization != nil {
 		newPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.Organization.ID)
 		newPod.Labels["organization.lagoon.sh/name"] = lagoonBuild.Spec.Project.Organization.Name
+	}
+
+	if lagoonBuild.Spec.Project.ID != nil {
+		newPod.Labels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.ID)
+	}
+	if lagoonBuild.Spec.Project.EnvironmentID != nil {
+		newPod.Labels["lagoon.sh/environmentId"] = fmt.Sprintf("%d", *lagoonBuild.Spec.Project.EnvironmentID)
 	}
 
 	if !r.ClusterAutoscalerEvict {

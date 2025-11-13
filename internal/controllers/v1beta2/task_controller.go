@@ -304,6 +304,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 						Labels: map[string]string{
 							"lagoon.sh/jobType":     "task",
 							"lagoon.sh/taskName":    lagoonTask.Name,
+							"lagoon.sh/project":     lagoonTask.Spec.Project.Name,
 							"crd.lagoon.sh/version": crdVersion,
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						},
@@ -322,6 +323,10 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 				if lagoonTask.Spec.Project.Organization != nil {
 					taskPod.Labels["organization.lagoon.sh/id"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.Organization.ID)
 					taskPod.Labels["organization.lagoon.sh/name"] = lagoonTask.Spec.Project.Organization.Name
+				}
+
+				if lagoonTask.Spec.Project.ID != nil {
+					taskPod.Labels["lagoon.sh/projectId"] = fmt.Sprintf("%d", *lagoonTask.Spec.Project.ID)
 				}
 
 				if !r.ClusterAutoscalerEvict {

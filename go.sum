@@ -1241,15 +1241,8 @@ github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijb
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli v1.22.2/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli/v2 v2.3.0/go.mod h1:LJmUH05zAU44vOAcrfzZQKsZbVcdbOG8rtL3/XcUArI=
-<<<<<<< HEAD
-github.com/uselagoon/machinery v0.0.34 h1:5DsvXEyMeXmzQhjt11YH7+kZJueabovrwKTv0x7jQV8=
-github.com/uselagoon/machinery v0.0.34/go.mod h1:G0ujppuNR0BrtAnlmH8xDb9TDfayb4A36aeo0DYg7fQ=
-github.com/uselagoon/machinery v0.0.35-0.20251124010253-71bebf6d6966 h1:zfOFGy2aaAn5SnGoOBn/GqmiPzQKY4Crd5A0Y+DXI90=
-github.com/uselagoon/machinery v0.0.35-0.20251124010253-71bebf6d6966/go.mod h1:G0ujppuNR0BrtAnlmH8xDb9TDfayb4A36aeo0DYg7fQ=
-=======
-github.com/uselagoon/machinery v0.0.35-0.20250907230447-55e831cff5b2 h1:2tYU+GPIwBo1iyYCcXHgasDPZ1cmQyk2EoIOPdAeyDc=
-github.com/uselagoon/machinery v0.0.35-0.20250907230447-55e831cff5b2/go.mod h1:G0ujppuNR0BrtAnlmH8xDb9TDfayb4A36aeo0DYg7fQ=
->>>>>>> 4ba5b32 (feat: consume environment services from confimap)
+github.com/uselagoon/machinery v0.0.35-0.20250907231937-622deb3fd70d h1:7qifEQS0lMjRlwRy9NbhAUUNqbvrGej6oKtesSDMaLQ=
+github.com/uselagoon/machinery v0.0.35-0.20250907231937-622deb3fd70d/go.mod h1:G0ujppuNR0BrtAnlmH8xDb9TDfayb4A36aeo0DYg7fQ=
 github.com/uudashr/gocognit v0.0.0-20190926065955-1655d0de0517/go.mod h1:j44Ayx2KW4+oB6SWMv8KsmHzZrOInQav7D3cQMJ5JUM=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.2.0/go.mod h1:4vX61m6KN+xDduDNwXrhIAVZaZaZiQ1luJk8LWSxF3s=

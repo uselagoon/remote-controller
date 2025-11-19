@@ -33,7 +33,7 @@ func K8UPVersions(ctx context.Context, c client.Client) (bool, bool, error) {
 			return k8upv1alpha1Exists, k8upv1Exists, err
 		}
 	}
-	if crdv1alpha1.ObjectMeta.Name == "restores.backup.appuio.ch" {
+	if crdv1alpha1.Name == "restores.backup.appuio.ch" {
 		k8upv1alpha1Exists = true
 	}
 	crdv1 := &apiextensionsv1.CustomResourceDefinition{}
@@ -42,7 +42,7 @@ func K8UPVersions(ctx context.Context, c client.Client) (bool, bool, error) {
 			return k8upv1alpha1Exists, k8upv1Exists, err
 		}
 	}
-	if crdv1.ObjectMeta.Name == "restores.k8up.io" {
+	if crdv1.Name == "restores.k8up.io" {
 		k8upv1Exists = true
 	}
 	return k8upv1alpha1Exists, k8upv1Exists, nil

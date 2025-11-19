@@ -71,7 +71,7 @@ func (p *Pruner) NamespacePruner() {
 					if ierr != nil {
 						opLog.Error(ierr, fmt.Sprintf("Unable to annotate namespace %s with %s", ns.Name, ExpirationPausedLabel))
 					}
-					continue //on to the next NS
+					continue // on to the next NS
 				}
 				delete = i
 			}
@@ -87,7 +87,7 @@ func (p *Pruner) NamespacePruner() {
 					if ierr != nil {
 						opLog.Error(ierr, fmt.Sprintf("Unable to annotate namespace %s with %s", ns.Name, ExpirationPausedLabel))
 					}
-					continue //on to the next NS
+					continue // on to the next NS
 				}
 				delete = i
 			}

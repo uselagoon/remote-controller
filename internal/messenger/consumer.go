@@ -322,13 +322,13 @@ func (m *Messenger) Consumer(targetName string) {
 			case "deploytarget:restic:backup:restore", "kubernetes:restic:backup:restore":
 				v1alpha1, v1, err := helpers.K8UPVersions(ctx, m.Client)
 				if err != nil {
-					//@TODO: send msg back to lagoon and update task to failed?
-					message.Ack(false) // ack to remove from queue
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 				if !v1alpha1 && !v1 {
 					// k8up not installed
-					message.Ack(false) // ack to remove from queue
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 				opLog.Info(
@@ -354,13 +354,13 @@ func (m *Messenger) Consumer(targetName string) {
 			case "deploytarget:restic:cancel:restore":
 				v1alpha1, v1, err := helpers.K8UPVersions(ctx, m.Client)
 				if err != nil {
-					//@TODO: send msg back to lagoon and update task to failed?
-					message.Ack(false) // ack to remove from queue
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 				if !v1alpha1 && !v1 {
 					// k8up not installed
-					message.Ack(false) // ack to remove from queue
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 				// if this is a request to cancel a restore attempt
@@ -380,8 +380,8 @@ func (m *Messenger) Consumer(targetName string) {
 							jobSpec.Environment.Name,
 						),
 					)
-					//@TODO: send msg back to lagoon and update task to failed?
-					message.Ack(false) // ack to remove from queue
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
 			case "deploytarget:route:migrate", "kubernetes:route:migrate", "openshift:route:migrate":

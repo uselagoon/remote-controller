@@ -48,10 +48,8 @@ func (m *Messenger) ResticRestore(ctx context.Context, namespace string, jobSpec
 		} else {
 			if v1 {
 				handlev1 = true
-			} else {
-				if v1alpha1 {
-					handlev1alpha1 = true
-				}
+			} else if v1alpha1 {
+				handlev1alpha1 = true
 			}
 		}
 	} else {

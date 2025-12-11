@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8upv1:aggregate-to-admin
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: 'true'
+rules:
+  - verbs:
+      - '*'
+    apiGroups:
+      - backup.appuio.ch
+    resources:
+      - '*'

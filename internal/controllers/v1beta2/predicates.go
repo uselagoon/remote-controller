@@ -26,7 +26,7 @@ func (p BuildPodPredicates) Create(e event.CreateEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-build", value)
+						match, _ := regexp.MatchString("^lagoon-(build|variables)", value)
 						return match
 					}
 				}
@@ -43,7 +43,7 @@ func (p BuildPodPredicates) Delete(e event.DeleteEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-build", value)
+						match, _ := regexp.MatchString("^lagoon-(build|variables)", value)
 						return match
 					}
 				}
@@ -83,7 +83,7 @@ func (p BuildPodPredicates) Update(e event.UpdateEvent) bool {
 									"build_step":      oldBuildStep,
 								})
 							})
-							match, _ := regexp.MatchString("^lagoon-build", value)
+							match, _ := regexp.MatchString("^lagoon-(build|variables)", value)
 							return match
 						}
 					}
@@ -101,7 +101,7 @@ func (p BuildPodPredicates) Generic(e event.GenericEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/buildName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-build", value)
+						match, _ := regexp.MatchString("^lagoon-(build|variables)", value)
 						return match
 					}
 				}

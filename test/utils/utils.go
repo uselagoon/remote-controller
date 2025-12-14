@@ -197,11 +197,18 @@ func StopMetricsConsumer() {
 // Installs a CRD file but doesn't cause a failure if it already exists
 func InstallK8upCRD(version string) error {
 	crd := k8upv1alpha1crd
+	role := "test/e2e/testdata/k8up-v1alpha1-role.yaml"
 	if version == "k8up-v1" {
 		crd = k8upv1crd
+		role = "test/e2e/testdata/k8up-v1-role.yaml"
 	}
 	cmd := exec.Command(kubectlPath, "create", "-f", crd)
 	_, err := Run(cmd)
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command(kubectlPath, "create", "-f", role)
+	_, err = Run(cmd)
 	return err
 }
 
@@ -210,6 +217,10 @@ func UninstallK8upCRDs() {
 	cmd := exec.Command(kubectlPath, "delete", "-f", k8upv1alpha1crd)
 	_, _ = Run(cmd)
 	cmd = exec.Command(kubectlPath, "delete", "-f", k8upv1crd)
+	_, _ = Run(cmd)
+	cmd = exec.Command(kubectlPath, "delete", "-f", "test/e2e/testdata/k8up-v1alpha1-role.yaml")
+	_, _ = Run(cmd)
+	cmd = exec.Command(kubectlPath, "delete", "-f", "test/e2e/testdata/k8up-v1-role.yaml")
 	_, _ = Run(cmd)
 }
 

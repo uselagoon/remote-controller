@@ -80,8 +80,21 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 				if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 					// if we have a failure state, then fail the build and get the logs from the container
 					opLog.Info(fmt.Sprintf("Build failed, container exit reason was: %v", container.State.Waiting.Reason))
-					lagoonBuild.Labels["lagoon.sh/buildStatus"] = lagooncrd.BuildStatusFailed.String()
-					if err := r.Update(ctx, &lagoonBuild); err != nil {
+					// set the status conditions on the failed build to ensure state is handled correctly as a failed build
+					condition, _ := helpers.BuildStepToStatusConditions(container.State.Waiting.Reason, "", time.Now().UTC())
+					_ = meta.SetStatusCondition(&lagoonBuild.Status.Conditions, condition)
+					// finally patch the build with the failed status phase
+					mergeMap := map[string]interface{}{
+						"labels": map[string]string{
+							"lagoon.sh/buildStatus": lagooncrd.BuildStatusFailed.String(),
+						},
+						"status": map[string]interface{}{
+							"conditions": lagoonBuild.Status.Conditions,
+							"phase":      lagooncrd.BuildStatusFailed.String(),
+						},
+					}
+					mergePatch, _ := json.Marshal(mergeMap)
+					if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 						return err
 					}
 					opLog.Info(fmt.Sprintf("Marked build %s as %s", lagoonBuild.Name, lagooncrd.BuildStatusFailed.String()))

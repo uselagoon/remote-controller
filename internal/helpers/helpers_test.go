@@ -130,6 +130,30 @@ func TestGenerateNamespaceName(t *testing.T) {
 			},
 			want: "-",
 		},
+		{
+			name: "really long projectname with environment truncate",
+			args: args{
+				pattern:             "",
+				environmentName:     "main",
+				projectname:         "fabulousnesses-bouncing-crimson-woodpecker-68e703a96368c",
+				prefix:              "",
+				controllerNamespace: "lagoon",
+				randomPrefix:        false,
+			},
+			want: "fabulousnesses-bouncing-crimson-woodpecker-68e703a96368c--b28b",
+		},
+		{
+			name: "really really long projectname with environment truncate",
+			args: args{
+				pattern:             "",
+				environmentName:     "main",
+				projectname:         "fabulousnesses-bouncing-crimson-woodpecker-chair-68e703a96368c",
+				prefix:              "",
+				controllerNamespace: "lagoon",
+				randomPrefix:        false,
+			},
+			want: "fabulousnesses-bouncing-crimson-woodpecker-chair-68e703a96-aae8",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -212,6 +236,14 @@ func TestShortenEnvironment(t *testing.T) {
 				project:     "this-is-my-project",
 			},
 			want: "feature-branch",
+		},
+		{
+			name: "short environment name",
+			args: args{
+				environment: MakeSafe("main"),
+				project:     "fabulousnesses-bouncing-crimson-woodpecker-68e703a96368c",
+			},
+			want: "-b28b",
 		},
 	}
 	for _, tt := range tests {

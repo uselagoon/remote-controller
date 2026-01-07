@@ -46,9 +46,9 @@ jobs:
     - name: Set up testing dependencies
       run: sudo apt-get update && sudo apt-get -y install build-essential && sudo apt-get clean
     - name: Setup correct Go version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.25'
 
     - name: Add dependency chart repos
       run: |

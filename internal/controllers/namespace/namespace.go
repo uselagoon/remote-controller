@@ -44,8 +44,16 @@ type NamespaceReconciler struct {
 	LagoonTargetName string
 }
 
+type IdleState string
+
+const (
+	ActiveState IdleState = "ACTIVE"
+	IdledState  IdleState = "IDLED"
+	ScaledState IdleState = "SCALED"
+)
+
 type Idled struct {
-	Idled bool `json:"idled"`
+	IdleState IdleState `json:"idleState"`
 }
 
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -58,7 +66,18 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// this would be nice to be a lagoon label :)
 	if val, ok := namespace.Labels["idling.amazee.io/idled"]; ok {
+		idledState := ActiveState
 		idled, _ := strconv.ParseBool(val)
+		if idled {
+			idledState = IdledState
+		}
+		// check if force scaled
+		if fval, ok := namespace.Labels["idling.amazee.io/force-scaled"]; ok {
+			fscaled, _ := strconv.ParseBool(fval)
+			if fscaled {
+				idledState = ScaledState
+			}
+		}
 		opLog.Info(fmt.Sprintf("environment %s idle state %t", namespace.Name, idled))
 		if r.EnableMQ {
 			environmentName := namespace.Labels["lagoon.sh/environment"]
@@ -68,7 +87,7 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
 			projectID := helpers.UintPtr(uint(pID))
 			idling := Idled{
-				Idled: idled,
+				IdleState: idledState,
 			}
 			idlingJSON, _ := json.Marshal(idling)
 			msg := schema.LagoonMessage{

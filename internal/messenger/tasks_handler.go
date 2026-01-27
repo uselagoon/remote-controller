@@ -183,7 +183,9 @@ func (m *Messenger) EnvironmentServiceState(ctx context.Context, opLog logr.Logg
 			// if the service has no replicas, set it back to what the previous replica value was
 			prevReplicas, err := strconv.ParseInt(deployment.Annotations["service.lagoon.sh/replicas"], 10, 32)
 			if err != nil {
-				return err
+				// unable to get replica value, default to 1 to allow scale up
+				// if a hpa is active, this will be ignored
+				prevReplicas = 1
 			}
 			replicas := int32(1)
 			if prevReplicas > 0 && prevReplicas <= math.MaxInt32 {

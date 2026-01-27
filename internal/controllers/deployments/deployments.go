@@ -59,8 +59,6 @@ func (r *DeploymentsReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, &deployment); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
-	opLog.Info(fmt.Sprintf("deployment %s", deployment.Name))
-	opLog.Info(fmt.Sprintf(`{"replicas":%d}`, *deployment.Spec.Replicas))
 	// this would be nice to be a lagoon label :)
 	if val, ok := deployment.Labels["idling.amazee.io/idled"]; ok {
 		var namespace corev1.Namespace

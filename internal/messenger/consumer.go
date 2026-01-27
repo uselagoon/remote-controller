@@ -412,6 +412,36 @@ func (m *Messenger) Consumer(targetName string) {
 					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "deploytarget:environment:idling":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received environment idling request for project %s, environment %s - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						m.genNamespace(jobSpec),
+					),
+				)
+				// idle or unidle an environment, optionally forcible scale it so it can't be unidled by the ingress
+				err := m.ScaleOrIdleEnvironment(ctx, opLog, m.genNamespace(jobSpec), jobSpec)
+				if err != nil {
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "deploytarget:environment:service":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received environment service request for project %s, environment %s service - %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+						m.genNamespace(jobSpec),
+					),
+				)
+				// idle an environment, optionally forcible scale it so it can't be unidled by the ingress
+				err := m.EnvironmentServiceState(ctx, opLog, m.genNamespace(jobSpec), jobSpec)
+				if err != nil {
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
 			default:
 				// if we get something that we don't know about, spit out the entire message
 				opLog.Info(

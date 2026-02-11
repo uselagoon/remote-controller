@@ -51,7 +51,9 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	k8upv1 "github.com/k8up-io/k8up/v2/api/v1"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	deploymentsctrl "github.com/uselagoon/remote-controller/internal/controllers/deployments"
 	harborctrl "github.com/uselagoon/remote-controller/internal/controllers/harbor"
+	namespacectrl "github.com/uselagoon/remote-controller/internal/controllers/namespace"
 	lagoonv1beta2ctrl "github.com/uselagoon/remote-controller/internal/controllers/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/messenger"
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
@@ -946,6 +948,34 @@ func main() {
 	// pre-seed the queues with the current state of tasks
 	if err := lagoonv1beta2.SeedTaskStartup(tmpClient, scheme, controllerNamespace, tasksCache, tasksQueueCache); err != nil {
 		setupLog.Error(err, "unable to seed controller startup state")
+	}
+
+	setupLog.Info("starting namespace controller")
+	// start the namespace reconciler
+	if err = (&namespacectrl.NamespaceReconciler{
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("namespace").WithName("Namespace"),
+		Scheme:           mgr.GetScheme(),
+		EnableMQ:         enableMQ,
+		Messaging:        messaging,
+		LagoonTargetName: lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
+		os.Exit(1)
+	}
+
+	setupLog.Info("starting deployment controller")
+	// start the namespace reconciler
+	if err = (&deploymentsctrl.DeploymentsReconciler{
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("deployments").WithName("Deployments"),
+		Scheme:           mgr.GetScheme(),
+		EnableMQ:         enableMQ,
+		Messaging:        messaging,
+		LagoonTargetName: lagoonTargetName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Deployments")
+		os.Exit(1)
 	}
 
 	setupLog.Info("starting build controller")

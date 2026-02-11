@@ -16,7 +16,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
 	github.com/prometheus/client_golang v1.23.2
-	github.com/uselagoon/machinery v0.0.34
+	github.com/uselagoon/machinery v0.0.35-0.20251124010253-71bebf6d6966
 	github.com/vshn/k8up v1.99.99
 	github.com/xhit/go-str2duration/v2 v2.1.0
 	golang.org/x/text v0.32.0

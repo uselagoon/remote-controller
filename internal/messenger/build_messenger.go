@@ -11,8 +11,12 @@ import (
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type LagoonServices struct {
@@ -119,20 +123,57 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 				Cluster:       targetName,
 			},
 		}
+
 		lagoonServices := &corev1.ConfigMap{}
-		if err := m.APIReader.Get(ctx, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: "lagoon-services"}, lagoonServices); err != nil {
+		if err := m.Client.Get(ctx, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: "lagoon-services"}, lagoonServices); err != nil {
 			if helpers.IgnoreNotFound(err) != nil {
 				opLog.Error(err, "configmap %s not found", "lagoon-services")
 				return
 			}
-		}
-		if val, ok := lagoonServices.Data["post-deploy"]; ok {
-			serviceConfig := LagoonServices{}
-			err := json.Unmarshal([]byte(val), &serviceConfig)
-			if err == nil {
-				fmt.Println(serviceConfig.Services)
-				fmt.Println(serviceConfig.Volumes)
-				msg.Meta.EnvironmentServices = serviceConfig.Services
+			// if configmap doesn't exist, fall back to previous service check behaviour
+			labelRequirements1, _ := labels.NewRequirement("lagoon.sh/service", selection.NotIn, []string{"faketest"})
+			listOption := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.InNamespace(lagoonBuild.Namespace),
+				client.MatchingLabelsSelector{
+					Selector: labels.NewSelector().Add(*labelRequirements1),
+				},
+			})
+			depList := &appsv1.DeploymentList{}
+			serviceNames := []string{}
+			services := []schema.EnvironmentService{}
+			if err := m.Client.List(context.TODO(), depList, listOption); err == nil {
+				// generate the list of services to add or update to the environment
+				for _, deployment := range depList.Items {
+					var serviceName, serviceType string
+					containers := []schema.ServiceContainer{}
+					if name, ok := deployment.Labels["lagoon.sh/service"]; ok {
+						serviceName = name
+						serviceNames = append(serviceNames, serviceName)
+						for _, container := range deployment.Spec.Template.Spec.Containers {
+							containers = append(containers, schema.ServiceContainer{Name: container.Name})
+						}
+					}
+					if sType, ok := deployment.Labels["lagoon.sh/service-type"]; ok {
+						serviceType = sType
+					}
+					// probably need to collect dbaas consumers too at some stage
+					services = append(services, schema.EnvironmentService{
+						Name:       serviceName,
+						Type:       serviceType,
+						Containers: containers,
+					})
+				}
+				msg.Meta.Services = serviceNames
+				msg.Meta.EnvironmentServices = services
+			}
+		} else {
+			// otherwise get the values from configmap
+			if val, ok := lagoonServices.Data["post-deploy"]; ok {
+				serviceConfig := LagoonServices{}
+				err := json.Unmarshal([]byte(val), &serviceConfig)
+				if err == nil {
+					msg.Meta.EnvironmentServices = serviceConfig.Services
+				}
 			}
 		}
 		if checkLagoonEnv {

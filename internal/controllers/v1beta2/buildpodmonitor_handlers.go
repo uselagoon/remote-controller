@@ -326,6 +326,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 						Name:       serviceName,
 						Type:       serviceType,
 						Containers: containers,
+						Replicas:   *deployment.Spec.Replicas,
 					})
 				}
 				msg.Meta.Services = serviceNames

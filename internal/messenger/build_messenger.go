@@ -19,11 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type LagoonServices struct {
-	Services []schema.EnvironmentService `json:"services"`
-	Volumes  []schema.EnvironmentVolume  `json:"volumes"`
-}
-
 // buildStatusLogsToLagoonLogs sends the logs to lagoon-logs message queue, used for general messaging
 func (m *Messenger) BuildStatusLogsToLagoonLogs(
 	ctx context.Context,
@@ -127,7 +122,7 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 		lagoonServices := &corev1.ConfigMap{}
 		if err := m.Client.Get(ctx, types.NamespacedName{Namespace: lagoonBuild.Namespace, Name: "lagoon-services"}, lagoonServices); err != nil {
 			if helpers.IgnoreNotFound(err) != nil {
-				opLog.Error(err, "configmap %s not found", "lagoon-services")
+				opLog.Error(err, "configmap lagoon-services not found")
 				return
 			}
 			// if configmap doesn't exist, fall back to previous service check behaviour
@@ -169,7 +164,7 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 		} else {
 			// otherwise get the values from configmap
 			if val, ok := lagoonServices.Data["post-deploy"]; ok {
-				serviceConfig := LagoonServices{}
+				serviceConfig := helpers.LagoonServices{}
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
 					msg.Meta.EnvironmentServices = serviceConfig.Services

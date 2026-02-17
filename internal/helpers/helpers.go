@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/uselagoon/machinery/api/schema"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	corev1 "k8s.io/api/core/v1"
@@ -362,4 +363,9 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 		routes = strings.Split(string(rs), ",")
 	}
 	return route, routes, nil
+}
+
+type LagoonServices struct {
+	Services []schema.EnvironmentService `json:"services"`
+	Volumes  []schema.EnvironmentVolume  `json:"volumes"`
 }

@@ -27,11 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type LagoonServices struct {
-	Services []schema.EnvironmentService `json:"services"`
-	Volumes  []schema.EnvironmentVolume  `json:"volumes"`
-}
-
 func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 	opLog logr.Logger,
 	req ctrl.Request,
@@ -306,7 +301,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			depList := &appsv1.DeploymentList{}
 			serviceNames := []string{}
 			services := []schema.EnvironmentService{}
-			if err := r.APIReader.List(context.TODO(), depList, listOption); err == nil {
+			if err := r.APIReader.List(ctx, depList, listOption); err == nil {
 				// generate the list of services to add or update to the environment
 				for _, deployment := range depList.Items {
 					var serviceName, serviceType string
@@ -335,7 +330,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 		} else {
 			// otherwise get the values from configmap
 			if val, ok := lagoonServices.Data["post-deploy"]; ok {
-				serviceConfig := LagoonServices{}
+				serviceConfig := helpers.LagoonServices{}
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
 					msg.Meta.EnvironmentServices = serviceConfig.Services

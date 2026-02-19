@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/cheshir/go-mq/v2 v2.0.1
 	github.com/coreos/go-semver v0.3.1
-	github.com/docker/cli v28.4.0+incompatible
+	github.com/docker/cli v29.2.1+incompatible
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/go-version v1.8.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7

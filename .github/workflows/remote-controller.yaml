@@ -40,7 +40,7 @@ jobs:
       timeout-minutes: 1
       continue-on-error: true
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
       with:
         fetch-depth: "0"
     - name: Set up testing dependencies

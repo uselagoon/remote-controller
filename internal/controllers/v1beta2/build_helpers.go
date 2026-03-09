@@ -635,6 +635,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				"crd.lagoon.sh/version":   crdVersion,
 				"lagoon.sh/buildRemoteID": string(lagoonBuild.UID),
 			},
+			Annotations: map[string]string{},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
@@ -690,7 +691,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 
 	if !r.ClusterAutoscalerEvict {
 		// try to prevent build pods from being evicted by cluster autoscaler
-		newPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+		newPod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 	}
 
 	// set the pod security context, if defined to a non-default value

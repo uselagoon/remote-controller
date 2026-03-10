@@ -307,6 +307,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 							"crd.lagoon.sh/version": crdVersion,
 							"lagoon.sh/controller":  r.ControllerNamespace,
 						},
+						Annotations: map[string]string{},
 						OwnerReferences: []metav1.OwnerReference{
 							{
 								APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
@@ -326,7 +327,7 @@ func (r *LagoonTaskReconciler) getTaskPodDeployment(ctx context.Context, lagoonT
 
 				if !r.ClusterAutoscalerEvict {
 					// try to prevent build pods from being evicted by cluster autoscaler
-					taskPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+					taskPod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 				}
 				return taskPod, nil
 			}
@@ -585,6 +586,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					"crd.lagoon.sh/version": crdVersion,
 					"lagoon.sh/controller":  r.ControllerNamespace,
 				},
+				Annotations: map[string]string{},
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),
@@ -669,7 +671,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		}
 		if !r.ClusterAutoscalerEvict {
 			// try to prevent build pods from being evicted by cluster autoscaler
-			newPod.Labels["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+			newPod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 		}
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it

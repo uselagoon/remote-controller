@@ -60,56 +60,6 @@ func (h *Harbor) CreateProjectV2(ctx context.Context, namespace corev1.Namespace
 	// 	fmt.Println(x)
 	// }
 
-	if h.WebhookAddition {
-		wps, err := h.ClientV5.ListProjectWebhookPolicies(ctx, int(project.ProjectID))
-		if err != nil {
-			h.Log.Info(fmt.Sprintf("Error listing project %s webhooks", project.Name))
-			return nil, err
-		}
-		exists := false
-		for _, wp := range wps {
-			// if the webhook policy already exists with the name we want
-			// then update it with any changes that may be required
-			if wp.Name == "Lagoon Default Webhook" {
-				exists = true
-				wp.Targets = []*harborclientv5model.WebhookTargetObject{
-					{
-						Type:           "http",
-						SkipCertVerify: true,
-						Address:        h.WebhookURL,
-					},
-				}
-				wp.Enabled = true
-				wp.EventTypes = []string{"SCANNING_FAILED", "SCANNING_COMPLETED"}
-				err = h.ClientV5.UpdateProjectWebhookPolicy(ctx, int(wp.ProjectID), wp)
-				if err != nil {
-					h.Log.Info(fmt.Sprintf("Error updating project %s webhook", project.Name))
-					return nil, err
-				}
-			}
-		}
-		if !exists {
-			// otherwise create the webhook if it doesn't exist
-			newPolicy := &harborclientv5model.WebhookPolicy{
-				Name:      "Lagoon Default Webhook",
-				ProjectID: int64(project.ProjectID),
-				Enabled:   true,
-				Targets: []*harborclientv5model.WebhookTargetObject{
-					{
-						Type:           "http",
-						SkipCertVerify: true,
-						Address:        h.WebhookURL,
-					},
-				},
-				EventTypes: []string{"SCANNING_FAILED", "SCANNING_COMPLETED"},
-			}
-			err = h.ClientV5.AddProjectWebhookPolicy(ctx, int(project.ProjectID), newPolicy)
-			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error adding project %s webhook", project.Name))
-				return nil, err
-			}
-		}
-	}
 	return project, nil
 }
 

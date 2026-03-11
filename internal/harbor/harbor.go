@@ -23,7 +23,6 @@ type Harbor struct {
 	Log                   logr.Logger
 	ClientV5              *harborclientv5.RESTClient
 	DeleteDisabled        bool
-	WebhookAddition       bool
 	RobotPrefix           string
 	ExpiryInterval        time.Duration
 	RotateInterval        time.Duration
@@ -31,8 +30,6 @@ type Harbor struct {
 	ControllerNamespace   string
 	NamespacePrefix       string
 	RandomNamespacePrefix bool
-	WebhookURL            string
-	WebhookEventTypes     []string
 	LagoonTargetName      string
 	Config                *config.Options
 	TLSSkipVerify         bool

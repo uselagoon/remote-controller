@@ -23,7 +23,6 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cheshir/go-mq/v2"
@@ -159,13 +158,10 @@ func main() {
 	var harborPassword string
 	var harborRobotPrefix string
 	var harborRobotDeleteDisabled bool
-	var harborWebhookAdditionEnabled bool
 	var harborExpiryInterval string
 	var harborRotateInterval string
 	var harborRobotAccountExpiry string
 	var harborCredentialCron string
-	var harborLagoonWebhook string
-	var harborWebhookEventTypes string
 	var nativeCronPodMinFrequency int
 	var pvcRetryAttempts int
 	var pvcRetryInterval int
@@ -371,12 +367,6 @@ func main() {
 		"The number of days or hours (eg 24h or 30d) to set for new robot account expiration.")
 	flag.StringVar(&harborCredentialCron, "harbor-credential-cron", "0 1 * * *",
 		"Cron definition for how often to run harbor credential rotations")
-	flag.BoolVar(&harborWebhookAdditionEnabled, "harbor-enable-project-webhook", false,
-		"Tells the controller to add Lagoon webhook policies to harbor projects when creating or updating.")
-	flag.StringVar(&harborLagoonWebhook, "harbor-lagoon-webhook", "http://webhook.172.17.0.1.nip.io:32080",
-		"The webhook URL to add for Lagoon, this is where events notifications will be posted.")
-	flag.StringVar(&harborWebhookEventTypes, "harbor-webhook-eventtypes", "SCANNING_FAILED,SCANNING_COMPLETED",
-		"The event types to use for the Lagoon webhook")
 
 	// this is for legacy reasons, and backwards compatability support due to removal of https://github.com/uselagoon/lagoon/pull/3659
 	flag.StringVar(&unauthenticatedRegistry, "unauthenticated-registry", "registry.lagoon.svc:5000", "An unauthenticated registry URL that could be used for local testing without a harbor")
@@ -491,9 +481,6 @@ func main() {
 	harborUsername = helpers.GetEnv("HARBOR_USERNAME", harborUsername)
 	harborPassword = helpers.GetEnv("HARBOR_PASSWORD", harborPassword)
 	harborRobotPrefix = helpers.GetEnv("HARBOR_ROBOT_PREFIX", harborRobotPrefix)
-	harborWebhookAdditionEnabled = helpers.GetEnvBool("HARBOR_WEBHOOK_ADDITION_ENABLED", harborWebhookAdditionEnabled)
-	harborLagoonWebhook = helpers.GetEnv("HARBOR_LAGOON_WEBHOOK", harborLagoonWebhook)
-	harborWebhookEventTypes = helpers.GetEnv("HARBOR_WEBHOOK_EVENTTYPES", harborWebhookEventTypes)
 	harborRobotDeleteDisabled = helpers.GetEnvBool("HARBOR_ROBOT_DELETE_DISABLED", harborRobotDeleteDisabled)
 	harborExpiryInterval = helpers.GetEnv("HARBOR_EXPIRY_INTERVAL", harborExpiryInterval)
 	harborRotateInterval = helpers.GetEnv("HARBOR_ROTATE_INTERVAL", harborRotateInterval)
@@ -738,13 +725,10 @@ func main() {
 		RotateInterval:        harborRotateIntervalDuration,
 		DeleteDisabled:        harborRobotDeleteDisabled,
 		RobotAccountExpiry:    harborRobotAccountExpiryDuration,
-		WebhookAddition:       harborWebhookAdditionEnabled,
 		ControllerNamespace:   controllerNamespace,
 		NamespacePrefix:       namespacePrefix,
 		RandomNamespacePrefix: randomPrefix,
-		WebhookURL:            harborLagoonWebhook,
 		LagoonTargetName:      lagoonTargetName,
-		WebhookEventTypes:     strings.Split(harborWebhookEventTypes, ","),
 		TLSSkipVerify:         tlsSkipVerify,
 	}
 

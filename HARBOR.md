@@ -13,13 +13,10 @@ This feature allows controllers in multiple clusters to be able to point to a mo
 * `--harbor-password` "The password for accessing harbor."
 * `--harbor-robot-prefix` "The default prefix for robot accounts, will usually be 'robot$'."
 * `--harbor-robot-delete-disabled` "Tells harbor to delete any disabled robot accounts and re-create them if required."
-* `--harbor-enable-project-webhook` "Tells the controller to add Lagoon webhook policies to harbor projects."
 * `--harbor-expiry-interval` "The number of days or hours (eg 24h or 30d) before expiring credentials to re-fresh."
 * `--harbor-rotate-interval` "The number of days or hours (eg 24h or 30d) to force refresh if required."
 * `--harbor-robot-account-expiry` "The number of days or hours (eg 24h or 30d) to force refresh if required."
 * `--harbor-credential-cron` "Cron definition for how often to run harbor credential rotations"
-* `--harbor-lagoon-webhook` "The webhook URL to add for Lagoon, this is where events notifications will be posted"
-* `--harbor-webhook-eventtypes` "The event types to use for the Lagoon webhook"
 
 A lot of these have defaults that are probably ok to leave.
 

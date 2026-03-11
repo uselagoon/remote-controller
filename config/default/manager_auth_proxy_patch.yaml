@@ -18,7 +18,6 @@ spec:
         - "--harbor-credential-cron=*/2 * * * *"
         - "--harbor-robot-account-expiry=1d"
         - "--enable-harbor"
-        - "--harbor-enable-project-webhook"
         - "--enable-debug"
         - "--qos-total-builds=5"
         - "--qos-max-builds=3"

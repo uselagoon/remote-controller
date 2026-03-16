@@ -226,7 +226,7 @@ manifests: controller-gen local-dev/tools ## Generate WebhookConfiguration, Clus
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Build the docker image
-docker-build: test
+docker-build:
 	docker build . -t ${IMG}
 
 # Push the docker image

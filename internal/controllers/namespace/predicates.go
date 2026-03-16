@@ -12,6 +12,11 @@ type NamespacePredicates struct {
 
 // Create is used when a creation event is received by the controller.
 func (n NamespacePredicates) Create(e event.CreateEvent) bool {
+	// this would force the idle state of any environment to publish
+	// whenever the controller restarts too
+	// if _, ok := e.Object.GetLabels()["idling.lagoon.sh/idled"]; ok {
+	// 	return true
+	// }
 	return false
 }
 
@@ -22,12 +27,12 @@ func (n NamespacePredicates) Delete(e event.DeleteEvent) bool {
 
 // Update is used when an update event is received by the controller.
 func (n NamespacePredicates) Update(e event.UpdateEvent) bool {
-	if oldIdled, ok := e.ObjectOld.GetLabels()["idling.amazee.io/idled"]; ok {
-		if newIdled, ok := e.ObjectNew.GetLabels()["idling.amazee.io/idled"]; ok {
-			if oldIdled != newIdled {
-				return true
-			}
-		}
+	// whenever the idling label is modified on a namespace
+	if _, ok := e.ObjectNew.GetLabels()["idling.amazee.io/idled"]; ok {
+		return true
+	}
+	if _, ok := e.ObjectNew.GetLabels()["idling.lagoon.sh/idled"]; ok {
+		return true
 	}
 	return false
 }

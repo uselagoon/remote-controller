@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"github.com/go-logr/logr"
@@ -59,53 +58,48 @@ func (r *DeploymentsReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, &deployment); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
-	// this would be nice to be a lagoon label :)
-	if val, ok := deployment.Labels["idling.amazee.io/idled"]; ok {
-		var namespace corev1.Namespace
-		if err := r.Get(ctx, types.NamespacedName{
-			Name: deployment.Namespace,
-		}, &namespace); err != nil {
-			return ctrl.Result{}, ignoreNotFound(err)
+	var namespace corev1.Namespace
+	if err := r.Get(ctx, types.NamespacedName{
+		Name: deployment.Namespace,
+	}, &namespace); err != nil {
+		return ctrl.Result{}, ignoreNotFound(err)
+	}
+	if r.EnableMQ {
+		environmentName := namespace.Labels["lagoon.sh/environment"]
+		eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])
+		envID := helpers.UintPtr(uint(eID))
+		projectName := namespace.Labels["lagoon.sh/project"]
+		pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
+		projectID := helpers.UintPtr(uint(pID))
+		serviceName := deployment.Labels["lagoon.sh/service"]
+		serviceType := deployment.Labels["lagoon.sh/service-type"]
+		state := ServiceState{
+			Name:     serviceName,
+			Type:     serviceType,
+			Replicas: *deployment.Spec.Replicas,
 		}
-		opLog.Info(fmt.Sprintf("deployment %s idle state %v", deployment.Name, val))
-		if r.EnableMQ {
-			environmentName := namespace.Labels["lagoon.sh/environment"]
-			eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])
-			envID := helpers.UintPtr(uint(eID))
-			projectName := namespace.Labels["lagoon.sh/project"]
-			pID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/projectId"])
-			projectID := helpers.UintPtr(uint(pID))
-			serviceName := deployment.Labels["lagoon.sh/service"]
-			serviceType := deployment.Labels["lagoon.sh/service-type"]
-			state := ServiceState{
-				Name:     serviceName,
-				Type:     serviceType,
-				Replicas: *deployment.Spec.Replicas,
-			}
-			stateJSON, _ := json.Marshal(state)
-			msg := schema.LagoonMessage{
-				Type:      "servicestate",
-				Namespace: namespace.Name,
-				Meta: &schema.LagoonLogMeta{
-					EnvironmentID: envID,
-					ProjectID:     projectID,
-					Environment:   environmentName,
-					Project:       projectName,
-					Cluster:       r.LagoonTargetName,
-					AdvancedData:  base64.StdEncoding.EncodeToString(stateJSON),
-				},
-			}
-			msgBytes, err := json.Marshal(msg)
-			if err != nil {
-				opLog.Error(err, "Unable to encode message as JSON")
-			}
-			// @TODO: if we can't publish the message because for some reason, log the error and move on
-			// this may result in the state being out of sync in lagoon but eventually will be consistent
-			if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
-				return ctrl.Result{}, nil
-			}
+		stateJSON, _ := json.Marshal(state)
+		msg := schema.LagoonMessage{
+			Type:      "servicestate",
+			Namespace: namespace.Name,
+			Meta: &schema.LagoonLogMeta{
+				EnvironmentID: envID,
+				ProjectID:     projectID,
+				Environment:   environmentName,
+				Project:       projectName,
+				Cluster:       r.LagoonTargetName,
+				AdvancedData:  base64.StdEncoding.EncodeToString(stateJSON),
+			},
 		}
-		return ctrl.Result{}, nil
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			opLog.Error(err, "Unable to encode message as JSON")
+		}
+		// @TODO: if we can't publish the message because for some reason, log the error and move on
+		// this may result in the state being out of sync in lagoon but eventually will be consistent
+		if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
+			return ctrl.Result{}, nil
+		}
 	}
 	return ctrl.Result{}, nil
 }

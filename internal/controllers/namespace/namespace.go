@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"github.com/go-logr/logr"
@@ -78,7 +77,6 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				idledState = ScaledState
 			}
 		}
-		opLog.Info(fmt.Sprintf("environment %s idle state %t", namespace.Name, idled))
 		if r.EnableMQ {
 			environmentName := namespace.Labels["lagoon.sh/environment"]
 			eID, _ := strconv.Atoi(namespace.Labels["lagoon.sh/environmentId"])

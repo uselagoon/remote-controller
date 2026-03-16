@@ -1,7 +1,6 @@
 package deployments
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -24,11 +23,8 @@ func (n DeploymentsPredicates) Delete(e event.DeleteEvent) bool {
 // Update is used when an update event is received by the controller.
 func (n DeploymentsPredicates) Update(e event.UpdateEvent) bool {
 	if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/service"]; ok {
-		oldDeep := e.ObjectOld.(*appsv1.Deployment)
-		newDep := e.ObjectNew.(*appsv1.Deployment)
-		if *oldDeep.Spec.Replicas != *newDep.Spec.Replicas {
-			return true
-		}
+		// any time a deployment is modified
+		return true
 	}
 	return false
 }

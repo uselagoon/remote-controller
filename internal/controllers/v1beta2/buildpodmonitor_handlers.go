@@ -4,6 +4,7 @@ package v1beta2
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -367,6 +368,35 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			// overwrite whatever is there as these are just current state messages so it doesn't
 			// really matter if we don't smootly transition in what we send back to lagoon
 			return err
+		}
+		// if build has passed applying deployments stage, set the environment as not idled in the api
+		if helpers.ContainsString([]string{"restartingDeployments", "runningPostRolloutTasks", "finalizingBuild"}, buildStep) {
+			// on completion,
+			idling := schema.Idled{
+				IdleState: schema.ActiveState,
+			}
+			idlingJSON, _ := json.Marshal(idling)
+			msg := schema.LagoonMessage{
+				Type:      "idling",
+				Namespace: namespace.Name,
+				Meta: &schema.LagoonLogMeta{
+					EnvironmentID: envID,
+					ProjectID:     projectID,
+					Environment:   envName,
+					Project:       projectName,
+					Cluster:       r.LagoonTargetName,
+					AdvancedData:  base64.StdEncoding.EncodeToString(idlingJSON),
+				},
+			}
+			msgBytes, err := json.Marshal(msg)
+			if err != nil {
+				opLog.Error(err, "Unable to encode message as JSON")
+			}
+			// @TODO: if we can't publish the message because for some reason, log the error and move on
+			// this may result in the state being out of sync in lagoon but eventually will be consistent
+			if err := r.Messaging.Publish("lagoon-tasks:controller", msgBytes); err != nil {
+				return err
+			}
 		}
 		if r.EnableDebug {
 			opLog.Info(

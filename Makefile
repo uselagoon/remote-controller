@@ -37,6 +37,7 @@ KUSTOMIZE = $(realpath ./local-dev/kustomize)
 
 ARCH := $(shell uname | tr '[:upper:]' '[:lower:]')
 
+SKIP_KUBECONTEXT_CHECK = false
 
 .PHONY: local-dev/kind
 local-dev/kind:
@@ -407,7 +408,7 @@ kind/re-test-e2e:
 	$(KIND) export kubeconfig --name=$(KIND_CLUSTER) && \
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
-	$(MAKE) test-e2e
+	$(MAKE) test-e2e SKIP_KUBECONTEXT_CHECK=true
 
 .PHONY: clean
 kind/clean:
@@ -417,13 +418,20 @@ kind/clean:
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up inside github action.
 test-e2e: build-task-image generate-broker-certs
+	@if [ $(SKIP_KUBECONTEXT_CHECK) = false ]; then \
+		echo "==================================================="; \
+		echo "WARNING: You are targeting $$($(KUBECTL) config current-context)"; \
+		echo "==================================================="; \
+		echo -n "Do you want to continue? [y/N] " && read ans && if [[ $${ans:-'N'} = 'y' ]]; then echo -n ""; else exit 1; fi \
+	fi
 	export HARBOR_VERSION=$(HARBOR_VERSION) && \
 	export KUBECTL_PATH=$(KUBECTL) && \
 	export OVERRIDE_BUILD_DEPLOY_DIND_IMAGE=$(OVERRIDE_BUILD_DEPLOY_DIND_IMAGE) && \
 	go test ./test/e2e/ -v -ginkgo.v -timeout 20m
 
 .PHONY: github/test-e2e
-github/test-e2e: local-dev/tools install-lagoon-remote test-e2e
+github/test-e2e: local-dev/tools install-lagoon-remote
+	$(MAKE) test-e2e SKIP_KUBECONTEXT_CHECK=true
 
 .PHONY: kind/set-kubeconfig
 kind/set-kubeconfig:

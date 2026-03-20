@@ -62,6 +62,7 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta2
 // ProjectClone handles running the project clone archive task in the source environment.
 func (m *Messenger) ProjectClone(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	jobSpec.AdvancedTask.SSHKey = true
+	jobSpec.AdvancedTask.DeployerToken = true
 
 	clonePayload := &ProjectClonePayload{}
 	clonePayloadDecoded, err := base64.StdEncoding.DecodeString(jobSpec.AdvancedTask.JSONPayload)

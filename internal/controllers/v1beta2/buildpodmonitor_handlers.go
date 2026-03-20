@@ -335,6 +335,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
 					msg.Meta.EnvironmentServices = serviceConfig.Services
+					msg.Meta.EnvironmentVolumes = serviceConfig.Volumes
 				}
 			}
 		}

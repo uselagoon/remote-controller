@@ -1265,8 +1265,8 @@ github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijb
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli v1.22.2/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli/v2 v2.3.0/go.mod h1:LJmUH05zAU44vOAcrfzZQKsZbVcdbOG8rtL3/XcUArI=
-github.com/uselagoon/machinery v0.0.37 h1:H1I+jQxom9Yxsw7GJi71xLB3AkVDgdMSmTCfe3lxodc=
-github.com/uselagoon/machinery v0.0.37/go.mod h1:UVqIxwF/Q9xO3LQMkQhWeuegpuKcsrxmBa4LE52SiWQ=
+github.com/uselagoon/machinery v0.0.38-0.20260610223359-e7378dce5385 h1:J1xj+yS8uFxEkaKCeR1fe2vFV9Bp5uRS2O4FZDtPGYU=
+github.com/uselagoon/machinery v0.0.38-0.20260610223359-e7378dce5385/go.mod h1:UVqIxwF/Q9xO3LQMkQhWeuegpuKcsrxmBa4LE52SiWQ=
 github.com/uudashr/gocognit v0.0.0-20190926065955-1655d0de0517/go.mod h1:j44Ayx2KW4+oB6SWMv8KsmHzZrOInQav7D3cQMJ5JUM=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.2.0/go.mod h1:4vX61m6KN+xDduDNwXrhIAVZaZaZiQ1luJk8LWSxF3s=

@@ -24,6 +24,12 @@ type ActiveStandbyPayload struct {
 	DestinationNamespace string `json:"destinationNamespace"`
 }
 
+type ProjectClonePayload struct {
+	ProjectName       string `json:"projectName"`
+	SourceEnvironment string `json:"sourceEnvironment"`
+	CloneId           string `json:"cloneId"`
+}
+
 // IngressRouteMigration handles running the ingress migrations.
 func (m *Messenger) IngressRouteMigration(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
 	// always set these to true for ingress migration tasks
@@ -50,6 +56,27 @@ func (m *Messenger) ActiveStandbySwitch(namespace string, jobSpec *lagoonv1beta2
 		"lagoon.sh/activeStandby":                     "true",
 		"lagoon.sh/activeStandbyDestinationNamespace": asPayload.DestinationNamespace,
 		"lagoon.sh/activeStandbySourceNamespace":      asPayload.SourceNamespace,
+	})
+}
+
+// ProjectClone handles running the project clone archive task in the source environment.
+func (m *Messenger) ProjectClone(namespace string, jobSpec *lagoonv1beta2.LagoonTaskSpec) error {
+	jobSpec.AdvancedTask.SSHKey = true
+	jobSpec.AdvancedTask.DeployerToken = true
+
+	clonePayload := &ProjectClonePayload{}
+	clonePayloadDecoded, err := base64.StdEncoding.DecodeString(jobSpec.AdvancedTask.JSONPayload)
+	if err != nil {
+		return fmt.Errorf("unable to base64 decode payload: %v", err)
+	}
+	err = json.Unmarshal([]byte(clonePayloadDecoded), clonePayload)
+	if err != nil {
+		return fmt.Errorf("unable to unmarshal json payload: %v", err)
+	}
+
+	// Adding cloneId as a label as this may be useful for future visibility?
+	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
+		"clone.project.lagoon.sh/id": clonePayload.CloneId,
 	})
 }
 

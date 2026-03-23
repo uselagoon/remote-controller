@@ -454,6 +454,36 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		volumes = append(volumes, sshKeyVolume)
 		volumeMounts = append(volumeMounts, sshKeyVolumeMount)
 	}
+
+	// placeholder feature flag
+	if helpers.GetEnv("SCAN_RWX_VOLUMES", "false") == "true" {
+
+		volumeList := &corev1.PersistentVolumeClaimList{}
+
+		listErr := r.Client.List(ctx, volumeList, client.InNamespace(lagoonTask.Namespace))
+		if listErr != nil {
+			return listErr
+		}
+
+		for _, volume := range volumeList.Items {
+			if volume.Spec.AccessModes[0] == corev1.ReadWriteMany {
+				volumes = append(volumes, corev1.Volume{
+					Name: volume.Name,
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: volume.Name,
+						},
+					},
+				})
+				volumeMounts = append(volumeMounts, corev1.VolumeMount{
+					Name:      volume.Name,
+					ReadOnly:  false,
+					MountPath: "/storage/" + volume.Name,
+				})
+			}
+		}
+	}
+
 	if lagoonTask.Spec.AdvancedTask.DeployerToken {
 		// if this advanced task can access kubernetes, mount the token in
 		serviceAccount := &corev1.ServiceAccount{}

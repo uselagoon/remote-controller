@@ -460,7 +460,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 
 		volumeList := &corev1.PersistentVolumeClaimList{}
 
-		listErr := r.Client.List(ctx, volumeList, client.InNamespace(lagoonTask.Namespace))
+		listErr := r.List(ctx, volumeList, client.InNamespace(lagoonTask.Namespace))
 		if listErr != nil {
 			return listErr
 		}

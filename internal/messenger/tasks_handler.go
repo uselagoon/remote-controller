@@ -27,7 +27,7 @@ type ActiveStandbyPayload struct {
 type ProjectClonePayload struct {
 	ProjectName       string `json:"projectName"`
 	SourceEnvironment string `json:"sourceEnvironment"`
-	CloneId           string `json:"cloneId"`
+	CloneId           int    `json:"cloneId"`
 }
 
 // IngressRouteMigration handles running the ingress migrations.
@@ -76,7 +76,7 @@ func (m *Messenger) ProjectClone(namespace string, jobSpec *lagoonv1beta2.Lagoon
 
 	// Adding cloneId as a label as this may be useful for future visibility?
 	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
-		"clone.project.lagoon.sh/id": clonePayload.CloneId,
+		"clone.project.lagoon.sh/id": strconv.Itoa(clonePayload.CloneId),
 	})
 }
 

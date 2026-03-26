@@ -455,8 +455,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		volumeMounts = append(volumeMounts, sshKeyVolumeMount)
 	}
 
-	// placeholder feature flag
-	if helpers.GetEnv("SCAN_RWX_VOLUMES", "false") == "true" {
+	if lagoonTask.Spec.AdvancedTask.VolumeMounts {
 
 		volumeList := &corev1.PersistentVolumeClaimList{}
 

@@ -110,6 +110,7 @@ type LagoonAdvancedTaskInfo struct {
 	JSONPayload   string `json:"JSONPayload,omitempty"`
 	DeployerToken bool   `json:"deployerToken,omitempty"`
 	SSHKey        bool   `json:"sshKey,omitempty"`
+	VolumeMounts  bool   `json:"volumeMounts,omitempty"`
 }
 
 // LagoonMiscInfo defines the resource or backup information for a misc task.

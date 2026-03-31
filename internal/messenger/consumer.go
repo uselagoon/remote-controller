@@ -400,7 +400,7 @@ func (m *Messenger) Consumer(targetName string) {
 					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
-			case "deploytarget:task:projectclone":
+			case "deploytarget:task:projectclone", "deploytarget:task:projectclonerestore":
 				opLog.Info(
 					fmt.Sprintf(
 						"Received project clone task for project %s",

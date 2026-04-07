@@ -75,7 +75,7 @@ func (m *Messenger) ProjectClone(namespace string, jobSpec *lagoonv1beta2.Lagoon
 		return fmt.Errorf("unable to unmarshal json payload: %v", err)
 	}
 
-	// Adding cloneId as a label as this may be useful for future visibility?
+	// Adding cloneId as a label as this may be useful for future visibility
 	return m.createAdvancedTask(namespace, jobSpec, map[string]string{
 		"clone.project.lagoon.sh/id": strconv.Itoa(clonePayload.CloneId),
 	})

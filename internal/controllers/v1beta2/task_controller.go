@@ -59,6 +59,8 @@ type LagoonTaskReconciler struct {
 	QueueCache             *lru.Cache[string, string]
 	TasksCache             *lru.Cache[string, string]
 	ClusterAutoscalerEvict bool
+	LFFForceRWX2RWO        string
+	LFFDefaultRWX2RWO      string
 }
 
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -465,7 +467,8 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		}
 
 		for _, volume := range volumeList.Items {
-			if volume.Spec.AccessModes[0] == corev1.ReadWriteMany {
+			// if volume.Spec.AccessModes[0] == corev1.ReadWriteMany {
+			if *volume.Spec.StorageClassName == "bulk" {
 				volumes = append(volumes, corev1.Volume{
 					Name: volume.Name,
 					VolumeSource: corev1.VolumeSource{

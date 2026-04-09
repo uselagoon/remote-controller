@@ -61,6 +61,9 @@ type LagoonTaskReconciler struct {
 	ClusterAutoscalerEvict bool
 	LFFForceRWX2RWO        string
 	LFFDefaultRWX2RWO      string
+	TaskPodRunAsUser       int64
+	TaskPodRunAsGroup      int64
+	TaskPodFSGroup         int64
 }
 
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -641,6 +644,13 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 					},
 				},
 			},
+		}
+		if r.TaskPodRunAsUser != 0 || r.TaskPodRunAsGroup != 0 || r.TaskPodFSGroup != 0 {
+			newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+				RunAsUser:  &r.TaskPodRunAsUser,
+				RunAsGroup: &r.TaskPodRunAsGroup,
+				FSGroup:    &r.TaskPodFSGroup,
+			}
 		}
 		// check if the lagoon-env secret(s) exist and mount them to the pod as required, or fall back to the configmap
 		lagoonEnvSecret := &corev1.Secret{}

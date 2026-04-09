@@ -115,9 +115,6 @@ func main() {
 	var buildPodRunAsUser uint
 	var buildPodRunAsGroup uint
 	var buildPodFSGroup uint
-	var taskPodRunAsUser uint
-	var taskPodRunAsGroup uint
-	var taskPodFSGroup uint
 	var backupDefaultHourlyRetention int
 	var backupDefaultDailyRetention int
 	var backupDefaultWeeklyRetention int
@@ -272,9 +269,6 @@ func main() {
 	flag.UintVar(&buildPodRunAsUser, "build-pod-run-as-user", 0, "The build pod security context runAsUser.")
 	flag.UintVar(&buildPodRunAsGroup, "build-pod-run-as-group", 0, "The build pod security context runAsGroup.")
 	flag.UintVar(&buildPodFSGroup, "build-pod-fs-group", 0, "The build pod security context fsGroup.")
-	flag.UintVar(&taskPodRunAsUser, "task-pod-run-as-user", 0, "The task pod security context runAsUser.")
-	flag.UintVar(&taskPodRunAsGroup, "task-pod-run-as-group", 0, "The task pod security context runAsGroup.")
-	flag.UintVar(&taskPodFSGroup, "task-pod-fs-group", 0, "The task pod security context fsGroup.")
 	flag.StringVar(&backupDefaultSchedule, "backup-default-schedule", "M H(22-2) * * *",
 		"The default backup schedule for all projects on this cluster.")
 	flag.StringVar(&backupDefaultDevelopmentSchedule, "backup-default-dev-schedule", "",
@@ -1067,11 +1061,10 @@ func main() {
 		QueueCache:             tasksQueueCache,
 		TasksCache:             tasksCache,
 		ClusterAutoscalerEvict: clusterAutoscalerEvict,
-		LFFForceRWX2RWO:        lffForceRWX2RWO,
-		LFFDefaultRWX2RWO:      lffDefaultRWX2RWO,
-		TaskPodRunAsUser:       int64(taskPodRunAsUser),
-		TaskPodRunAsGroup:      int64(taskPodRunAsGroup),
-		TaskPodFSGroup:         int64(taskPodFSGroup),
+		LFFForceRWX2RWO:            lffForceRWX2RWO,
+		LFFDefaultRWX2RWO:          lffDefaultRWX2RWO,
+		LFFForceRootlessWorkload:   lffForceRootlessWorkload,
+		LFFDefaultRootlessWorkload: lffDefaultRootlessWorkload,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LagoonTask")
 		os.Exit(1)

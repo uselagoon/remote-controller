@@ -42,28 +42,27 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log                    logr.Logger
-	Scheme                 *runtime.Scheme
-	EnableMQ               bool
-	Messaging              *messenger.Messenger
-	ControllerNamespace    string
-	NamespacePrefix        string
-	RandomNamespacePrefix  bool
-	LagoonAPIConfiguration helpers.LagoonAPIConfiguration
-	EnableDebug            bool
-	LagoonTargetName       string
-	ProxyConfig            ProxyConfig
-	LFFTaskQoSEnabled      bool
-	TaskQoS                TaskQoS
-	ImagePullPolicy        corev1.PullPolicy
-	QueueCache             *lru.Cache[string, string]
-	TasksCache             *lru.Cache[string, string]
-	ClusterAutoscalerEvict bool
-	LFFForceRWX2RWO        string
-	LFFDefaultRWX2RWO      string
-	TaskPodRunAsUser       int64
-	TaskPodRunAsGroup      int64
-	TaskPodFSGroup         int64
+	Log                        logr.Logger
+	Scheme                     *runtime.Scheme
+	EnableMQ                   bool
+	Messaging                  *messenger.Messenger
+	ControllerNamespace        string
+	NamespacePrefix            string
+	RandomNamespacePrefix      bool
+	LagoonAPIConfiguration     helpers.LagoonAPIConfiguration
+	EnableDebug                bool
+	LagoonTargetName           string
+	ProxyConfig                ProxyConfig
+	LFFTaskQoSEnabled          bool
+	TaskQoS                    TaskQoS
+	ImagePullPolicy            corev1.PullPolicy
+	QueueCache                 *lru.Cache[string, string]
+	TasksCache                 *lru.Cache[string, string]
+	ClusterAutoscalerEvict     bool
+	LFFForceRWX2RWO            string
+	LFFDefaultRWX2RWO          string
+	LFFForceRootlessWorkload   string
+	LFFDefaultRootlessWorkload string
 }
 
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -645,13 +644,6 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 				},
 			},
 		}
-		if r.TaskPodRunAsUser != 0 || r.TaskPodRunAsGroup != 0 || r.TaskPodFSGroup != 0 {
-			newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
-				RunAsUser:  &r.TaskPodRunAsUser,
-				RunAsGroup: &r.TaskPodRunAsGroup,
-				FSGroup:    &r.TaskPodFSGroup,
-			}
-		}
 		// check if the lagoon-env secret(s) exist and mount them to the pod as required, or fall back to the configmap
 		lagoonEnvSecret := &corev1.Secret{}
 		err := r.Get(ctx, types.NamespacedName{
@@ -718,6 +710,20 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it
 			newPod.Spec.ServiceAccountName = "lagoon-deployer"
+		}
+		// we need to add podSecurtiyContext if rootless is enabled
+		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
+		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
+		_ = json.Unmarshal(lagoonTask.Spec.Project.Variables.Project, lagoonProjectVariables)
+		_ = json.Unmarshal(lagoonTask.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
+		// checking the various ways rootless could be enabled - not sure if this is overkill?
+		rootlessEnabled := r.LFFForceRootlessWorkload == "enabled" || helpers.VariableExists(lagoonProjectVariables, "LAGOON_FEATURE_FLAG_ROOTLESS_WORKLOAD", "enabled") || helpers.VariableExists(lagoonEnvironmentVariables, "LAGOON_FEATURE_FLAG_ROOTLESS_WORKLOAD", "enabled") || r.LFFDefaultRootlessWorkload == "enabled"
+		if rootlessEnabled {
+			newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+				RunAsUser:  helpers.Int64Ptr(10000),
+				RunAsGroup: helpers.Int64Ptr(0),
+				FSGroup:    helpers.Int64Ptr(10001),
+			}
 		}
 		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.Name))
 

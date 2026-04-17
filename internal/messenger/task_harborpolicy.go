@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	harborclientv5model "github.com/mittwald/goharbor-client/v5/apiv2/model"
+	retention "github.com/mittwald/goharbor-client/v5/apiv2/pkg/clients/retention"
 	"github.com/uselagoon/machinery/utils/cron"
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +39,7 @@ type HarborRetentionRule struct {
 	Name         string `json:"name"`
 	Pattern      string `json:"pattern"`
 	LatestPulled uint64 `json:"latestPulled"`
+	LatestPushed uint64 `json:"latestPushed"`
 }
 
 // HarborPolicy handles harbor retention policy changes.
@@ -134,11 +136,36 @@ func (m *Messenger) generateRetentionPolicy(projectID int64, projectName string,
 		},
 	}
 	for _, rule := range policy.Rules {
-		retPol.Rules = append(retPol.Rules,
-			&harborclientv5model.RetentionRule{
+		pulledRule := &harborclientv5model.RetentionRule{
+			Action: "retain",
+			Params: map[string]interface{}{
+				retention.PolicyTemplateLatestPulledArtifacts.String(): rule.LatestPulled,
+			},
+			ScopeSelectors: map[string][]harborclientv5model.RetentionSelector{
+				"repository": {
+					{
+						Decoration: "repoMatches",
+						Kind:       "doublestar",
+						Pattern:    rule.Pattern,
+					},
+				},
+			},
+			TagSelectors: []*harborclientv5model.RetentionSelector{
+				{
+					Decoration: "matches",
+					Extras:     "{\"untagged\":true}",
+					Kind:       "doublestar",
+					Pattern:    "**",
+				},
+			},
+			Template: retention.PolicyTemplateLatestPulledArtifacts.String(),
+		}
+		retPol.Rules = append(retPol.Rules, pulledRule)
+		if rule.LatestPushed != 0 {
+			pushedRule := &harborclientv5model.RetentionRule{
 				Action: "retain",
 				Params: map[string]interface{}{
-					"latestPulledN": rule.LatestPulled,
+					retention.PolicyTemplateLatestPushedArtifacts.String(): rule.LatestPushed,
 				},
 				ScopeSelectors: map[string][]harborclientv5model.RetentionSelector{
 					"repository": {
@@ -157,9 +184,10 @@ func (m *Messenger) generateRetentionPolicy(projectID int64, projectName string,
 						Pattern:    "**",
 					},
 				},
-				Template: "latestPulledN",
-			},
-		)
+				Template: retention.PolicyTemplateLatestPushedArtifacts.String(),
+			}
+			retPol.Rules = append(retPol.Rules, pushedRule)
+		}
 	}
 	return retPol, nil
 }

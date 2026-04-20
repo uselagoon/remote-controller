@@ -33,8 +33,9 @@ func (h *Harbor) CreateProjectV2(ctx context.Context, namespace corev1.Namespace
 		}
 		stor := int64(-1)
 		tStr := "true"
+		fStr := "false"
 		project.Metadata = &harborclientv5model.ProjectMetadata{
-			AutoScan:             &tStr,
+			AutoScan:             &fStr,
 			ReuseSysCVEAllowlist: &tStr,
 			Public:               "false",
 		}

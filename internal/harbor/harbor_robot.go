@@ -147,23 +147,23 @@ func (h *Harbor) DeleteRobotAccount(ctx context.Context, projectID int64, projec
 	}
 	for _, robot := range robots {
 		if h.matchRobotAccountV2(robot.Name, projectName, environmentName) {
-			err := h.ClientV5.DeleteProjectRobotV1(
+			err := h.ClientV5.DeleteRobotAccountByID(
 				ctx,
-				projectName,
 				int64(robot.ID),
 			)
 			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s", projectName, robot.Name))
-				return
+				//  don't block namespace deletion
+				h.Log.Info(fmt.Sprintf("Error deleting project %s robot account %s: %v", projectName, robot.Name, err.Error()))
+			} else {
+				h.Log.Info(
+					fmt.Sprintf(
+						"Deleted harbor robot account %s in  project %s, environment %s",
+						robot.Name,
+						projectName,
+						environmentName,
+					),
+				)
 			}
-			h.Log.Info(
-				fmt.Sprintf(
-					"Deleted harbor robot account %s in  project %s, environment %s",
-					robot.Name,
-					projectName,
-					environmentName,
-				),
-			)
 		}
 	}
 }

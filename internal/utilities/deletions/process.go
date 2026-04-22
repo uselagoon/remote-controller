@@ -86,10 +86,11 @@ func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, name
 				if cleanupRobot {
 					projectHarbor, err := d.Harbor.ClientV5.GetProject(ctx, project)
 					if err != nil {
+						//  don't block namespace deletion
 						opLog.Info(fmt.Sprintf("Error getting project %s, err: %v", project, err))
-						return err
+					} else {
+						d.Harbor.DeleteRobotAccount(ctx, int64(projectHarbor.ProjectID), project, environment)
 					}
-					d.Harbor.DeleteRobotAccount(ctx, int64(projectHarbor.ProjectID), project, environment)
 				}
 			}
 		}

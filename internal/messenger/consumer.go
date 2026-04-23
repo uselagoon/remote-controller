@@ -416,7 +416,6 @@ func (m *Messenger) Consumer(targetName string) {
 							jobSpec.Environment.Name,
 						),
 					)
-					// @TODO: send msg back to lagoon and update task to failed?
 					_ = message.Ack(false) // ack to remove from queue
 					return
 				}

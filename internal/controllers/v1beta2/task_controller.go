@@ -469,7 +469,6 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		}
 
 		for _, volume := range volumeList.Items {
-			// if volume.Spec.AccessModes[0] == corev1.ReadWriteMany {
 			if *volume.Spec.StorageClassName == "bulk" {
 				volumes = append(volumes, corev1.Volume{
 					Name: volume.Name,

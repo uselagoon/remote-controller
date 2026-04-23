@@ -184,6 +184,17 @@ func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
 	if value, ok := tmpMap["volumeMounts"]; ok {
 		a.VolumeMounts = jsonToBool(value)
 	}
+	if value, ok := tmpMap["volumeMounts"]; ok {
+		if reflect.TypeOf(value).Kind() == reflect.Float64 {
+			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))
+			if err == nil {
+				a.VolumeMounts = vBool
+			}
+		}
+		if reflect.TypeOf(value).Kind() == reflect.Bool {
+			a.VolumeMounts = value.(bool)
+		}
+	}
 	if value, ok := tmpMap["RunnerImage"]; ok {
 		a.RunnerImage = value.(string)
 	}

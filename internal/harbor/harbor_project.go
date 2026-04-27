@@ -74,7 +74,7 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 			repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
 			err := h.ClientV5.DeleteRepository(ctx, projectName, repoName)
 			if err != nil {
-				h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
+				h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s: %v", repo.Name, err.Error()))
 			}
 			h.Log.Info(
 				fmt.Sprintf(
@@ -97,16 +97,18 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 					repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
 					err := h.ClientV5.DeleteRepository(ctx, projectName, repoName)
 					if err != nil {
-						h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s", repo.Name))
+						//  don't block namespace deletion
+						h.Log.Info(fmt.Sprintf("Error deleting harbor repository %s: %v", repo.Name, err.Error()))
+					} else {
+						h.Log.Info(
+							fmt.Sprintf(
+								"Deleted harbor repository %s in  project %s, environment %s",
+								repo.Name,
+								projectName,
+								environmentName,
+							),
+						)
 					}
-					h.Log.Info(
-						fmt.Sprintf(
-							"Deleted harbor repository %s in  project %s, environment %s",
-							repo.Name,
-							projectName,
-							environmentName,
-						),
-					)
 				}
 			}
 		}

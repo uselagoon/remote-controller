@@ -42,23 +42,27 @@ import (
 // LagoonTaskReconciler reconciles a LagoonTask object
 type LagoonTaskReconciler struct {
 	client.Client
-	Log                    logr.Logger
-	Scheme                 *runtime.Scheme
-	EnableMQ               bool
-	Messaging              *messenger.Messenger
-	ControllerNamespace    string
-	NamespacePrefix        string
-	RandomNamespacePrefix  bool
-	LagoonAPIConfiguration helpers.LagoonAPIConfiguration
-	EnableDebug            bool
-	LagoonTargetName       string
-	ProxyConfig            ProxyConfig
-	LFFTaskQoSEnabled      bool
-	TaskQoS                TaskQoS
-	ImagePullPolicy        corev1.PullPolicy
-	QueueCache             *lru.Cache[string, string]
-	TasksCache             *lru.Cache[string, string]
-	ClusterAutoscalerEvict bool
+	Log                        logr.Logger
+	Scheme                     *runtime.Scheme
+	EnableMQ                   bool
+	Messaging                  *messenger.Messenger
+	ControllerNamespace        string
+	NamespacePrefix            string
+	RandomNamespacePrefix      bool
+	LagoonAPIConfiguration     helpers.LagoonAPIConfiguration
+	EnableDebug                bool
+	LagoonTargetName           string
+	ProxyConfig                ProxyConfig
+	LFFTaskQoSEnabled          bool
+	TaskQoS                    TaskQoS
+	ImagePullPolicy            corev1.PullPolicy
+	QueueCache                 *lru.Cache[string, string]
+	TasksCache                 *lru.Cache[string, string]
+	ClusterAutoscalerEvict     bool
+	LFFForceRWX2RWO            string
+	LFFDefaultRWX2RWO          string
+	LFFForceRootlessWorkload   string
+	LFFDefaultRootlessWorkload string
 }
 
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoontasks,verbs=get;list;watch;create;update;patch;delete
@@ -454,6 +458,35 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		volumes = append(volumes, sshKeyVolume)
 		volumeMounts = append(volumeMounts, sshKeyVolumeMount)
 	}
+
+	if lagoonTask.Spec.AdvancedTask.VolumeMounts {
+
+		volumeList := &corev1.PersistentVolumeClaimList{}
+
+		listErr := r.List(ctx, volumeList, client.InNamespace(lagoonTask.Namespace))
+		if listErr != nil {
+			return listErr
+		}
+
+		for _, volume := range volumeList.Items {
+			if *volume.Spec.StorageClassName == "bulk" {
+				volumes = append(volumes, corev1.Volume{
+					Name: volume.Name,
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: volume.Name,
+						},
+					},
+				})
+				volumeMounts = append(volumeMounts, corev1.VolumeMount{
+					Name:      volume.Name,
+					ReadOnly:  false,
+					MountPath: "/storage/" + volume.Name,
+				})
+			}
+		}
+	}
+
 	if lagoonTask.Spec.AdvancedTask.DeployerToken {
 		// if this advanced task can access kubernetes, mount the token in
 		serviceAccount := &corev1.ServiceAccount{}
@@ -676,6 +709,20 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		if lagoonTask.Spec.AdvancedTask.DeployerToken {
 			// start this with the serviceaccount so that it gets the token mounted into it
 			newPod.Spec.ServiceAccountName = "lagoon-deployer"
+		}
+		// we need to add podSecurtiyContext if rootless is enabled
+		lagoonProjectVariables := &[]helpers.LagoonEnvironmentVariable{}
+		lagoonEnvironmentVariables := &[]helpers.LagoonEnvironmentVariable{}
+		_ = json.Unmarshal(lagoonTask.Spec.Project.Variables.Project, lagoonProjectVariables)
+		_ = json.Unmarshal(lagoonTask.Spec.Project.Variables.Environment, lagoonEnvironmentVariables)
+		// checking the various ways rootless could be enabled - not sure if this is overkill?
+		rootlessEnabled := r.LFFForceRootlessWorkload == "enabled" || helpers.VariableExists(lagoonProjectVariables, "LAGOON_FEATURE_FLAG_ROOTLESS_WORKLOAD", "enabled") || helpers.VariableExists(lagoonEnvironmentVariables, "LAGOON_FEATURE_FLAG_ROOTLESS_WORKLOAD", "enabled") || r.LFFDefaultRootlessWorkload == "enabled"
+		if rootlessEnabled {
+			newPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+				RunAsUser:  helpers.Int64Ptr(10000),
+				RunAsGroup: helpers.Int64Ptr(0),
+				FSGroup:    helpers.Int64Ptr(10001),
+			}
 		}
 		opLog.Info(fmt.Sprintf("Creating advanced task pod for: %s", lagoonTask.Name))
 

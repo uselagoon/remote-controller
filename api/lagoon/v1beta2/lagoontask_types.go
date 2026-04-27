@@ -18,7 +18,6 @@ package v1beta2
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -110,6 +109,7 @@ type LagoonAdvancedTaskInfo struct {
 	JSONPayload   string `json:"JSONPayload,omitempty"`
 	DeployerToken bool   `json:"deployerToken,omitempty"`
 	SSHKey        bool   `json:"sshKey,omitempty"`
+	VolumeMounts  bool   `json:"volumeMounts,omitempty"`
 }
 
 // LagoonMiscInfo defines the resource or backup information for a misc task.
@@ -157,32 +157,32 @@ func init() {
 	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
 }
 
-// this is a custom unmarshal function that will check deployerToken and sshKey which come from Lagoon as `1|0` booleans because javascript
+func jsonToBool(value interface{}) bool {
+	switch valueType := value.(type) {
+	case bool:
+		return valueType
+	case float64:
+		boolValue, err := strconv.ParseBool(fmt.Sprintf("%v", valueType))
+		if err == nil {
+			return boolValue
+		}
+	}
+	return false
+}
+
+// this is a custom unmarshal function that will check deployerToken, sshKey and volumeMounts which come from Lagoon as `1|0` booleans because javascript
 // this converts them from floats to bools
 func (a *LagoonAdvancedTaskInfo) UnmarshalJSON(data []byte) error {
 	tmpMap := map[string]interface{}{}
 	_ = json.Unmarshal(data, &tmpMap)
 	if value, ok := tmpMap["deployerToken"]; ok {
-		if reflect.TypeOf(value).Kind() == reflect.Float64 {
-			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))
-			if err == nil {
-				a.DeployerToken = vBool
-			}
-		}
-		if reflect.TypeOf(value).Kind() == reflect.Bool {
-			a.DeployerToken = value.(bool)
-		}
+		a.DeployerToken = jsonToBool(value)
 	}
 	if value, ok := tmpMap["sshKey"]; ok {
-		if reflect.TypeOf(value).Kind() == reflect.Float64 {
-			vBool, err := strconv.ParseBool(fmt.Sprintf("%v", value))
-			if err == nil {
-				a.SSHKey = vBool
-			}
-		}
-		if reflect.TypeOf(value).Kind() == reflect.Bool {
-			a.SSHKey = value.(bool)
-		}
+		a.SSHKey = jsonToBool(value)
+	}
+	if value, ok := tmpMap["volumeMounts"]; ok {
+		a.VolumeMounts = jsonToBool(value)
 	}
 	if value, ok := tmpMap["RunnerImage"]; ok {
 		a.RunnerImage = value.(string)

@@ -400,6 +400,25 @@ func (m *Messenger) Consumer(targetName string) {
 					_ = message.Ack(false) // ack to remove from queue
 					return
 				}
+			case "deploytarget:task:projectclone", "deploytarget:task:projectclonerestore":
+				opLog.Info(
+					fmt.Sprintf(
+						"Received project clone task for project %s",
+						jobSpec.Project.Name,
+					),
+				)
+				err := m.ProjectClone(m.genNamespace(jobSpec), jobSpec)
+				if err != nil {
+					opLog.Error(err,
+						fmt.Sprintf(
+							"Project clone task for project %s, environment %s failed to be created",
+							jobSpec.Project.Name,
+							jobSpec.Environment.Name,
+						),
+					)
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
 			case "deploytarget:harborpolicy:update":
 				err := m.HarborPolicy(ctx, jobSpec)
 				if err != nil {

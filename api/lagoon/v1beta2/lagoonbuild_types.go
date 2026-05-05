@@ -129,6 +129,7 @@ type Project struct {
 	ProjectSecret         string          `json:"projectSecret"`
 	SubFolder             string          `json:"subfolder,omitempty"`
 	Key                   []byte          `json:"key"`
+	OrganizationKey       []byte          `json:"organizationKey,omitempty"`
 	Monitoring            Monitoring      `json:"monitoring"`
 	Variables             LagoonVariables `json:"variables"`
 	Registry              string          `json:"registry,omitempty"`

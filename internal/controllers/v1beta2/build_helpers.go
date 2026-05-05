@@ -111,6 +111,40 @@ func (r *LagoonBuildReconciler) getCreateOrUpdateSSHKeySecret(ctx context.Contex
 	return nil
 }
 
+// getCreateOrUpdateOrganizationKeySecret will create or update the ssh key.
+func (r *LagoonBuildReconciler) getCreateOrUpdateOrganizationKeySecret(ctx context.Context,
+	sshKey *corev1.Secret,
+	spec lagooncrd.LagoonBuildSpec,
+	ns string) error {
+	sshKey.ObjectMeta = metav1.ObjectMeta{
+		Name:      "lagoon-organization-key",
+		Namespace: ns,
+	}
+	sshKey.Type = "kubernetes.io/ssh-auth"
+	sshKey.Data = map[string][]byte{
+		"ssh-privatekey": spec.Project.OrganizationKey,
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Namespace: ns,
+		Name:      "lagoon-organization-key",
+	}, sshKey)
+	if err != nil {
+		if err := r.Create(ctx, sshKey); err != nil {
+			return fmt.Errorf("there was an error creating the lagoon-sshkey. Error was: %v", err)
+		}
+	}
+	// if the keys are different, then load in the new key from the spec
+	if !bytes.Equal(sshKey.Data["ssh-privatekey"], spec.Project.OrganizationKey) {
+		sshKey.Data = map[string][]byte{
+			"ssh-privatekey": spec.Project.OrganizationKey,
+		}
+		if err := r.Update(ctx, sshKey); err != nil {
+			return fmt.Errorf("there was an error updating the lagoon-sshkey. Error was: %v", err)
+		}
+	}
+	return nil
+}
+
 // processBuild will actually process the build.
 func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Logger, lagoonBuild lagooncrd.LagoonBuild) error {
 	// we run these steps again just to be sure that it gets updated/created if it hasn't already
@@ -123,6 +157,16 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 	err := r.getCreateOrUpdateSSHKeySecret(ctx, sshKey, lagoonBuild.Spec, lagoonBuild.Namespace)
 	if err != nil {
 		return err
+	}
+	if lagoonBuild.Spec.Project.OrganizationKey != nil {
+		if r.EnableDebug {
+			opLog.Info(fmt.Sprintf("Checking `lagoon-organization-key` Secret exists: %s", lagoonBuild.Name))
+		}
+		sshKey2 := &corev1.Secret{}
+		err := r.getCreateOrUpdateOrganizationKeySecret(ctx, sshKey2, lagoonBuild.Spec, lagoonBuild.Namespace)
+		if err != nil {
+			return err
+		}
 	}
 
 	// create the `lagoon-deployer` ServiceAccount
@@ -603,6 +647,22 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			ReadOnly:  true,
 			MountPath: "/var/run/secrets/lagoon/ssh",
 		},
+	}
+	if lagoonBuild.Spec.Project.OrganizationKey != nil {
+		volumes = append(volumes, corev1.Volume{
+			Name: "lagoon-organization-key",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  "lagoon-organization-key",
+					DefaultMode: helpers.Int32Ptr(420),
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "lagoon-organization-key",
+			ReadOnly:  true,
+			MountPath: "/var/run/secrets/lagoon/organization",
+		})
 	}
 
 	// if the existing token exists, mount it

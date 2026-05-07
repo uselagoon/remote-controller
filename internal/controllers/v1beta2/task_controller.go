@@ -609,6 +609,10 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 		Name:      lagoonTask.Name,
 	}, newPod)
 	if err != nil {
+
+		// For now, we disable service links to bring advanced tasks in line with `cli` pods behavior in terms of env vars
+		enableServiceLinks := false
+
 		newPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      lagoonTask.Name,
@@ -641,6 +645,7 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 						VolumeMounts:    volumeMounts,
 					},
 				},
+				EnableServiceLinks: &enableServiceLinks,
 			},
 		}
 		// check if the lagoon-env secret(s) exist and mount them to the pod as required, or fall back to the configmap

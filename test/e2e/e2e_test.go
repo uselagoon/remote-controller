@@ -63,6 +63,8 @@ var (
 
 	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
 	deletePolicyWant        = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
+	createPolicyWant2       = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPushedK":2},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPushedK"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`
+	deletePolicyWant2       = `{"algorithm":"or","rules":[],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":""}}}`
 	projectRepositoriesWant = `[{"artifact_count":1,"name":"nginx-example/dev8/nginx"},{"artifact_count":1,"name":"nginx-example/dev7/nginx"},{"artifact_count":1,"name":"nginx-example/dev6/nginx"},{"artifact_count":1,"name":"nginx-example/dev5/nginx"},{"artifact_count":1,"name":"nginx-example/dev4/nginx"},{"artifact_count":1,"name":"nginx-example/dev3/nginx"},{"artifact_count":1,"name":"nginx-example/dev2/nginx"},{"artifact_count":1,"name":"nginx-example/dev1/nginx"},{"artifact_count":1,"name":"nginx-example/main/nginx"}]`
 )
 
@@ -501,6 +503,26 @@ var _ = Describe("controller", Ordered, func() {
 			after, err = utils.QueryHarborProjectPolicies(ip, "nginx-example")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			err = comparePolicy(deletePolicyWant, after)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("creating harbor policy 2 update via rabbitmq")
+			err = utils.PublishMessage("@test/e2e/testdata/create-retention-policy2.json")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			time.Sleep(10 * time.Second)
+			By("check harbor project policies after creating policy 2")
+			after2, err := utils.QueryHarborProjectPolicies(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = comparePolicy(createPolicyWant2, after2)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("delete harbor policy 2 via rabbitmq")
+			err = utils.PublishMessage("@test/e2e/testdata/remove-retention-policy.json")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			time.Sleep(10 * time.Second)
+			By("check harbor project policies after deleting policy 2")
+			after, err = utils.QueryHarborProjectPolicies(ip, "nginx-example")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			err = comparePolicy(deletePolicyWant2, after)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("check harbor project repositories before deleting environment")

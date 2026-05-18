@@ -120,7 +120,10 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 					} else {
 						// start the build pod immediately
 						var lagoonBuild lagooncrd.LagoonBuild
-						if err := r.Get(ctx, types.NamespacedName{Namespace: pBuild.Namespace, Name: startBuild}, &lagoonBuild); err != nil {
+						// Bypass controller-runtime read cache to avoid race condition where a build exists but
+						// has not been put in the cache yet.
+						if err := r.APIReader.Get(ctx, types.NamespacedName{Namespace: pBuild.Namespace, Name: startBuild}, &lagoonBuild); err != nil {
+							// An error here results in the build being stuck queued until remote-controller is restarted.
 							return err
 						}
 						if err := r.processBuild(ctx, opLog, lagoonBuild); err != nil {

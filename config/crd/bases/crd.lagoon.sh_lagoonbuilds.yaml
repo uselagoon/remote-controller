@@ -223,6 +223,9 @@ spec:
                       name:
                         type: string
                     type: object
+                  organizationKey:
+                    format: byte
+                    type: string
                   productionEnvironment:
                     type: string
                   projectIdling:

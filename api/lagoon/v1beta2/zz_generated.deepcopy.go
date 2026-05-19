@@ -508,6 +508,11 @@ func (in *Project) DeepCopyInto(out *Project) {
 		*out = make([]byte, len(*in))
 		copy(*out, *in)
 	}
+	if in.OrganizationKey != nil {
+		in, out := &in.OrganizationKey, &out.OrganizationKey
+		*out = make([]byte, len(*in))
+		copy(*out, *in)
+	}
 	out.Monitoring = in.Monitoring
 	in.Variables.DeepCopyInto(&out.Variables)
 	if in.EnvironmentIdling != nil {

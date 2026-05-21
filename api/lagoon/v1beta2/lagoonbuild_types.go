@@ -99,10 +99,6 @@ type LagoonBuildStatus struct {
 	Phase      string             `json:"phase,omitempty"`
 }
 
-func init() {
-	SchemeBuilder.Register(&LagoonBuild{}, &LagoonBuildList{})
-}
-
 // Build contains the type of build, and the image to use for the builder.
 type Build struct {
 	CI       string `json:"ci,omitempty"`

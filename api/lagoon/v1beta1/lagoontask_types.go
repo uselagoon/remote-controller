@@ -57,7 +57,3 @@ type LagoonTaskStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	Phase      string             `json:"phase,omitempty"`
 }
-
-func init() {
-	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
-}

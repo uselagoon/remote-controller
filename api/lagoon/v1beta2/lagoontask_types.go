@@ -153,10 +153,6 @@ type LagoonTaskStatus struct {
 	Phase      string             `json:"phase,omitempty"`
 }
 
-func init() {
-	SchemeBuilder.Register(&LagoonTask{}, &LagoonTaskList{})
-}
-
 func jsonToBool(value interface{}) bool {
 	switch valueType := value.(type) {
 	case bool:

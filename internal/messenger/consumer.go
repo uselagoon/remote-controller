@@ -320,6 +320,17 @@ func (m *Messenger) Consumer(targetName string) {
 					}
 				}
 			case "deploytarget:restic:backup:restore", "kubernetes:restic:backup:restore":
+				v1alpha1, v1, err := helpers.K8UPVersions(ctx, m.Client)
+				if err != nil {
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+				if !v1alpha1 && !v1 {
+					// k8up not installed
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
 				opLog.Info(
 					fmt.Sprintf(
 						"Received backup restoration for project %s, environment %s",
@@ -327,11 +338,44 @@ func (m *Messenger) Consumer(targetName string) {
 						jobSpec.Environment.Name,
 					),
 				)
-				err := m.ResticRestore(m.genNamespace(jobSpec), jobSpec)
+				err = m.ResticRestore(ctx, m.genNamespace(jobSpec), jobSpec, v1alpha1, v1, false)
 				if err != nil {
 					opLog.Error(err,
 						fmt.Sprintf(
 							"Backup restoration for project %s, environment %s failed to be created",
+							jobSpec.Project.Name,
+							jobSpec.Environment.Name,
+						),
+					)
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+			case "deploytarget:restic:cancel:restore":
+				v1alpha1, v1, err := helpers.K8UPVersions(ctx, m.Client)
+				if err != nil {
+					// @TODO: send msg back to lagoon and update task to failed?
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+				if !v1alpha1 && !v1 {
+					// k8up not installed
+					_ = message.Ack(false) // ack to remove from queue
+					return
+				}
+				// if this is a request to cancel a restore attempt
+				opLog.Info(
+					fmt.Sprintf(
+						"Received restore cancellation for project %s, environment %s",
+						jobSpec.Project.Name,
+						jobSpec.Environment.Name,
+					),
+				)
+				err = m.ResticRestore(ctx, m.genNamespace(jobSpec), jobSpec, v1alpha1, v1, true)
+				if err != nil {
+					opLog.Error(err,
+						fmt.Sprintf(
+							"Cancel restore for project %s, environment %s failed",
 							jobSpec.Project.Name,
 							jobSpec.Environment.Name,
 						),

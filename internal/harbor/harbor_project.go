@@ -70,7 +70,7 @@ func (h *Harbor) DeleteRepository(ctx context.Context, projectName, branch strin
 	h.Config.PageSize = 100
 	listRepositories := h.ListRepositories(ctx, projectName)
 	for _, repo := range listRepositories {
-		if strings.Contains(repo.Name, fmt.Sprintf("%s/%s", projectName, environmentName)) {
+		if strings.HasPrefix(repo.Name, fmt.Sprintf("%s/%s/", projectName, environmentName)) {
 			repoName := strings.Replace(repo.Name, fmt.Sprintf("%s/", projectName), "", 1)
 			err := h.ClientV5.DeleteRepository(ctx, projectName, repoName)
 			if err != nil {

@@ -306,6 +306,10 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 				// generate the list of services to add or update to the environment
 				for _, deployment := range depList.Items {
 					var serviceName, serviceType string
+					replicas := int32(1)
+					if deployment.Spec.Replicas != nil {
+						replicas = *deployment.Spec.Replicas
+					}
 					containers := []schema.ServiceContainer{}
 					if name, ok := deployment.Labels["lagoon.sh/service"]; ok {
 						serviceName = name
@@ -322,7 +326,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 						Name:       serviceName,
 						Type:       serviceType,
 						Containers: containers,
-						Replicas:   *deployment.Spec.Replicas,
+						Replicas:   replicas,
 					})
 				}
 				msg.Meta.Services = serviceNames
@@ -334,6 +338,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 				serviceConfig := helpers.LagoonServices{}
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
+					helpers.SetServiceReplicas(ctx, r.APIReader, jobPod.Namespace, serviceConfig.Services)
 					msg.Meta.EnvironmentServices = serviceConfig.Services
 					msg.Meta.EnvironmentVolumes = serviceConfig.Volumes
 				}

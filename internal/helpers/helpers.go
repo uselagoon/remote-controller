@@ -17,6 +17,7 @@ import (
 	"github.com/uselagoon/machinery/api/schema"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -368,4 +369,30 @@ func GetLagoonEnvRoutes(ctx context.Context, opLog logr.Logger, c client.Client,
 type LagoonServices struct {
 	Services []schema.EnvironmentService `json:"services"`
 	Volumes  []schema.EnvironmentVolume  `json:"volumes"`
+}
+
+// SetServiceReplicas sets the replica count of each service from its live deployment
+func SetServiceReplicas(ctx context.Context, reader client.Reader, namespace string, services []schema.EnvironmentService) {
+	depList := &appsv1.DeploymentList{}
+	replicas := map[string]int32{}
+	if err := reader.List(ctx, depList, client.InNamespace(namespace)); err != nil {
+		for idx := range services {
+			services[idx].Replicas = 0
+		}
+		return
+	}
+	for _, deployment := range depList.Items {
+		name, ok := deployment.Labels["lagoon.sh/service"]
+		if !ok {
+			continue
+		}
+		count := int32(1)
+		if deployment.Spec.Replicas != nil {
+			count = *deployment.Spec.Replicas
+		}
+		replicas[name] = count
+	}
+	for idx := range services {
+		services[idx].Replicas = replicas[services[idx].Name]
+	}
 }

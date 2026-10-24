@@ -73,10 +73,14 @@ func (r *DeploymentsReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		projectID := helpers.UintPtr(uint(pID))
 		serviceName := deployment.Labels["lagoon.sh/service"]
 		serviceType := deployment.Labels["lagoon.sh/service-type"]
+		replicas := int32(1)
+		if deployment.Spec.Replicas != nil {
+			replicas = *deployment.Spec.Replicas
+		}
 		state := ServiceState{
 			Name:     serviceName,
 			Type:     serviceType,
-			Replicas: *deployment.Spec.Replicas,
+			Replicas: replicas,
 		}
 		stateJSON, _ := json.Marshal(state)
 		msg := schema.LagoonMessage{

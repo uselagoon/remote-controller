@@ -62,6 +62,25 @@ func (m *Messenger) Consumer(targetName string) {
 		}
 	}()
 
+	// the mq library only reconnects on client side errors, if the broker closes the connection
+	// (eg, broker restart) the state becomes disconnected and nothing recovers it, so restart the controller
+	go func() {
+		const checkInterval = 10 * time.Second
+		const maxUnhealthyChecks = 6
+		unhealthy := 0
+		for range time.Tick(checkInterval) {
+			if messageQueue.ConnectionState() == mq.ConnectionStateConnected {
+				unhealthy = 0
+				continue
+			}
+			unhealthy++
+			opLog.Info(fmt.Sprintf("Message queue not connected, check %d/%d", unhealthy, maxUnhealthyChecks))
+			if unhealthy >= maxUnhealthyChecks {
+				log.Panicf("Terminating controller due to message queue remaining disconnected")
+			}
+		}
+	}()
+
 	forever := make(chan bool)
 
 	// Handle any tasks that go to the `builddeploy` queue

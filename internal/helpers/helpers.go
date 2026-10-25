@@ -376,9 +376,7 @@ func SetServiceReplicas(ctx context.Context, reader client.Reader, namespace str
 	depList := &appsv1.DeploymentList{}
 	replicas := map[string]int32{}
 	if err := reader.List(ctx, depList, client.InNamespace(namespace)); err != nil {
-		for idx := range services {
-			services[idx].Replicas = 0
-		}
+		// retain the value from the configmap if there is an error checking the deployments
 		return
 	}
 	for _, deployment := range depList.Items {
@@ -393,6 +391,8 @@ func SetServiceReplicas(ctx context.Context, reader client.Reader, namespace str
 		replicas[name] = count
 	}
 	for idx := range services {
-		services[idx].Replicas = replicas[services[idx].Name]
+		if count, ok := replicas[services[idx].Name]; ok {
+			services[idx].Replicas = count
+		}
 	}
 }

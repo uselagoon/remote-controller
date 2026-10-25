@@ -83,7 +83,10 @@ Build cancelled
 		// update the deployment with the status of cancelled in lagoon
 		r.Messaging.BuildStatusLogsToLagoonLogs(ctx, r.EnableMQ, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
 		r.Messaging.UpdateDeploymentAndEnvironmentTask(ctx, r.EnableMQ, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
-		r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled, r.LagoonTargetName)
+		// a build that already started has had real logs shipped, don't overwrite them with the stub
+		if lagoonBuild.Labels["lagoon.sh/buildStarted"] != "true" {
+			r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, allContainerLogs, lagooncrd.BuildStatusCancelled, r.LagoonTargetName)
+		}
 	}
 	return nil
 }

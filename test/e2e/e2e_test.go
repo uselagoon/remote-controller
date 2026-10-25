@@ -313,6 +313,9 @@ var _ = Describe("controller", Ordered, func() {
 			// this tests that cancellations of builds behaves correctly
 			testCancellations(timeout, duration, interval)
 
+			// this tests that a build pod deleted without a cancellation still ships its final status
+			testDeletedBuildPod(timeout, duration, interval)
+
 			By("validating that only 1 build pod remains in a namespace")
 			verifyOnlyOneBuildPod := func() error {
 				cmd = exec.Command(utils.Kubectl(), "get",

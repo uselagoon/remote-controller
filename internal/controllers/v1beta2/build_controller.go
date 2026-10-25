@@ -138,7 +138,11 @@ func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				}
 				r.Messaging.BuildStatusLogsToLagoonLogs(ctx, r.EnableMQ, opLog, &lagoonBuild, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
 				r.Messaging.UpdateDeploymentAndEnvironmentTask(ctx, r.EnableMQ, opLog, &lagoonBuild, true, lagooncrd.BuildStatusCancelled, r.LagoonTargetName, "cancelled")
-				r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, msg, lagooncrd.BuildStatusCancelled, r.LagoonTargetName)
+				// builds that already started have real logs shipped by the build monitor,
+				// sending the stub would overwrite them
+				if started := lagoonBuild.Labels["lagoon.sh/buildStarted"]; started != "true" {
+					r.Messaging.BuildLogsToLagoonLogs(r.EnableMQ, opLog, &lagoonBuild, msg, lagooncrd.BuildStatusCancelled, r.LagoonTargetName)
+				}
 				// ensure the build is removed from any queues when it is cancelled
 				r.BuildCache.Remove(lagoonBuild.Name)
 				r.QueueCache.Remove(lagoonBuild.Name)

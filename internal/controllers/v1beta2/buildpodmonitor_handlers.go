@@ -518,10 +518,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 	if cancel {
 		// only set the status to cancelled if the pod is running/pending/queued
 		// otherwise send the existing status of complete/failed/cancelled
-		if helpers.ContainsString(
-			lagooncrd.BuildRunningPendingStatus,
-			lagoonBuild.Labels["lagoon.sh/buildStatus"],
-		) {
+		if shouldMarkCancelled(lagoonBuild.Labels["lagoon.sh/buildStatus"], jobPod.Status.Phase) {
 			buildCondition = lagooncrd.BuildStatusCancelled
 		} else if helpers.ContainsString(
 			lagooncrd.BuildCompletedCancelledFailedStatus,
@@ -560,6 +557,7 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 		)
 		var allContainerLogs []byte
 		var err error
+		logsCollected := true
 		if logs == nil {
 			if collectLogs {
 				allContainerLogs, err = r.collectLogs(ctx, req, jobPod)
@@ -575,11 +573,13 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 ========================================`, cancellationMessage))...)
 					}
 				} else {
-					allContainerLogs = []byte(fmt.Sprintf(`
-========================================
-Build %s
-========================================`, buildCondition))
+					// never ship a stub in place of real logs, core would overwrite
+					// the logs it already holds
+					logsCollected = false
+					opLog.Error(err, "unable to collect build pod logs, not sending logs")
 				}
+			} else {
+				logsCollected = false
 			}
 		} else {
 			allContainerLogs = logs
@@ -601,7 +601,7 @@ Build %s
 			"phase":      buildCondition.String(),
 		}
 
-		// do any message publishing here, and update any pending messages if needed
+		// do any message publishing here
 		if err = r.buildStatusLogsToLagoonLogs(ctx, opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower()); err != nil {
 			opLog.Error(err, "unable to publish build status logs")
 		}
@@ -610,7 +610,7 @@ Build %s
 		}
 		// if the container logs can't be retrieved, we don't want to send any build logs back, as this will nuke
 		// any previously received logs
-		if !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
+		if logsCollected && !strings.Contains(string(allContainerLogs), "unable to retrieve container logs for containerd") {
 			if err = r.buildLogsToLagoonLogs(opLog, &lagoonBuild, &jobPod, namespace, buildCondition.ToLower(), allContainerLogs); err != nil {
 				opLog.Error(err, "unable to publish build logs")
 			}
@@ -622,6 +622,7 @@ Build %s
 			// if it does, try to patch it
 			if err := r.Patch(ctx, &lagoonBuild, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 				opLog.Error(err, "unable to update resource")
+				return err
 			}
 		}
 		// just delete the pod
@@ -638,4 +639,14 @@ Build %s
 		}
 	}
 	return nil
+}
+
+// shouldMarkCancelled returns true if a cancellation should change the build status,
+// builds that are not running/pending, or whose pod already reached a terminal phase
+// keep the status the pod reported
+func shouldMarkCancelled(buildStatus string, phase corev1.PodPhase) bool {
+	if phase == corev1.PodSucceeded || phase == corev1.PodFailed {
+		return false
+	}
+	return helpers.ContainsString(lagooncrd.BuildRunningPendingStatus, buildStatus)
 }

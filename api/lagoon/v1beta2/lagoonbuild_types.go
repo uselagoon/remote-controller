@@ -241,6 +241,8 @@ func NewCachedBuildQueueItem(lagoonBuild LagoonBuild, priority, position, length
 
 const (
 	BuildFinalizer = "finalizer.lagoonbuild.crd.lagoon.sh/v1beta2"
+	// BuildPodFinalizer holds a build pod in terminating until its final status and logs have been shipped
+	BuildPodFinalizer = "finalizer.lagoonbuildpod.crd.lagoon.sh/v1beta2"
 
 	// NotOwnedByControllerMessage is used to describe an error where the controller was unable to start the build because
 	// the `lagoon.sh/controller` label does not match this controllers name

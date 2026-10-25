@@ -696,6 +696,7 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 				"lagoon.sh/buildRemoteID": string(lagoonBuild.UID),
 			},
 			Annotations: map[string]string{},
+			Finalizers:  []string{lagooncrd.BuildPodFinalizer},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: fmt.Sprintf("%v", lagooncrd.GroupVersion),

@@ -518,6 +518,11 @@ func (r *BuildMonitorReconciler) updateDeploymentWithLogs(
 			lagoonBuild.Labels["lagoon.sh/buildStatus"],
 		) {
 			buildCondition = lagooncrd.BuildStatusCancelled
+		} else if helpers.ContainsString(
+			lagooncrd.BuildCompletedCancelledFailedStatus,
+			lagoonBuild.Labels["lagoon.sh/buildStatus"],
+		) {
+			buildCondition = lagooncrd.BuildStatusType(lagoonBuild.Labels["lagoon.sh/buildStatus"])
 		}
 		if _, ok := lagoonBuild.Labels["lagoon.sh/cancelBuildNoPod"]; ok {
 			collectLogs = false

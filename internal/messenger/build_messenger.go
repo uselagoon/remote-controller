@@ -172,7 +172,7 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 				serviceConfig := helpers.LagoonServices{}
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
-					helpers.SetServiceReplicas(ctx, m.Client, lagoonBuild.Namespace, serviceConfig.Services)
+					helpers.SetServiceReplicas(ctx, m.APIReader, lagoonBuild.Namespace, serviceConfig.Services)
 					msg.Meta.EnvironmentServices = serviceConfig.Services
 					msg.Meta.EnvironmentVolumes = serviceConfig.Volumes
 				}

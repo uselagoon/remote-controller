@@ -140,6 +140,10 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 				// generate the list of services to add or update to the environment
 				for _, deployment := range depList.Items {
 					var serviceName, serviceType string
+					replicas := int32(1)
+					if deployment.Spec.Replicas != nil {
+						replicas = *deployment.Spec.Replicas
+					}
 					containers := []schema.ServiceContainer{}
 					if name, ok := deployment.Labels["lagoon.sh/service"]; ok {
 						serviceName = name
@@ -156,6 +160,7 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 						Name:       serviceName,
 						Type:       serviceType,
 						Containers: containers,
+						Replicas:   replicas,
 					})
 				}
 				msg.Meta.Services = serviceNames
@@ -167,6 +172,7 @@ func (m *Messenger) UpdateDeploymentAndEnvironmentTask(
 				serviceConfig := helpers.LagoonServices{}
 				err := json.Unmarshal([]byte(val), &serviceConfig)
 				if err == nil {
+					helpers.SetServiceReplicas(ctx, m.APIReader, lagoonBuild.Namespace, serviceConfig.Services)
 					msg.Meta.EnvironmentServices = serviceConfig.Services
 					msg.Meta.EnvironmentVolumes = serviceConfig.Volumes
 				}

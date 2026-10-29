@@ -22,11 +22,11 @@ jobs:
         lagoon_build_image: ["uselagoon/build-deploy-image:main"]
         experimental: [false]
         include:
-          - kindest_node_version: v1.30.10@sha256:4de75d0e82481ea846c0ed1de86328d821c1e6a6a91ac37bf804e5313670e507
+          - kindest_node_version: v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
             harbor: "1.14.3"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: false
-          - kindest_node_version: v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f
+          - kindest_node_version: v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
             harbor: "1.18.0"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
@@ -66,7 +66,7 @@ jobs:
     - name: Create kind cluster
       uses: helm/kind-action@v1.15.1
       with:
-        version: v0.27.0
+        version: v0.33.0
         cluster_name: remote-controller
         node_image: kindest/node:${{ matrix.kindest_node_version }}
         kubectl_version: v1.32.2

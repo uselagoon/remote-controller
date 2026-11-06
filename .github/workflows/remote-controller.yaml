@@ -30,6 +30,10 @@ jobs:
             harbor: "1.18.0"
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: true
+          - kindest_node_version: v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+            harbor: "1.18.0"
+            lagoon_build_image: "uselagoon/build-deploy-image:main"
+            experimental: true
     steps:
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
@@ -66,7 +70,7 @@ jobs:
     - name: Create kind cluster
       uses: helm/kind-action@v1.15.1
       with:
-        version: v0.27.0
+        version: v0.33.0
         cluster_name: remote-controller
         node_image: kindest/node:${{ matrix.kindest_node_version }}
         kubectl_version: v1.32.2

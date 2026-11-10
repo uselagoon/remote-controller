@@ -108,8 +108,22 @@ type ProxyConfig struct {
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crd.lagoon.sh,resources=lagoonbuilds/status,verbs=get;update;patch
 
-// @TODO: all the things for now, review later
-// +kubebuilder:rbac:groups="*",resources="*",verbs="*"
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=list;watch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=list;watch
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=admin
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;delete
+// +kubebuilder:rbac:groups=apps,resources=statefulsets;daemonsets,verbs=list;watch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=list;watch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=list;watch;delete
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
+// +kubebuilder:rbac:groups=backup.appuio.ch;k8up.io,resources=restores,verbs=create
 
 // Reconcile runs when a request comes through
 func (r *LagoonBuildReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

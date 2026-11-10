@@ -54,9 +54,6 @@ type BuildMonitorReconciler struct {
 	BuildCache            *lru.Cache[string, string]
 }
 
-// @TODO: all the things for now, review later
-// +kubebuilder:rbac:groups="*",resources="*",verbs="*"
-
 // Reconcile runs when a request comes through
 func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoonbuildmonitor", req.NamespacedName)

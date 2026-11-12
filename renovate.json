@@ -1,8 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": [],
   "draftPR": true,
   "enabledManagers": [
     "custom.regex"
@@ -54,5 +52,10 @@
         "needs-testing"
       ]
     }
-  ]
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": false
+  },
+  "osvVulnerabilityAlerts": false,
+  "dependencyDashboard": false
 }

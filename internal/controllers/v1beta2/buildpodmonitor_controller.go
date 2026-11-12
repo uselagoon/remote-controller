@@ -76,6 +76,22 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// a pod deletion request came through
 	// first try and clean up the pod and capture the logs and update
 	// the lagoonbuild that owns it with the status
+	err := r.handlePodDeletion(ctx, opLog, req, jobPod)
+	if err != nil {
+		opLog.Error(err, "Unable to update the LagoonBuild.")
+	}
+	// remove the finalizer from any pods that were created with it so they are not stuck terminating
+	if helpers.ContainsString(jobPod.Finalizers, lagooncrd.BuildPodFinalizer) {
+		patch := client.MergeFrom(jobPod.DeepCopy())
+		jobPod.Finalizers = helpers.RemoveString(jobPod.Finalizers, lagooncrd.BuildPodFinalizer)
+		if err := r.Patch(ctx, &jobPod, patch); err != nil {
+			return ctrl.Result{}, helpers.IgnoreNotFound(err)
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *BuildMonitorReconciler) handlePodDeletion(ctx context.Context, opLog logr.Logger, req ctrl.Request, jobPod corev1.Pod) error {
 	var lagoonBuild lagooncrd.LagoonBuild
 	err := r.Get(ctx, types.NamespacedName{
 		Namespace: jobPod.Namespace,
@@ -87,7 +103,9 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
-	} else if helpers.ContainsString(
+		return err
+	}
+	if helpers.ContainsString(
 		lagooncrd.BuildRunningPendingStatus,
 		lagoonBuild.Labels["lagoon.sh/buildStatus"],
 	) {
@@ -98,13 +116,9 @@ func (r *BuildMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			opLog.Error(err, "Unable to update the LagoonBuild.")
 		}
+		return err
 	}
-	// if the update is successful or not, it will just continue on to check for pending builds
-	// in the event pending builds are not processed and the build pod itself has been deleted
-	// then manually patching the `LagoonBuild` with the label
-	// "lagoon.sh/buildStatus=Cancelled"
-	// should be enough to get things rolling again if no pending builds are being picked up
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // SetupWithManager sets up the controller with the given manager

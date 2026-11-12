@@ -31,7 +31,7 @@ jobs:
             lagoon_build_image: "uselagoon/build-deploy-image:main"
             experimental: false
           # renovate: datasource=docker depName=kindest/node
-          - kindest_node_version: v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f
+          - kindest_node_version: v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
           # renovate: datasource=helm depName=harbor registryUrl=https://helm.goharbor.io
             harbor: "1.18.0"
             lagoon_build_image: "uselagoon/build-deploy-image:main"

@@ -56,6 +56,5 @@
   "vulnerabilityAlerts": {
     "enabled": false
   },
-  "osvVulnerabilityAlerts": false,
-  "dependencyDashboard": false
+  "osvVulnerabilityAlerts": false
 }

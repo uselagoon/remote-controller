@@ -48,9 +48,6 @@ type TaskMonitorReconciler struct {
 	TasksCache            *lru.Cache[string, string]
 }
 
-// @TODO: all the things for now, review later
-// +kubebuilder:rbac:groups="*",resources="*",verbs="*"
-
 // Reconcile runs when a request comes through
 func (r *TaskMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("lagoontaskmonitor", req.NamespacedName)

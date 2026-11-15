@@ -4,15 +4,29 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	lagoonv1beta2 "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 )
 
 func (d *Deletions) ProcessDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace) error {
+	start := time.Now()
+	err := d.processDeletion(ctx, opLog, namespace)
+	result := "ok"
+	if err != nil {
+		result = "error"
+	}
+	metrics.NamespaceDeletions.WithLabelValues(result).Inc()
+	metrics.NamespaceDeletionDuration.Observe(time.Since(start).Seconds())
+	return err
+}
+
+func (d *Deletions) processDeletion(ctx context.Context, opLog logr.Logger, namespace *corev1.Namespace) error {
 	// get the namespace project and environment labels
 	project := ""
 	if val, ok := namespace.Labels["lagoon.sh/project"]; ok {

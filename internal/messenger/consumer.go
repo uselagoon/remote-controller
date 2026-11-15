@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	"log"
 	"strings"
 	"time"
@@ -17,6 +18,19 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
+
+// instrumentHandler records receive counts, handling duration and last received time for a queue handler
+func instrumentHandler(queue string, handler func(message mq.Message)) func(message mq.Message) {
+	return func(message mq.Message) {
+		start := time.Now()
+		metrics.MessagesReceived.WithLabelValues(queue).Inc()
+		metrics.MQLastMessageReceived.SetToCurrentTime()
+		defer func() {
+			metrics.MessageHandlingDuration.WithLabelValues(queue).Observe(time.Since(start).Seconds())
+		}()
+		handler(message)
+	}
+}
 
 // Consumer handles consuming messages sent to the queue that these controllers are connected to and processes them accordingly
 func (m *Messenger) Consumer(targetName string) {
@@ -49,9 +63,11 @@ func (m *Messenger) Consumer(targetName string) {
 	// add the message queue to messenger for use in publishing
 	m.MQ = messageQueue
 
+	metrics.MQConnected.Set(1)
 	go func() {
 		count := 0
 		for err := range messageQueue.Error() {
+			metrics.MQErrors.Inc()
 			opLog.Info(fmt.Sprintf("Caught error from message queue: %v", err))
 			// if there are 5 errors (usually after about 60-120 seconds)
 			// fatalf and restart the controller
@@ -70,9 +86,17 @@ func (m *Messenger) Consumer(targetName string) {
 		unhealthy := 0
 		for range time.Tick(checkInterval) {
 			if messageQueue.ConnectionState() == mq.ConnectionStateConnected {
+				if unhealthy > 0 {
+					metrics.MQReconnects.Inc()
+				}
+				metrics.MQConnected.Set(1)
 				unhealthy = 0
 				continue
 			}
+			if unhealthy == 0 {
+				metrics.MQDisconnects.Inc()
+			}
+			metrics.MQConnected.Set(0)
 			unhealthy++
 			opLog.Info(fmt.Sprintf("Message queue not connected, check %d/%d", unhealthy, maxUnhealthyChecks))
 			if unhealthy >= maxUnhealthyChecks {
@@ -85,7 +109,7 @@ func (m *Messenger) Consumer(targetName string) {
 
 	// Handle any tasks that go to the `builddeploy` queue
 	opLog.Info("Listening for lagoon-tasks:" + targetName + ":builddeploy")
-	err = messageQueue.SetConsumerHandler("builddeploy-queue", func(message mq.Message) {
+	err = messageQueue.SetConsumerHandler("builddeploy-queue", instrumentHandler("builddeploy-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshal the body into a lagoonbuild
 			newBuild := &lagoonv1beta2.LagoonBuild{}
@@ -93,14 +117,14 @@ func (m *Messenger) Consumer(targetName string) {
 			m.handleBuildMessage(ctx, opLog, newBuild)
 		}
 		_ = message.Ack(false) // ack to remove from queue
-	})
+	}))
 	if err != nil {
 		log.Panicf("Failed to set handler to consumer `%s`: %v", "builddeploy-queue", err)
 	}
 
 	// Handle any tasks that go to the `remove` queue
 	opLog.Info("Listening for lagoon-tasks:" + targetName + ":remove")
-	err = messageQueue.SetConsumerHandler("remove-queue", func(message mq.Message) {
+	err = messageQueue.SetConsumerHandler("remove-queue", instrumentHandler("remove-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshall the message into a remove task to be processed
 			removeTask := &removeTask{}
@@ -217,14 +241,14 @@ func (m *Messenger) Consumer(targetName string) {
 			)
 		}
 		_ = message.Ack(false) // ack to remove from queue
-	})
+	}))
 	if err != nil {
 		log.Panicf("Failed to set handler to consumer `%s`: %v", "remove-queue", err)
 	}
 
 	// Handle any tasks that go to the `jobs` queue
 	opLog.Info("Listening for lagoon-tasks:" + targetName + ":jobs")
-	err = messageQueue.SetConsumerHandler("jobs-queue", func(message mq.Message) {
+	err = messageQueue.SetConsumerHandler("jobs-queue", instrumentHandler("jobs-queue", func(message mq.Message) {
 		if err == nil {
 			// unmarshall the message into a remove task to be processed
 			jobSpec := &lagoonv1beta2.LagoonTaskSpec{}
@@ -275,14 +299,14 @@ func (m *Messenger) Consumer(targetName string) {
 			}
 		}
 		_ = message.Ack(false) // ack to remove from queue
-	})
+	}))
 	if err != nil {
 		log.Panicf("Failed to set handler to consumer `%s`: %v", "jobs-queue", err)
 	}
 
 	// Handle any tasks that go to the `misc` queue
 	opLog.Info("Listening for lagoon-tasks:" + targetName + ":misc")
-	err = messageQueue.SetConsumerHandler("misc-queue", func(message mq.Message) {
+	err = messageQueue.SetConsumerHandler("misc-queue", instrumentHandler("misc-queue", func(message mq.Message) {
 		if err == nil {
 			opLog := ctrl.Log.WithName("handlers").WithName("LagoonTasks")
 			// unmarshall the message into a remove task to be processed
@@ -491,7 +515,7 @@ func (m *Messenger) Consumer(targetName string) {
 			}
 		}
 		_ = message.Ack(false) // ack to remove from queue
-	})
+	}))
 	if err != nil {
 		log.Panicf("Failed to set handler to consumer `%s`: %v", "misc-queue", err)
 	}

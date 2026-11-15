@@ -6,11 +6,13 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -22,6 +24,8 @@ type DockerHost struct {
 	ReuseType           string
 	ReuseCache          *lru.Cache[string, string]
 	BuildCache          *lru.Cache[string, string]
+	hostsMu             sync.Mutex
+	lastAvailableHosts  []string
 }
 
 func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax int) string {
@@ -36,6 +40,7 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax 
 	if err := d.Client.List(ctx, dockerHosts, listOption); err != nil {
 		// return the default dockerhost
 		d.Log.Error(err, "unable to determine dockerhost, falling back to default dockerhost")
+		metrics.DockerHostSelectionIssues.WithLabelValues("list_error").Inc()
 		return dockerHost
 	}
 
@@ -52,6 +57,11 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax 
 		}
 	}
 
+	metrics.DockerHostsAvailable.Set(float64(len(availableHosts)))
+	if len(availableHosts) == 0 {
+		metrics.DockerHostSelectionIssues.WithLabelValues("none_available").Inc()
+	}
+
 	if cacheHost, ok := d.ReuseCache.Get(reuseIdentifier); ok {
 		if helpers.ContainsString(availableHosts, cacheHost) {
 			// if the namespace has already got a host assigned, prefer it
@@ -65,7 +75,33 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax 
 	// finally assign in the cache
 	_ = d.BuildCache.Add(buildName, dockerHost)
 	_ = d.ReuseCache.Add(reuseIdentifier, dockerHost)
+	metrics.DockerHostBuildsAssigned.WithLabelValues(dockerHost).Inc()
+	d.updateInUseMetric(availableHosts)
 	return dockerHost
+}
+
+// UpdateInUseMetric refreshes the builds in use per dockerhost, hosts with no builds are reported as 0
+func (d *DockerHost) UpdateInUseMetric() {
+	d.hostsMu.Lock()
+	availableHosts := append([]string(nil), d.lastAvailableHosts...)
+	d.hostsMu.Unlock()
+	d.updateInUseMetric(availableHosts)
+}
+
+func (d *DockerHost) updateInUseMetric(availableHosts []string) {
+	d.hostsMu.Lock()
+	d.lastAvailableHosts = availableHosts
+	d.hostsMu.Unlock()
+	inUse := countDupes(d.BuildCache.Values())
+	metrics.DockerHostBuildsInUse.Reset()
+	for _, host := range availableHosts {
+		if _, ok := inUse[host]; !ok {
+			inUse[host] = 0
+		}
+	}
+	for host, count := range inUse {
+		metrics.DockerHostBuildsInUse.WithLabelValues(host).Set(float64(count))
+	}
 }
 
 func New(client client.Client,
@@ -173,5 +209,6 @@ func (d *DockerHost) pickHost(chosenHost string, availableHosts []string, hostsI
 		}
 	}
 	// just use the chosen host as the fall back
+	metrics.DockerHostSelectionIssues.WithLabelValues("all_busy").Inc()
 	return chosenHost
 }

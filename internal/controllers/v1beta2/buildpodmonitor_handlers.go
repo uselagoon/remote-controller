@@ -268,6 +268,7 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			}
 			// remove the build from the buildcache
 			_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
+			r.DockerHost.UpdateInUseMetric()
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		if condition == "running" {

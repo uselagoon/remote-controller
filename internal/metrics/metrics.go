@@ -1,6 +1,10 @@
 package metrics
 
 import (
+	"net/http"
+	"runtime"
+	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -145,8 +149,140 @@ var (
 		Help: "The time a single build spent in each step. Retained for a short period after the build ends",
 	}, []string{"build_name", "build_namespace", "build_step"})
 
+	// messaging metrics
+	MessagesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_mq_messages_received_total",
+		Help: "The total number of messages received from the Lagoon message queues",
+	}, []string{"queue"})
+	MessageHandlingDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "lagoon_mq_message_handling_duration_seconds",
+		Help:    "The time taken to handle a message received from the Lagoon message queues",
+		Buckets: []float64{.005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60},
+	}, []string{"queue"})
+	MessagesPublished = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_mq_messages_published_total",
+		Help: "The total number of messages published back to Lagoon, result is ok or error",
+	}, []string{"queue", "result"})
+	MQConnected = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "lagoon_mq_connected",
+		Help: "1 if the controller is connected to the message queue broker, otherwise 0",
+	})
+	MQDisconnects = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "lagoon_mq_disconnects_total",
+		Help: "The number of times the message queue connection was observed to be lost",
+	})
+	MQReconnects = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "lagoon_mq_reconnects_total",
+		Help: "The number of times the message queue connection was observed to recover",
+	})
+	MQErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "lagoon_mq_errors_total",
+		Help: "The number of errors reported by the message queue client",
+	})
+	MQLastMessageReceived = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "lagoon_mq_last_message_received_timestamp_seconds",
+		Help: "The unix time the last message was received from the Lagoon message queues",
+	})
+
+	// dockerhost metrics
+	DockerHostBuildsAssigned = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_dockerhost_builds_assigned_total",
+		Help: "The total number of builds assigned to each dockerhost",
+	}, []string{"dockerhost"})
+	DockerHostBuildsInUse = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lagoon_dockerhost_builds_in_use",
+		Help: "The number of builds the controller currently has assigned to each dockerhost",
+	}, []string{"dockerhost"})
+	DockerHostsAvailable = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "lagoon_dockerhosts_available",
+		Help: "The number of dedicated dockerhosts that responded to the last availability check",
+	})
+	DockerHostSelectionIssues = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_dockerhost_selection_issues_total",
+		Help: "Dockerhost selections that were not ideal, reason is list_error, none_available or all_busy",
+	}, []string{"reason"})
+
+	// harbor metrics
+	HarborRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_harbor_api_requests_total",
+		Help: "The total number of requests made to the Harbor API, code is the HTTP status or error",
+	}, []string{"method", "code"})
+	HarborRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "lagoon_harbor_api_request_duration_seconds",
+		Help:    "The duration of requests made to the Harbor API",
+		Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10, 30},
+	}, []string{"method"})
+
+	// namespace deletion metrics, result is ok or error
+	NamespaceDeletions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "lagoon_namespace_deletions_total",
+		Help: "The total number of environment namespace deletions processed, from remove messages and the pruner",
+	}, []string{"result"})
+	NamespaceDeletionDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "lagoon_namespace_deletion_duration_seconds",
+		Help:    "The time taken to process an environment namespace deletion",
+		Buckets: []float64{1, 5, 15, 30, 60, 120, 300, 600},
+	})
+
+	// operational metrics
+	ControllerInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lagoon_remote_controller_info",
+		Help: "Information about the running remote-controller, the value is always 1",
+	}, []string{"version", "commit", "go_version", "target"})
+
 	stepTracker sync.Map
 )
+
+// Version and Commit can be set at build time with -ldflags "-X github.com/uselagoon/remote-controller/internal/metrics.Version=..."
+var (
+	Version = ""
+	Commit  = ""
+)
+
+// SetControllerInfo publishes the controller info metric.
+func SetControllerInfo(target string) {
+	version, commit := Version, Commit
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if version == "" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+		if commit == "" {
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					commit = setting.Value
+				}
+			}
+		}
+	}
+	if version == "" {
+		version = "unknown"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+	ControllerInfo.WithLabelValues(version, commit, runtime.Version(), target).Set(1)
+}
+
+// InstrumentedTransport records request metrics for outbound Harbor API calls.
+type InstrumentedTransport struct {
+	Base http.RoundTripper
+}
+
+func (t InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.Base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	start := time.Now()
+	resp, err := base.RoundTrip(req)
+	HarborRequestDuration.WithLabelValues(req.Method).Observe(time.Since(start).Seconds())
+	code := "error"
+	if err == nil {
+		code = strconv.Itoa(resp.StatusCode)
+	}
+	HarborRequests.WithLabelValues(req.Method, code).Inc()
+	return resp, err
+}
 
 // BuildMetricsRetention is how long per-build series are kept after a build ends.
 const BuildMetricsRetention = time.Hour
@@ -265,5 +401,22 @@ func init() {
 		BuildQueueWait,
 		TaskDuration,
 		TaskQueueWait,
+		MessagesReceived,
+		MessageHandlingDuration,
+		MessagesPublished,
+		MQConnected,
+		MQDisconnects,
+		MQReconnects,
+		MQErrors,
+		MQLastMessageReceived,
+		DockerHostBuildsAssigned,
+		DockerHostBuildsInUse,
+		DockerHostsAvailable,
+		DockerHostSelectionIssues,
+		HarborRequests,
+		HarborRequestDuration,
+		NamespaceDeletions,
+		NamespaceDeletionDuration,
+		ControllerInfo,
 	)
 }

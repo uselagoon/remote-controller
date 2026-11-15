@@ -24,7 +24,6 @@ import (
 
 	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -384,11 +383,9 @@ func (r *LagoonTaskReconciler) createStandardTask(ctx context.Context, lagoonTas
 			// @TODO: send msg back and update task to failed?
 			return nil
 		}
-		metrics.TaskRunningStatus.With(prometheus.Labels{
-			"task_namespace": lagoonTask.Namespace,
-			"task_name":      lagoonTask.Name,
-		}).Set(1)
-		metrics.TasksStartedCounter.Inc()
+		taskType := taskMetricType(lagoonTask)
+		metrics.ObserveSince(metrics.TaskQueueWait.WithLabelValues(taskType), lagoonTask.CreationTimestamp.Time)
+		metrics.TasksStartedCounter.WithLabelValues(taskType).Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Task pod already running for: %s", lagoonTask.Name))
 	}
@@ -775,11 +772,9 @@ func (r *LagoonTaskReconciler) createAdvancedTask(ctx context.Context, lagoonTas
 			)
 			return err
 		}
-		metrics.TaskRunningStatus.With(prometheus.Labels{
-			"task_namespace": lagoonTask.Namespace,
-			"task_name":      lagoonTask.Name,
-		}).Set(1)
-		metrics.TasksStartedCounter.Inc()
+		taskType := taskMetricType(lagoonTask)
+		metrics.ObserveSince(metrics.TaskQueueWait.WithLabelValues(taskType), lagoonTask.CreationTimestamp.Time)
+		metrics.TasksStartedCounter.WithLabelValues(taskType).Inc()
 	} else {
 		opLog.Info(fmt.Sprintf("Advanced task pod already running for: %s", lagoonTask.Name))
 	}

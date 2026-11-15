@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
-	"github.com/uselagoon/remote-controller/internal/metrics"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -191,10 +189,7 @@ func (r *TaskMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 ) error {
 	if r.EnableMQ && lagoonTask != nil {
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
-			metrics.TaskRunningStatus.Delete(prometheus.Labels{
-				"task_namespace": lagoonTask.Namespace,
-				"task_name":      lagoonTask.Name,
-			})
+			observeTaskTerminal(lagoonTask, condition, jobPod.CreationTimestamp.Time)
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := schema.LagoonMessage{

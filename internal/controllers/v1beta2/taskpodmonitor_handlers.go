@@ -61,11 +61,6 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 			if container.State.Waiting != nil && helpers.ContainsString(failureStates, container.State.Waiting.Reason) {
 				// if we have a failure state, then fail the task and get the logs from the container
 				opLog.Info(fmt.Sprintf("Task failed, container exit reason was: %v", container.State.Waiting.Reason))
-				lagoonTask.Labels["lagoon.sh/taskStatus"] = lagooncrd.TaskStatusFailed.String()
-				if err := r.Update(ctx, &lagoonTask); err != nil {
-					return err
-				}
-				opLog.Info(fmt.Sprintf("Marked task %s as %s", lagoonTask.Name, lagooncrd.TaskStatusFailed.String()))
 				if err := r.Delete(ctx, &jobPod); err != nil {
 					return err
 				}
@@ -332,7 +327,7 @@ func (r *TaskMonitorReconciler) updateTaskWithLogs(
 	// then update the task to reflect the current pod status
 	// we do this so we don't update the status of the task again
 	if helpers.ContainsString(
-		lagooncrd.TaskRunningPendingFailedStatus,
+		lagooncrd.TaskRunningPendingStatus,
 		lagoonTask.Labels["lagoon.sh/taskStatus"],
 	) || cancel {
 		opLog.Info(

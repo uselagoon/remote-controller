@@ -26,7 +26,7 @@ COPY internal/controllers internal/controllers
 # Build
 ARG VERSION=""
 ARG COMMIT=""
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH GO111MODULE=on go build -a \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GO111MODULE=on go build -a \
     -ldflags "-X github.com/uselagoon/remote-controller/internal/metrics.Version=${VERSION} -X github.com/uselagoon/remote-controller/internal/metrics.Commit=${COMMIT}" \
     -o manager cmd/main.go
 

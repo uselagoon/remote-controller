@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"encoding/json"
 	"net/http"
 	"runtime"
 	"runtime/debug"
@@ -61,6 +62,14 @@ var (
 		[]string{"build_type"},
 	)
 
+	BuildFailureReasons = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "lagoon_builds_failure_reasons_total",
+			Help: "The total number of failed Lagoon builds by bounded failure reason",
+		},
+		[]string{"build_type", "reason"},
+	)
+
 	// general gauges for tasks
 	TasksRunningGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -96,6 +105,13 @@ var (
 		},
 		[]string{"task_type"},
 	)
+	TaskFailureReasons = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "lagoon_tasks_failure_reasons_total",
+			Help: "The total number of failed Lagoon tasks by bounded failure reason",
+		},
+		[]string{"task_type", "reason"},
+	)
 	TasksCancelledCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "lagoon_tasks_cancelled_total",
@@ -125,6 +141,16 @@ var (
 		Help:    "The duration of Lagoon tasks from pod start to a terminal state",
 		Buckets: taskDurationBuckets,
 	}, []string{"outcome", "task_type"})
+	BuildPodPending = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "lagoon_build_pod_pending_seconds",
+		Help:    "The time Lagoon build pods spend between creation and their container starting (scheduling, image pulls)",
+		Buckets: queueWaitBuckets,
+	}, []string{"build_type"})
+	TaskPodPending = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "lagoon_task_pod_pending_seconds",
+		Help:    "The time Lagoon task pods spend between creation and their container starting (scheduling, image pulls)",
+		Buckets: queueWaitBuckets,
+	}, []string{"task_type"})
 	TaskQueueWait = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "lagoon_task_queue_wait_seconds",
 		Help:    "The time Lagoon tasks wait between being created and their pod being started",
@@ -377,6 +403,42 @@ func ObserveSince(observer prometheus.Observer, start time.Time) {
 	observer.Observe(time.Since(start).Seconds())
 }
 
+type queueItemAge struct {
+	CreationTimestamp int64 `json:"creationTimestamp"`
+}
+
+func oldestQueueItemAge(values func() []string) float64 {
+	oldest := int64(0)
+	for _, value := range values() {
+		var item queueItemAge
+		if err := json.Unmarshal([]byte(value), &item); err != nil || item.CreationTimestamp <= 0 {
+			continue
+		}
+		if oldest == 0 || item.CreationTimestamp < oldest {
+			oldest = item.CreationTimestamp
+		}
+	}
+	if oldest == 0 {
+		return 0
+	}
+	return time.Since(time.Unix(oldest, 0)).Seconds()
+}
+
+// RegisterQueueAgeGauges registers gauges, evaluated at scrape time, reporting the age of the oldest
+// pending build and task so stuck queues are visible even when no events are being processed.
+func RegisterQueueAgeGauges(builds, tasks func() []string) {
+	metrics.Registry.MustRegister(
+		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "lagoon_builds_oldest_pending_age_seconds",
+			Help: "The age of the oldest Lagoon build waiting in the queue, 0 when the queue is empty",
+		}, func() float64 { return oldestQueueItemAge(builds) }),
+		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "lagoon_tasks_oldest_pending_age_seconds",
+			Help: "The age of the oldest Lagoon task waiting in the queue, 0 when the queue is empty",
+		}, func() float64 { return oldestQueueItemAge(tasks) }),
+	)
+}
+
 func init() {
 	// Register custom metrics with the global prometheus registry
 	metrics.Registry.MustRegister(
@@ -386,6 +448,10 @@ func init() {
 		BuildsCompletedCounter,
 		BuildsFailedCounter,
 		BuildsCancelledCounter,
+		BuildFailureReasons,
+		TaskFailureReasons,
+		BuildPodPending,
+		TaskPodPending,
 		TasksRunningGauge,
 		TasksPendingGauge,
 		TasksStartedCounter,

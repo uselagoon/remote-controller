@@ -198,6 +198,8 @@ func main() {
 	var unauthenticatedRegistry string
 	var dockerHostNamespace string
 	var dockerHostReuseType string
+	var dockerHostScaleName string
+	var dockerHostScaleMultiplier int
 
 	var clusterAutoscalerEvict bool
 
@@ -422,6 +424,10 @@ func main() {
 	flag.IntVar(&pvcRetryInterval, "delete-pvc-retry-interval", 10, "The number of seconds between each retry attempt (default 10).")
 
 	flag.StringVar(&dockerHostNamespace, "docker-host-namespace", "lagoon", "The name of the docker-host namespace")
+	flag.IntVar(&dockerHostScaleMultiplier, "docker-host-scale-multiplier", 3,
+		"The docker-host is scaled up by one replica for every (multiplier * qos-max-builds) builds in the queue")
+	flag.StringVar(&dockerHostScaleName, "docker-host-scale-name", "lagoon-remote-docker-host",
+		"The name of the LagoonDockerHost resource in the docker-host namespace to scale with the build queue")
 	flag.StringVar(&dockerHostReuseType, "docker-host-reuse-type", "namespace",
 		`The resource type (namespace, project, organization) to use when assigning a docker-host to a build to preference an already used dockerhost
 		eg. If project is defined, all builds from a project will prefer to build on the same docker-host where possible`)
@@ -510,6 +516,8 @@ func main() {
 
 	dockerHostNamespace = helpers.GetEnv("DOCKERHOST_NAMESPACE", dockerHostNamespace)
 	dockerHostReuseType = helpers.GetEnv("DOCKERHOST_REUSE_TYPE", dockerHostReuseType)
+	dockerHostScaleName = helpers.GetEnv("DOCKERHOST_SCALE_NAME", dockerHostScaleName)
+	dockerHostScaleMultiplier = helpers.GetEnvInt("DOCKERHOST_SCALE_MULTIPLIER", dockerHostScaleMultiplier)
 
 	if enablePodProxy {
 		httpProxy = helpers.GetEnv("HTTP_PROXY", httpProxy)
@@ -782,6 +790,8 @@ func main() {
 		mgr.GetClient(),
 		ctrl.Log.WithName("dockerhost"),
 		dockerHostNamespace,
+		dockerHostScaleName,
+		dockerHostScaleMultiplier,
 		dockerHostReuseType,
 		reuseCache,
 		buildCache,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -135,7 +136,7 @@ func (r *LagoonTaskReconciler) updateLagoonTask(opLog logr.Logger,
 ) (bool, schema.LagoonMessage) {
 	if r.EnableMQ && lagoonTask != nil {
 		if taskCondition.ToLower() == "failed" || taskCondition.ToLower() == "complete" || taskCondition.ToLower() == "cancelled" {
-			observeTaskTerminal(lagoonTask, taskCondition.ToLower(), lagoonTask.CreationTimestamp.Time)
+			observeTaskTerminal(lagoonTask, taskCondition.ToLower(), lagoonTask.CreationTimestamp.Time, nil)
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := schema.LagoonMessage{
@@ -220,14 +221,24 @@ func taskMetricType(lagoonTask *lagooncrd.LagoonTask) string {
 }
 
 // observeTaskTerminal records the outcome counter and duration for a task reaching a terminal state.
-func observeTaskTerminal(lagoonTask *lagooncrd.LagoonTask, condition string, started time.Time) {
+func observeTaskTerminal(lagoonTask *lagooncrd.LagoonTask, condition string, started time.Time, pod *corev1.Pod) {
 	taskType := taskMetricType(lagoonTask)
 	metrics.ObserveSince(metrics.TaskDuration.WithLabelValues(condition, taskType), started)
+	if pod != nil {
+		if delay, ok := podStartDelay(pod); ok {
+			metrics.TaskPodPending.WithLabelValues(taskType).Observe(delay.Seconds())
+		}
+	}
 	switch condition {
 	case "complete":
 		metrics.TasksCompletedCounter.WithLabelValues(taskType).Inc()
 	case "failed":
 		metrics.TasksFailedCounter.WithLabelValues(taskType).Inc()
+		reason := "unknown"
+		if pod != nil {
+			reason = failureReason(pod)
+		}
+		metrics.TaskFailureReasons.WithLabelValues(taskType, reason).Inc()
 	case "cancelled":
 		metrics.TasksCancelledCounter.WithLabelValues(taskType).Inc()
 	}

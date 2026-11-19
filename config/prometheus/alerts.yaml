@@ -75,3 +75,11 @@ spec:
           annotations:
             summary: Namespace deletions are failing
             description: One or more environment namespace deletions failed in the last hour.
+        - alert: LagoonRemoteControllerQueueStuck
+          expr: max(lagoon_builds_oldest_pending_age_seconds) > 1800 or max(lagoon_tasks_oldest_pending_age_seconds) > 1800
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Builds or tasks are stuck in the queue
+            description: The oldest pending build or task has been queued for more than 30 minutes.

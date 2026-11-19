@@ -104,6 +104,7 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					opLog.Info(fmt.Sprintf("Deleted failed build pod: %s", jobPod.Name))
 					// update the status to failed on the deleted pod
 					// and set the terminate time to now, it is used when we update the deployment and environment
+					markFailureReason(&jobPod, container.State.Waiting.Reason)
 					jobPod.Status.Phase = corev1.PodFailed
 					state := corev1.ContainerStatus{
 						State: corev1.ContainerState{
@@ -258,11 +259,15 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 				metrics.BuildDuration.WithLabelValues(condition, buildType, jobPod.Annotations["dockerhost.lagoon.sh/name"]),
 				jobPod.CreationTimestamp.Time,
 			)
+			if delay, ok := podStartDelay(jobPod); ok {
+				metrics.BuildPodPending.WithLabelValues(buildType).Observe(delay.Seconds())
+			}
 			switch condition {
 			case "complete":
 				metrics.BuildsCompletedCounter.WithLabelValues(buildType).Inc()
 			case "failed":
 				metrics.BuildsFailedCounter.WithLabelValues(buildType).Inc()
+				metrics.BuildFailureReasons.WithLabelValues(buildType, failureReason(jobPod)).Inc()
 			case "cancelled":
 				metrics.BuildsCancelledCounter.WithLabelValues(buildType).Inc()
 			}

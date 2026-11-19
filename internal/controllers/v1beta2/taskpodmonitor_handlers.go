@@ -65,6 +65,7 @@ func (r *TaskMonitorReconciler) handleTaskMonitor(ctx context.Context, opLog log
 				opLog.Info(fmt.Sprintf("Deleted failed task pod: %s", jobPod.Name))
 				// update the status to failed on the deleted pod
 				// and set the terminate time to now, it is used when we update the deployment and environment
+				markFailureReason(&jobPod, container.State.Waiting.Reason)
 				jobPod.Status.Phase = corev1.PodFailed
 				state := corev1.ContainerStatus{
 					State: corev1.ContainerState{
@@ -189,7 +190,7 @@ func (r *TaskMonitorReconciler) updateLagoonTask(opLog logr.Logger,
 ) error {
 	if r.EnableMQ && lagoonTask != nil {
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
-			observeTaskTerminal(lagoonTask, condition, jobPod.CreationTimestamp.Time)
+			observeTaskTerminal(lagoonTask, condition, jobPod.CreationTimestamp.Time, jobPod)
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		msg := schema.LagoonMessage{

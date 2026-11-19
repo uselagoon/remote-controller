@@ -569,6 +569,7 @@ func main() {
 	tasksQueueCache, _ := lru.New[string, string](cacheSize)
 	// create tasks cache
 	tasksCache, _ := lru.New[string, string](cacheSize)
+	metrics.RegisterQueueAgeGauges(buildsQueueCache.Values, tasksQueueCache.Values)
 
 	brokerDSN := fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost)
 	if mqTLS {

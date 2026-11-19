@@ -124,10 +124,9 @@ func (p TaskPodPredicates) Create(e event.CreateEvent) bool {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
-					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value == "task" {
-							return true
-						}
+					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
+						match, _ := regexp.MatchString("^lagoon-task", value)
+						return match
 					}
 				}
 			}
@@ -142,10 +141,9 @@ func (p TaskPodPredicates) Delete(e event.DeleteEvent) bool {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
-					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value == "task" {
-							return true
-						}
+					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
+						match, _ := regexp.MatchString("^lagoon-task", value)
+						return match
 					}
 				}
 			}
@@ -160,11 +158,10 @@ func (p TaskPodPredicates) Update(e event.UpdateEvent) bool {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.ObjectNew.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
-					if _, ok := e.ObjectOld.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/jobType"]; ok {
-							if value == "task" {
-								return true
-							}
+					if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/taskName"]; okOld {
+						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/taskName"]; ok {
+							match, _ := regexp.MatchString("^lagoon-task", value)
+							return match
 						}
 					}
 				}
@@ -180,10 +177,9 @@ func (p TaskPodPredicates) Generic(e event.GenericEvent) bool {
 		if controller == p.ControllerNamespace {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
-					if value, ok := e.Object.GetLabels()["lagoon.sh/jobType"]; ok {
-						if value == "task" {
-							return true
-						}
+					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
+						match, _ := regexp.MatchString("^lagoon-task", value)
+						return match
 					}
 				}
 			}

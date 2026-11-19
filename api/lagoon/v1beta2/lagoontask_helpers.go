@@ -34,13 +34,6 @@ var (
 		TaskStatusComplete.String(),
 		TaskStatusCancelled.String(),
 	}
-	// TaskRunningPendingStatus .
-	TaskRunningPendingFailedStatus = []string{
-		TaskStatusPending.String(),
-		TaskStatusQueued.String(),
-		TaskStatusRunning.String(),
-		TaskStatusFailed.String(),
-	}
 )
 
 // TaskContainsStatus .

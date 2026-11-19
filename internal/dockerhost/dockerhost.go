@@ -6,6 +6,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -19,9 +20,15 @@ type DockerHost struct {
 	Client              client.Client
 	Log                 logr.Logger
 	DockerHostNamespace string
+	ScaleName           string
+	ScaleMultiplier     int
 	ReuseType           string
 	ReuseCache          *lru.Cache[string, string]
 	BuildCache          *lru.Cache[string, string]
+
+	// capacity of the scalable docker-host pools as last observed, used to scale the qos limits
+	readyHosts atomic.Int64
+	minHosts   atomic.Int64
 }
 
 func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax int) string {
@@ -71,6 +78,8 @@ func (d *DockerHost) AssignDockerHost(buildName, reuseIdentifier string, qosMax 
 func New(client client.Client,
 	log logr.Logger,
 	dockerHostNamespace,
+	scaleName string,
+	scaleMultiplier int,
 	reuseType string,
 	reuseCache,
 	buildCache *lru.Cache[string, string],
@@ -79,6 +88,8 @@ func New(client client.Client,
 		Client:              client,
 		Log:                 log,
 		DockerHostNamespace: dockerHostNamespace,
+		ScaleName:           scaleName,
+		ScaleMultiplier:     scaleMultiplier,
 		ReuseType:           reuseType,
 		ReuseCache:          reuseCache,
 		BuildCache:          buildCache,

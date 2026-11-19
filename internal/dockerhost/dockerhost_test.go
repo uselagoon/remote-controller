@@ -98,7 +98,7 @@ func Test_pickHost(t *testing.T) {
 
 			fakeClient := clientBuilder.Build()
 			logs := ctrl.Log.WithName("dockerhost")
-			d := New(fakeClient, logs, "lagoon", tt.args.reuseType, &lru.Cache[string, string]{}, &lru.Cache[string, string]{})
+			d := New(fakeClient, logs, "lagoon", "lagoon-remote-docker-host", 3, tt.args.reuseType, &lru.Cache[string, string]{}, &lru.Cache[string, string]{})
 			if got := d.pickHost(tt.args.chosen, tt.args.available, tt.args.inUse, tt.args.qosMax); got != tt.want {
 				t.Errorf("pickHost() = %v, want %v", got, tt.want)
 			}

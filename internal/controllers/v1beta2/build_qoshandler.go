@@ -40,21 +40,32 @@ func (r *LagoonBuildReconciler) qosBuildProcessor(ctx context.Context,
 	return ctrl.Result{}, r.whichBuildNext(ctx, opLog)
 }
 
+// effectiveBuildLimits scales the docker-host pool for the current queue, then returns the container build and
+// total build limits scaled by the number of ready docker-hosts.
+func (r *LagoonBuildReconciler) effectiveBuildLimits(ctx context.Context, queued, running int) (int, int) {
+	if r.DockerHost == nil {
+		return r.BuildQoS.MaxContainerBuilds, r.BuildQoS.TotalBuilds
+	}
+	r.DockerHost.ScaleForQueue(ctx, r.BuildQoS.MaxContainerBuilds, queued, running)
+	return r.DockerHost.EffectiveQoS(r.BuildQoS.MaxContainerBuilds), r.DockerHost.EffectiveQoS(r.BuildQoS.TotalBuilds)
+}
+
 func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.Logger) error {
 	dockerBuilds, err := lagooncrd.RunningDockerBuilds(r.BuildCache.Values())
 	if err != nil {
 		return fmt.Errorf("unable to determine running docker builds: %v", err)
 	}
-	buildsToStart := r.BuildQoS.MaxContainerBuilds - len(dockerBuilds)
 	runningBuilds := len(r.BuildCache.Values())
 	queuedBuilds := len(r.QueueCache.Values())
+	maxContainerBuilds, totalBuilds := r.effectiveBuildLimits(ctx, queuedBuilds, runningBuilds)
+	buildsToStart := maxContainerBuilds - len(dockerBuilds)
 	metrics.BuildsRunningGauge.Set(float64(r.BuildCache.Len()))
 	metrics.BuildsPendingGauge.Set(float64(r.QueueCache.Len()))
-	if runningBuilds >= r.BuildQoS.TotalBuilds {
+	if runningBuilds >= totalBuilds {
 		// if the maximum number of builds is hit, then drop out and try again next time
 		opLog.Info(fmt.Sprintf("Currently %v running builds, max build limit reached. %v queued", runningBuilds, queuedBuilds))
 		// can't start any builds, so pass 0
-		err := r.processQueue(ctx, opLog, 0, true)
+		err := r.processQueue(ctx, opLog, 0, true, totalBuilds)
 		if err != nil {
 			opLog.Error(err, "error running queue processor")
 		}
@@ -62,7 +73,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 		opLog.Info(fmt.Sprintf("Currently %v running container build phase builds (%v total builds), room for %v to be started. %v queued", len(dockerBuilds), runningBuilds, buildsToStart, queuedBuilds))
 		if buildsToStart > 0 {
 			// if there are any free slots to start a build, do that here
-			err := r.processQueue(ctx, opLog, buildsToStart, false)
+			err := r.processQueue(ctx, opLog, buildsToStart, false, totalBuilds)
 			if err != nil {
 				opLog.Error(err, "error running queue processor")
 			}
@@ -79,7 +90,7 @@ func (r *LagoonBuildReconciler) whichBuildNext(ctx context.Context, opLog logr.L
 // to only run the process at any one time til it is complete
 // buildsToStart is the number of builds that can be started at the time the process is called
 // limitHit is used to determine if the build limit has been hit, this is used to prevent new builds from being started inside this process
-func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Logger, buildsToStart int, limitHit bool) error {
+func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Logger, buildsToStart int, limitHit bool, totalBuilds int) error {
 	// this should only ever be able to run one instance of at a time within a single controller
 	// this is because this process is quite heavy when it goes to submit the queue messages to the api
 	// the downside of this is that there can be delays with the messages it sends to the actual
@@ -108,7 +119,7 @@ func (r *LagoonBuildReconciler) processQueue(ctx context.Context, opLog logr.Log
 				}
 				// if there are no running builds, check if there are any pending builds that can be started
 				// avoid exceeding total builds
-				if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < r.BuildQoS.TotalBuilds {
+				if len(runningNSBuilds) == 0 && len(r.BuildCache.Values()) < totalBuilds {
 					if r.EnableDebug {
 						opLog.Info("Checking StartBuildOrCancelExtraBuilds")
 					}

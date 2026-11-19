@@ -21,7 +21,11 @@ COPY internal/dockerhost internal/dockerhost
 COPY internal/controllers internal/controllers
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} GO111MODULE=on go build -a -o manager cmd/main.go
+ARG VERSION=""
+ARG COMMIT=""
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} GO111MODULE=on go build -a \
+    -ldflags "-X github.com/uselagoon/remote-controller/internal/metrics.Version=${VERSION} -X github.com/uselagoon/remote-controller/internal/metrics.Commit=${COMMIT}" \
+    -o manager cmd/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

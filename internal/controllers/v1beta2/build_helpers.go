@@ -17,7 +17,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/matryer/try"
-	"github.com/prometheus/client_golang/prometheus"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
 	"github.com/uselagoon/remote-controller/internal/metrics"
@@ -809,17 +808,17 @@ func (r *LagoonBuildReconciler) processBuild(ctx context.Context, opLog logr.Log
 			// @TODO: should update the build to failed
 			return nil
 		}
-		metrics.BuildRunningStatus.With(prometheus.Labels{
-			"build_namespace":  lagoonBuild.Namespace,
-			"build_name":       lagoonBuild.Name,
-			"build_dockerhost": dockerHost,
-		}).Set(1)
-		metrics.BuildStatus.With(prometheus.Labels{
-			"build_namespace": lagoonBuild.Namespace,
-			"build_name":      lagoonBuild.Name,
-			"build_step":      "running",
-		}).Set(1)
-		metrics.BuildsStartedCounter.Inc()
+		metrics.ObserveBuildStep(lagoonBuild.Namespace, lagoonBuild.Name, "running")
+		metrics.RecordBuildStart(metrics.BuildInfo{
+			Name:        lagoonBuild.Name,
+			Namespace:   lagoonBuild.Namespace,
+			Project:     lagoonBuild.Spec.Project.Name,
+			Environment: lagoonBuild.Spec.Project.Environment,
+			BuildType:   lagoonBuild.Spec.Build.Type,
+			DockerHost:  dockerHost,
+		})
+		metrics.ObserveSince(metrics.BuildQueueWait.WithLabelValues(lagoonBuild.Spec.Build.Type), lagoonBuild.CreationTimestamp.Time)
+		metrics.BuildsStartedCounter.WithLabelValues(lagoonBuild.Spec.Build.Type).Inc()
 		// then break out of the build
 	} else {
 		opLog.Info(fmt.Sprintf("Build pod already running for: %s", lagoonBuild.Name))

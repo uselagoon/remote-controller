@@ -38,6 +38,7 @@ import (
 	"github.com/uselagoon/remote-controller/internal/dockerhost"
 	"github.com/uselagoon/remote-controller/internal/harbor"
 	"github.com/uselagoon/remote-controller/internal/helpers"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	"github.com/uselagoon/remote-controller/internal/utilities/deletions"
 	"github.com/uselagoon/remote-controller/internal/utilities/pruner"
 
@@ -545,6 +546,7 @@ func main() {
 		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.1/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
+	metrics.SetControllerInfo(lagoonTargetName)
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:           scheme,
 		Metrics:          metricsServerOptions,
@@ -567,6 +569,7 @@ func main() {
 	tasksQueueCache, _ := lru.New[string, string](cacheSize)
 	// create tasks cache
 	tasksCache, _ := lru.New[string, string](cacheSize)
+	metrics.RegisterQueueAgeGauges(buildsQueueCache.Values, tasksQueueCache.Values)
 
 	brokerDSN := fmt.Sprintf("amqp://%s:%s@%s", mqUser, mqPass, mqHost)
 	if mqTLS {

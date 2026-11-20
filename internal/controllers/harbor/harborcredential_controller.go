@@ -27,9 +27,6 @@ type HarborCredentialReconciler struct {
 	ControllerNamespace string
 }
 
-// all the things
-// +kubebuilder:rbac:groups=*,resources=*,verbs=*
-
 func (r *HarborCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	opLog := r.Log.WithValues("harbor", req.NamespacedName)
 

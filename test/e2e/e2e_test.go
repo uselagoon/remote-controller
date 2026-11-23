@@ -48,17 +48,9 @@ var (
 	interval = 1 * time.Second
 
 	metricLabels = []string{
-		"lagoon_builds_cancelled_total",
-		"lagoon_builds_completed_total",
-		"lagoon_builds_failed_total",
 		"lagoon_builds_pending_current",
 		"lagoon_builds_running_current",
-		"lagoon_builds_started_total",
-		"lagoon_tasks_cancelled_total",
-		"lagoon_tasks_completed_total",
-		"lagoon_tasks_failed_total",
 		"lagoon_tasks_running_current",
-		"lagoon_tasks_started_total",
 	}
 
 	createPolicyWant        = `{"algorithm":"or","rules":[{"action":"retain","params":{"latestPulledN":3},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"[^pr\\-]*/*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"},{"action":"retain","params":{"latestPulledN":1},"scope_selectors":{"repository":[{"decoration":"repoMatches","kind":"doublestar","pattern":"pr-*"}]},"tag_selectors":[{"decoration":"matches","extras":"{\"untagged\":true}","kind":"doublestar","pattern":"**"}],"template":"latestPulledN"}],"scope":{"level":"project"},"trigger":{"kind":"Schedule","settings":{"cron":"0 3 3 * * 3"}}}`

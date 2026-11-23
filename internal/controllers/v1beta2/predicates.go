@@ -125,7 +125,7 @@ func (p TaskPodPredicates) Create(e event.CreateEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-task", value)
+						match, _ := regexp.MatchString("^lagoon-(advanced-)?task", value)
 						return match
 					}
 				}
@@ -142,7 +142,7 @@ func (p TaskPodPredicates) Delete(e event.DeleteEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-task", value)
+						match, _ := regexp.MatchString("^lagoon-(advanced-)?task", value)
 						return match
 					}
 				}
@@ -160,7 +160,7 @@ func (p TaskPodPredicates) Update(e event.UpdateEvent) bool {
 				if value == crdVersion {
 					if _, okOld := e.ObjectOld.GetLabels()["lagoon.sh/taskName"]; okOld {
 						if value, ok := e.ObjectNew.GetLabels()["lagoon.sh/taskName"]; ok {
-							match, _ := regexp.MatchString("^lagoon-task", value)
+							match, _ := regexp.MatchString("^lagoon-(advanced-)?task", value)
 							return match
 						}
 					}
@@ -178,7 +178,7 @@ func (p TaskPodPredicates) Generic(e event.GenericEvent) bool {
 			if value, ok := e.Object.GetLabels()["crd.lagoon.sh/version"]; ok {
 				if value == crdVersion {
 					if value, ok := e.Object.GetLabels()["lagoon.sh/taskName"]; ok {
-						match, _ := regexp.MatchString("^lagoon-task", value)
+						match, _ := regexp.MatchString("^lagoon-(advanced-)?task", value)
 						return match
 					}
 				}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/uselagoon/remote-controller/internal/metrics"
 
 	harborclientv5 "github.com/mittwald/goharbor-client/v5/apiv2"
 	"github.com/mittwald/goharbor-client/v5/apiv2/pkg/config"
@@ -45,7 +46,8 @@ func New(harbor Harbor) (*Harbor, error) {
 		Page:     1,
 		PageSize: 100,
 	}
-	c2, err := harborclientv5.NewRESTClientForHost(harbor.API, harbor.Username, harbor.Password, harbor.Config)
+	httpClient := &http.Client{Transport: metrics.InstrumentedTransport{Base: http.DefaultTransport}}
+	c2, err := harborclientv5.NewRESTClientForHostWithClient(harbor.API, harbor.Username, harbor.Password, harbor.Config, httpClient)
 	if err != nil {
 		return nil, err
 	}

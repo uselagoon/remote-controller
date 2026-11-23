@@ -3,6 +3,7 @@ package messenger
 import (
 	"fmt"
 
+	"github.com/uselagoon/remote-controller/internal/metrics"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -14,8 +15,10 @@ func (m *Messenger) Publish(queue string, message []byte) error {
 	producer, err := m.MQ.AsyncProducer(queue)
 	if err != nil {
 		opLog.Info(fmt.Sprintf("Failed to get async producer: %v", err))
+		metrics.MessagesPublished.WithLabelValues(queue, "error").Inc()
 		return err
 	}
 	producer.Produce(message)
+	metrics.MessagesPublished.WithLabelValues(queue, "ok").Inc()
 	return nil
 }

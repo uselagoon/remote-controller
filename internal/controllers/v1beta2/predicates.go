@@ -4,9 +4,7 @@ package v1beta2
 
 import (
 	"regexp"
-	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uselagoon/remote-controller/internal/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -70,19 +68,8 @@ func (p BuildPodPredicates) Update(e event.UpdateEvent) bool {
 								oldBuildStep = value
 							}
 							if newBuildStep != oldBuildStep {
-								metrics.BuildStatus.With(prometheus.Labels{
-									"build_namespace": e.ObjectOld.GetNamespace(),
-									"build_name":      e.ObjectOld.GetName(),
-									"build_step":      newBuildStep,
-								}).Set(1)
+								metrics.ObserveBuildStep(e.ObjectOld.GetNamespace(), value, newBuildStep)
 							}
-							time.AfterFunc(31*time.Second, func() {
-								metrics.BuildStatus.Delete(prometheus.Labels{
-									"build_namespace": e.ObjectOld.GetNamespace(),
-									"build_name":      e.ObjectOld.GetName(),
-									"build_step":      oldBuildStep,
-								})
-							})
 							match, _ := regexp.MatchString("^lagoon-(build|variables)", value)
 							return match
 						}

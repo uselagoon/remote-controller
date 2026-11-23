@@ -1,0 +1,85 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: controller-manager-alerts
+  namespace: system
+spec:
+  groups:
+    - name: lagoon-remote-controller
+      rules:
+        - alert: LagoonRemoteControllerMQDisconnected
+          expr: max(lagoon_mq_connected) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Remote-controller is disconnected from the message queue
+            description: The controller has not been connected to the broker for 2 minutes and is not receiving builds or tasks.
+        - alert: LagoonRemoteControllerMQReconnecting
+          expr: increase(lagoon_mq_disconnects_total[30m]) > 3
+          labels:
+            severity: warning
+          annotations:
+            summary: Remote-controller message queue connection is unstable
+            description: The message queue connection was lost more than 3 times in 30 minutes.
+        - alert: LagoonRemoteControllerNoMessages
+          expr: time() - max(lagoon_mq_last_message_received_timestamp_seconds) > 6 * 3600 and max(lagoon_mq_connected) == 1
+          labels:
+            severity: warning
+          annotations:
+            summary: Remote-controller has received no messages for 6 hours
+            description: The consumer is connected but quiet. This may be normal on a quiet cluster, or a stuck consumer.
+        - alert: LagoonRemoteControllerBuildQueueWaitHigh
+          expr: histogram_quantile(0.95, sum by (le) (rate(lagoon_build_queue_wait_seconds_bucket[15m]))) > 600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Lagoon builds are waiting a long time to start
+            description: The p95 wait between a build being created and its pod starting has been above 10 minutes for 15 minutes.
+        - alert: LagoonRemoteControllerBuildFailureRatioHigh
+          expr: |
+            sum(increase(lagoon_builds_failed_total[1h]))
+              / clamp_min(sum(increase(lagoon_builds_failed_total[1h])) + sum(increase(lagoon_builds_completed_total[1h])), 1) > 0.5
+            and sum(increase(lagoon_builds_failed_total[1h])) >= 5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than half of Lagoon builds are failing
+            description: Over the last hour more than 50% of finished builds failed.
+        - alert: LagoonRemoteControllerNoDockerHosts
+          expr: max(lagoon_dockerhosts_available) == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: No dedicated dockerhosts are available
+            description: Builds are falling back to the default dockerhost.
+        - alert: LagoonRemoteControllerHarborErrors
+          expr: |
+            sum(rate(lagoon_harbor_api_requests_total{code=~"5..|error"}[10m]))
+              / clamp_min(sum(rate(lagoon_harbor_api_requests_total[10m])), 1e-9) > 0.2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Harbor API requests are failing
+            description: More than 20% of Harbor API requests failed over 10 minutes.
+        - alert: LagoonRemoteControllerNamespaceDeletionFailures
+          expr: increase(lagoon_namespace_deletions_total{result="error"}[1h]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: Namespace deletions are failing
+            description: One or more environment namespace deletions failed in the last hour.
+        - alert: LagoonRemoteControllerQueueStuck
+          expr: max(lagoon_builds_oldest_pending_age_seconds) > 1800 or max(lagoon_tasks_oldest_pending_age_seconds) > 1800
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Builds or tasks are stuck in the queue
+            description: The oldest pending build or task has been queued for more than 30 minutes.

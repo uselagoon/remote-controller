@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uselagoon/machinery/api/schema"
 	lagooncrd "github.com/uselagoon/remote-controller/api/lagoon/v1beta2"
 	"github.com/uselagoon/remote-controller/internal/helpers"
@@ -105,6 +104,7 @@ func (r *BuildMonitorReconciler) handleBuildMonitor(ctx context.Context,
 					opLog.Info(fmt.Sprintf("Deleted failed build pod: %s", jobPod.Name))
 					// update the status to failed on the deleted pod
 					// and set the terminate time to now, it is used when we update the deployment and environment
+					markFailureReason(&jobPod, container.State.Waiting.Reason)
 					jobPod.Status.Phase = corev1.PodFailed
 					state := corev1.ContainerStatus{
 						State: corev1.ContainerState{
@@ -245,13 +245,35 @@ func (r *BuildMonitorReconciler) updateDeploymentAndEnvironmentTask(
 			buildStep = value
 		}
 		if condition == "failed" || condition == "complete" || condition == "cancelled" {
-			metrics.BuildRunningStatus.Delete(prometheus.Labels{
-				"build_namespace":  jobPod.Namespace,
-				"build_name":       jobPod.Name,
-				"build_dockerhost": jobPod.Annotations["dockerhost.lagoon.sh/name"],
-			})
+			buildType := lagoonBuild.Spec.Build.Type
+			metrics.FinishBuildStep(jobPod.Namespace, jobPod.Name)
+			metrics.RecordBuildEnd(metrics.BuildInfo{
+				Name:        jobPod.Name,
+				Namespace:   jobPod.Namespace,
+				Project:     lagoonBuild.Spec.Project.Name,
+				Environment: lagoonBuild.Spec.Project.Environment,
+				BuildType:   buildType,
+				DockerHost:  jobPod.Annotations["dockerhost.lagoon.sh/name"],
+			}, condition, jobPod.CreationTimestamp.Time)
+			metrics.ObserveSince(
+				metrics.BuildDuration.WithLabelValues(condition, buildType, jobPod.Annotations["dockerhost.lagoon.sh/name"]),
+				jobPod.CreationTimestamp.Time,
+			)
+			if delay, ok := podStartDelay(jobPod); ok {
+				metrics.BuildPodPending.WithLabelValues(buildType).Observe(delay.Seconds())
+			}
+			switch condition {
+			case "complete":
+				metrics.BuildsCompletedCounter.WithLabelValues(buildType).Inc()
+			case "failed":
+				metrics.BuildsFailedCounter.WithLabelValues(buildType).Inc()
+				metrics.BuildFailureReasons.WithLabelValues(buildType, failureReason(jobPod)).Inc()
+			case "cancelled":
+				metrics.BuildsCancelledCounter.WithLabelValues(buildType).Inc()
+			}
 			// remove the build from the buildcache
 			_ = r.DockerHost.BuildCache.Remove(jobPod.Name)
+			r.DockerHost.UpdateInUseMetric()
 			time.Sleep(2 * time.Second) // smol sleep to reduce race of final messages with previous messages
 		}
 		if condition == "running" {
